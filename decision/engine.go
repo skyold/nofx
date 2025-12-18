@@ -749,9 +749,9 @@ func (e *StrategyEngine) BuildSystemPrompt(accountEquity float64, variant string
 	// 5. Entry standards (editable)
 	if promptSections.EntryStandards != "" {
 		sb.WriteString(promptSections.EntryStandards)
-		sb.WriteString("\n\nYou have the following indicator data:\n")
+		sb.WriteString("\n\n你拥有以下市场数据和指标:\n")
 		e.writeAvailableIndicators(&sb)
-		sb.WriteString(fmt.Sprintf("\n**Confidence ≥ %d** required to open positions.\n\n", riskControl.MinConfidence))
+		//sb.WriteString(fmt.Sprintf("\n**Confidence ≥ %d** required to open positions.\n\n", riskControl.MinConfidence))
 	} else {
 		sb.WriteString("# 🎯 入场标准（严格）\n\n")
 		sb.WriteString("仅在多项信号共振时开仓。你具备以下数据：\n")
@@ -859,9 +859,11 @@ func (e *StrategyEngine) writeRiskConstraintsChaos(sb *strings.Builder, accountE
 	sb.WriteString("## 代码强制（后端校验，无法绕过）：\n")
 	sb.WriteString(fmt.Sprintf("- 最大持仓数：同时最多 %d 个币\n", riskControl.MaxPositions))
 	sb.WriteString(fmt.Sprintf("- 仓位价值上限（山寨币）：最高 %.0f USDT（= 总权益 %.0f × %.1fx)\n", accountEquity*altcoinPosValueRatio, accountEquity, altcoinPosValueRatio))
-	sb.WriteString(fmt.Sprintf("- 仓位价值上限（BTC/ETH）：最高 %.0f USDT（= 总权益 %.0f × %.1fx)\n", accountEquity*btcEthPosValueRatio, accountEquity, btcEthPosValueRatio))
+	sb.WriteString(fmt.Sprintf("- 仓位价值上限(BTC/ETH): 最高 %.0f USDT（= 总权益 %.0f × %.1fx)\n", accountEquity*btcEthPosValueRatio, accountEquity, btcEthPosValueRatio))
 	sb.WriteString(fmt.Sprintf("- 最大保证金使用率：≤%.0f%%\n", riskControl.MaxMarginUsage*100))
-	sb.WriteString(fmt.Sprintf("- 最小持仓规模：≥%.0f USDT\n\n", riskControl.MinPositionSize))
+	sb.WriteString(fmt.Sprintf("- 最小持仓规模：≥%.0f USDT\n", riskControl.MinPositionSize))
+	sb.WriteString(fmt.Sprintf("- 默认交易杠杆：山寨币最高 %dx | BTC/ETH 最高 %dx\n", riskControl.AltcoinMaxLeverage, riskControl.BTCETHMaxLeverage))
+	sb.WriteString(fmt.Sprintf("- 默认风险回报比:≥1:%.1f(止盈/止损）\n\n", riskControl.MinRiskRewardRatio))
 }
 
 func (e *StrategyEngine) writeRiskConstraintsNofx(sb *strings.Builder, accountEquity float64) {
@@ -928,7 +930,8 @@ func (e *StrategyEngine) writeOutputFormatChaos(sb *strings.Builder, accountEqui
 	sb.WriteString("</reasoning>\n\n")
 	sb.WriteString("<decision>\n")
 	sb.WriteString("[\n")
-	sb.WriteString(fmt.Sprintf("  {\n    \"symbol\": \"BTCUSDT\",\n    \"action\": \"open_long\",\n    \"leverage\": %d,\n    \"position_size_usd\": %.0f,\n    \"stop_loss\": 61200,\n    \"take_profit\": 66000,\n    \"confidence\": 80,\n    \"risk_usd\": 400\n  }\n", riskControl.BTCETHMaxLeverage, accountEquity*btcEthPosValueRatio))
+	sb.WriteString(fmt.Sprintf("  {\n    \"symbol\": \"BTCUSDT\",\n    \"action\": \"open_long\",\n    \"leverage\": %d,\n    \"position_size_usd\": %.0f,\n    \"stop_loss\": 61200,\n    \"take_profit\": 66000,\n    \"confidence\": 80,\n    \"risk_usd\": 400\n  },\n", riskControl.BTCETHMaxLeverage, accountEquity*btcEthPosValueRatio))
+	sb.WriteString("  {\"symbol\": \"ETHUSDT\", \"action\": \"wait\"}\n")
 	sb.WriteString("]\n")
 	sb.WriteString("</decision>\n\n")
 	sb.WriteString("## 字段说明\n\n")
