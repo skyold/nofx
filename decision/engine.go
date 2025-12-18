@@ -732,31 +732,7 @@ func (e *StrategyEngine) BuildSystemPrompt(accountEquity float64, variant string
 		altcoinPosValueRatio = 1.0
 	}
 
-	sb.WriteString("# 硬性约束（风险控制）\n\n")
-	sb.WriteString("## 代码强制（后端校验，无法绕过）：\n")
-	sb.WriteString(fmt.Sprintf("- 最大持仓数：同时最多 %d 个币\n", riskControl.MaxPositions))
-	sb.WriteString(fmt.Sprintf("- 仓位价值上限（山寨币）：最高 %.0f USDT（= 总权益 %.0f × %.1fx)\n",
-		accountEquity*altcoinPosValueRatio, accountEquity, altcoinPosValueRatio))
-	sb.WriteString(fmt.Sprintf("- 仓位价值上限（BTC/ETH）：最高 %.0f USDT（= 总权益 %.0f × %.1fx)\n",
-		accountEquity*btcEthPosValueRatio, accountEquity, btcEthPosValueRatio))
-	sb.WriteString(fmt.Sprintf("- 最大保证金使用率：≤%.0f%%\n", riskControl.MaxMarginUsage*100))
-	sb.WriteString(fmt.Sprintf("- 最小持仓规模：≥%.0f USDT\n\n", riskControl.MinPositionSize))
-
-	sb.WriteString("## AI 指引（建议遵循）：\n")
-	sb.WriteString(fmt.Sprintf("- 交易杠杆：山寨币最高 %dx | BTC/ETH 最高 %dx\n",
-		riskControl.AltcoinMaxLeverage, riskControl.BTCETHMaxLeverage))
-	sb.WriteString(fmt.Sprintf("- 风险回报比：≥1:%.1f（止盈/止损）\n", riskControl.MinRiskRewardRatio))
-	sb.WriteString(fmt.Sprintf("- 最低信心阈值：开仓需 ≥%d\n\n", riskControl.MinConfidence))
-
-	// Position sizing guidance
-	sb.WriteString("## 仓位规模指引\n")
-	sb.WriteString("根据你的信心和上述仓位价值上限计算 `position_size_usd`：\n")
-	sb.WriteString("- 高信心（≥85）：使用上限的 80-100%%\n")
-	sb.WriteString("- 中等信心（70-84）：使用上限的 50-80%%\n")
-	sb.WriteString("- 低信心（60-69）：使用上限的 30-50%%\n")
-	sb.WriteString(fmt.Sprintf("- 示例：当总权益为 %.0f，BTC/ETH 比例为 %.1fx，最高为 %.0f USDT\n",
-		accountEquity, btcEthPosValueRatio, accountEquity*btcEthPosValueRatio))
-	sb.WriteString("- **不要** 仅用 `available_balance` 作为 `position_size_usd`。请使用仓位价值上限！\n\n")
+	e.writeRiskConstraintsChaos(&sb, accountEquity)
 
 	// 4. Trading frequency (editable)
 	if promptSections.TradingFrequency != "" {
@@ -795,28 +771,8 @@ func (e *StrategyEngine) BuildSystemPrompt(accountEquity float64, variant string
 	}
 
 	// 7. Output format
-	sb.WriteString("# 输出格式（严格遵守）\n\n")
-	sb.WriteString("**必须使用 XML 标签 <reasoning> 和 <decision> 分隔推理链与决策 JSON，避免解析错误**\n\n")
-	sb.WriteString("## 格式要求\n\n")
-	sb.WriteString("<reasoning>\n")
-	sb.WriteString("你的推理链分析...\n")
-	sb.WriteString("- 简要说明你的思考过程 \n")
-	sb.WriteString("</reasoning>\n\n")
-	sb.WriteString("<decision>\n")
-	sb.WriteString("步骤2：JSON 决策数组\n\n")
-	sb.WriteString("```json\n[\n")
-	// Use the actual configured position value ratio for BTC/ETH in the example
-	examplePositionSize := accountEquity * btcEthPosValueRatio
-	sb.WriteString(fmt.Sprintf("  {\"symbol\": \"BTCUSDT\", \"action\": \"open_short\", \"leverage\": %d, \"position_size_usd\": %.0f, \"stop_loss\": 97000, \"take_profit\": 91000, \"confidence\": 85, \"risk_usd\": 300},\n",
-		riskControl.BTCETHMaxLeverage, examplePositionSize))
-	sb.WriteString("  {\"symbol\": \"ETHUSDT\", \"action\": \"close_long\"}\n")
-	sb.WriteString("]\n```\n")
-	sb.WriteString("</decision>\n\n")
-	sb.WriteString("## 字段说明\n\n")
-	sb.WriteString("- `action`: open_long | open_short | close_long | close_short | hold | wait\n")
-	sb.WriteString(fmt.Sprintf("- `confidence`: 0-100（推荐开仓 ≥ %d）\n", riskControl.MinConfidence))
-	sb.WriteString("- 开仓必填：leverage, position_size_usd, stop_loss, take_profit, confidence, risk_usd\n")
-	sb.WriteString("- **重要**：所有数值必须是计算结果，而非公式/表达式（例如使用 `27.76`，不要写 `3000 * 0.01`）\n\n")
+	e.writeOutputFormatChaos(&sb, accountEquity) // 混沌模式
+	//e.writeOutputFormatNofx(&sb, accountEquity) // nofx 模式
 
 	// 8. Custom Prompt
 	if e.config.CustomPrompt != "" {
@@ -887,6 +843,127 @@ func (e *StrategyEngine) writeAvailableIndicators(sb *strings.Builder) {
 	if indicators.EnableQuantData {
 		sb.WriteString("- Quantitative data (institutional/retail fund flow, position changes, multi-period price changes)\n")
 	}
+}
+
+func (e *StrategyEngine) writeRiskConstraintsChaos(sb *strings.Builder, accountEquity float64) {
+	riskControl := e.config.RiskControl
+	btcEthPosValueRatio := riskControl.BTCETHMaxPositionValueRatio
+	if btcEthPosValueRatio <= 0 {
+		btcEthPosValueRatio = 5.0
+	}
+	altcoinPosValueRatio := riskControl.AltcoinMaxPositionValueRatio
+	if altcoinPosValueRatio <= 0 {
+		altcoinPosValueRatio = 1.0
+	}
+	sb.WriteString("# 硬性约束（风险控制）\n\n")
+	sb.WriteString("## 代码强制（后端校验，无法绕过）：\n")
+	sb.WriteString(fmt.Sprintf("- 最大持仓数：同时最多 %d 个币\n", riskControl.MaxPositions))
+	sb.WriteString(fmt.Sprintf("- 仓位价值上限（山寨币）：最高 %.0f USDT（= 总权益 %.0f × %.1fx)\n", accountEquity*altcoinPosValueRatio, accountEquity, altcoinPosValueRatio))
+	sb.WriteString(fmt.Sprintf("- 仓位价值上限（BTC/ETH）：最高 %.0f USDT（= 总权益 %.0f × %.1fx)\n", accountEquity*btcEthPosValueRatio, accountEquity, btcEthPosValueRatio))
+	sb.WriteString(fmt.Sprintf("- 最大保证金使用率：≤%.0f%%\n", riskControl.MaxMarginUsage*100))
+	sb.WriteString(fmt.Sprintf("- 最小持仓规模：≥%.0f USDT\n\n", riskControl.MinPositionSize))
+}
+
+func (e *StrategyEngine) writeRiskConstraintsNofx(sb *strings.Builder, accountEquity float64) {
+	riskControl := e.config.RiskControl
+	btcEthPosValueRatio := riskControl.BTCETHMaxPositionValueRatio
+	if btcEthPosValueRatio <= 0 {
+		btcEthPosValueRatio = 5.0
+	}
+	altcoinPosValueRatio := riskControl.AltcoinMaxPositionValueRatio
+	if altcoinPosValueRatio <= 0 {
+		altcoinPosValueRatio = 1.0
+	}
+	sb.WriteString("# 硬性约束（风险控制）\n\n")
+	sb.WriteString("## 代码强制（后端校验，无法绕过）：\n")
+	sb.WriteString(fmt.Sprintf("- 最大持仓数：同时最多 %d 个币\n", riskControl.MaxPositions))
+	sb.WriteString(fmt.Sprintf("- 仓位价值上限（山寨币）：最高 %.0f USDT（= 总权益 %.0f × %.1fx)\n", accountEquity*altcoinPosValueRatio, accountEquity, altcoinPosValueRatio))
+	sb.WriteString(fmt.Sprintf("- 仓位价值上限（BTC/ETH）：最高 %.0f USDT（= 总权益 %.0f × %.1fx)\n", accountEquity*btcEthPosValueRatio, accountEquity, btcEthPosValueRatio))
+	sb.WriteString(fmt.Sprintf("- 最大保证金使用率：≤%.0f%%\n", riskControl.MaxMarginUsage*100))
+	sb.WriteString(fmt.Sprintf("- 最小持仓规模：≥%.0f USDT\n\n", riskControl.MinPositionSize))
+	sb.WriteString("## AI 指引（建议遵循）：\n")
+	sb.WriteString(fmt.Sprintf("- 交易杠杆：山寨币最高 %dx | BTC/ETH 最高 %dx\n", riskControl.AltcoinMaxLeverage, riskControl.BTCETHMaxLeverage))
+	sb.WriteString(fmt.Sprintf("- 风险回报比：≥1:%.1f（止盈/止损）\n", riskControl.MinRiskRewardRatio))
+	sb.WriteString(fmt.Sprintf("- 最低信心阈值：开仓需 ≥%d\n\n", riskControl.MinConfidence))
+	sb.WriteString("## 仓位规模指引\n")
+	sb.WriteString("根据你的信心和上述仓位价值上限计算 `position_size_usd`：\n")
+	sb.WriteString("- 高信心（≥85）：使用上限的 80-100%%\n")
+	sb.WriteString("- 中等信心（70-84）：使用上限的 50-80%%\n")
+	sb.WriteString("- 低信心（60-69）：使用上限的 30-50%%\n")
+	sb.WriteString(fmt.Sprintf("- 示例：当总权益为 %.0f，BTC/ETH 比例为 %.1fx，最高为 %.0f USDT\n", accountEquity, btcEthPosValueRatio, accountEquity*btcEthPosValueRatio))
+	sb.WriteString("- **不要** 仅用 `available_balance` 作为 `position_size_usd`。请使用仓位价值上限！\n\n")
+}
+
+func (e *StrategyEngine) writeOutputFormatChaos(sb *strings.Builder, accountEquity float64) {
+	riskControl := e.config.RiskControl
+	btcEthPosValueRatio := riskControl.BTCETHMaxPositionValueRatio
+	if btcEthPosValueRatio <= 0 {
+		btcEthPosValueRatio = 5.0
+	}
+	sb.WriteString("━━━━━━━━━━━━━━━━━━━━\n")
+	sb.WriteString("【最终输出格式】\n")
+	sb.WriteString("━━━━━━━━━━━━━━━━━━━━\n\n")
+	sb.WriteString("**你的输出必须且仅包含以下两部分，按顺序排列：**\n")
+	sb.WriteString("    - **第一部分**：一个 `<reasoning>` 标签，内含JSON格式的**完整决策依据**。\n")
+	sb.WriteString("    - **第二部分**：一个 `<decision>` 标签，内含JSON格式的**纯粹执行指令数组**。\n")
+	sb.WriteString("不得输出任何其他解释、分析或文本。\n\n")
+	sb.WriteString("严格按照此示例输出：\n\n")
+	sb.WriteString("<reasoning>\n")
+	sb.WriteString("{\n")
+	sb.WriteString("  \"regime\": \"STRONG_TREND\",\n")
+	sb.WriteString("  \"regime_debug\": {\n")
+	sb.WriteString("    \"primary_reason\": \"4h与1h EMA多头排列明确，夹角>15度\",\n")
+	sb.WriteString("    \"volatility_state\": \"ATR正常\"\n")
+	sb.WriteString("  },\n")
+	sb.WriteString("  \"confidence_factors\": {\n")
+	sb.WriteString("    \"trend\": 20,\n")
+	sb.WriteString("    \"momentum\": 20,\n")
+	sb.WriteString("    \"volatility\": 20,\n")
+	sb.WriteString("    \"participation\": 20,\n")
+	sb.WriteString("    \"funding\": 0\n")
+	sb.WriteString("  },\n")
+	sb.WriteString("  \"calculated_confidence\": 80,\n")
+	sb.WriteString("  \"risk_params_note\": \"Regime=STRONG_TREND，应用100%仓位与杠杆上限，置信度要求≥80。\"\n")
+	sb.WriteString("}\n")
+	sb.WriteString("</reasoning>\n\n")
+	sb.WriteString("<decision>\n")
+	sb.WriteString("[\n")
+	sb.WriteString(fmt.Sprintf("  {\n    \"symbol\": \"BTCUSDT\",\n    \"action\": \"open_long\",\n    \"leverage\": %d,\n    \"position_size_usd\": %.0f,\n    \"stop_loss\": 61200,\n    \"take_profit\": 66000,\n    \"confidence\": 80,\n    \"risk_usd\": 400\n  }\n", riskControl.BTCETHMaxLeverage, accountEquity*btcEthPosValueRatio))
+	sb.WriteString("]\n")
+	sb.WriteString("</decision>\n\n")
+	sb.WriteString("## 字段说明\n\n")
+	sb.WriteString("- `action`: open_long | open_short | close_long | close_short | hold | wait\n")
+	sb.WriteString("- 开仓必填：leverage, position_size_usd, stop_loss, take_profit, confidence, risk_usd\n")
+	sb.WriteString("- **重要**：所有数值必须是计算结果，而非公式/表达式（例如使用 `27.76`，不要写 `3000 * 0.01`）\n\n")
+}
+
+func (e *StrategyEngine) writeOutputFormatNofx(sb *strings.Builder, accountEquity float64) {
+	riskControl := e.config.RiskControl
+	btcEthPosValueRatio := riskControl.BTCETHMaxPositionValueRatio
+	if btcEthPosValueRatio <= 0 {
+		btcEthPosValueRatio = 5.0
+	}
+	sb.WriteString("# 输出格式（严格遵守）\n\n")
+	sb.WriteString("**必须使用 XML 标签 <reasoning> 和 <decision> 分隔推理链与决策 JSON，避免解析错误**\n\n")
+	sb.WriteString("## 格式要求\n\n")
+	sb.WriteString("<reasoning>\n")
+	sb.WriteString("你的推理链分析...\n")
+	sb.WriteString("- 简要说明你的思考过程 \n")
+	sb.WriteString("</reasoning>\n\n")
+	sb.WriteString("<decision>\n")
+	sb.WriteString("步骤2：JSON 决策数组\n\n")
+	sb.WriteString("```json\n[\n")
+	examplePositionSize := accountEquity * btcEthPosValueRatio
+	sb.WriteString(fmt.Sprintf("  {\"symbol\": \"BTCUSDT\", \"action\": \"open_short\", \"leverage\": %d, \"position_size_usd\": %.0f, \"stop_loss\": 97000, \"take_profit\": 91000, \"confidence\": 85, \"risk_usd\": 300},\n",
+		riskControl.BTCETHMaxLeverage, examplePositionSize))
+	sb.WriteString("  {\"symbol\": \"ETHUSDT\", \"action\": \"close_long\"}\n")
+	sb.WriteString("]\n```\n")
+	sb.WriteString("</decision>\n\n")
+	sb.WriteString("## 字段说明\n\n")
+	sb.WriteString("- `action`: open_long | open_short | close_long | close_short | hold | wait\n")
+	sb.WriteString(fmt.Sprintf("- `confidence`: 0-100（推荐开仓 ≥ %d）\n", riskControl.MinConfidence))
+	sb.WriteString("- 开仓必填：leverage, position_size_usd, stop_loss, take_profit, confidence, risk_usd\n")
+	sb.WriteString("- **重要**：所有数值必须是计算结果，而非公式/表达式（例如使用 `27.76`，不要写 `3000 * 0.01`）\n\n")
 }
 
 // ============================================================================
