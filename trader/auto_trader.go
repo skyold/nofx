@@ -867,6 +867,10 @@ func (at *AutoTrader) executeOpenLongWithRecord(decision *decision.Decision, act
 	if err != nil {
 		return err
 	}
+	//check the price is valid for open long
+	if err := at.validateOpenPriceLevels("open_long", decision.Symbol, marketData.CurrentPrice, decision.StopLoss, decision.TakeProfit); err != nil {
+		return err
+	}
 
 	// Get balance (needed for multiple checks)
 	balance, err := at.trader.GetBalance()
@@ -982,6 +986,11 @@ func (at *AutoTrader) executeOpenShortWithRecord(decision *decision.Decision, ac
 	// Get current price
 	marketData, err := market.Get(decision.Symbol)
 	if err != nil {
+		return err
+	}
+	
+	// check the price is valid for open short
+	if err := at.validateOpenPriceLevels("open_short", decision.Symbol, marketData.CurrentPrice, decision.StopLoss, decision.TakeProfit); err != nil {
 		return err
 	}
 
@@ -1821,6 +1830,36 @@ func (at *AutoTrader) enforcePositionValueRatio(positionSizeUSD float64, equity 
 	}
 
 	return positionSizeUSD, false
+}
+
+func (at *AutoTrader) validateOpenPriceLevels(action string, symbol string, currentPrice, stopLoss, takeProfit float64) error {
+	if currentPrice <= 0 {
+		return fmt.Errorf("invalid current price for %s: %.8f", symbol, currentPrice)
+	}
+	if stopLoss <= 0 || takeProfit <= 0 {
+		return fmt.Errorf("%s invalid stop loss/take profit (stop_loss=%.8f take_profit=%.8f)", symbol, stopLoss, takeProfit)
+	}
+
+	switch action {
+	case "open_long":
+		if stopLoss >= currentPrice {
+			return fmt.Errorf("%s long stop loss must be below current price (stop_loss=%.8f current=%.8f)", symbol, stopLoss, currentPrice)
+		}
+		if takeProfit <= currentPrice {
+			return fmt.Errorf("%s long take profit must be above current price (take_profit=%.8f current=%.8f)", symbol, takeProfit, currentPrice)
+		}
+	case "open_short":
+		if stopLoss <= currentPrice {
+			return fmt.Errorf("%s short stop loss must be above current price (stop_loss=%.8f current=%.8f)", symbol, stopLoss, currentPrice)
+		}
+		if takeProfit >= currentPrice {
+			return fmt.Errorf("%s short take profit must be below current price (take_profit=%.8f current=%.8f)", symbol, takeProfit, currentPrice)
+		}
+	default:
+		return fmt.Errorf("unknown action for price level validation: %s", action)
+	}
+
+	return nil
 }
 
 // enforceMinPositionSize checks minimum position size (CODE ENFORCED)

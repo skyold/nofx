@@ -859,7 +859,7 @@ func (e *StrategyEngine) writeRiskConstraintsChaos(sb *strings.Builder, accountE
 	sb.WriteString("## 代码强制（后端校验，无法绕过）：\n")
 	sb.WriteString(fmt.Sprintf("- 最大持仓数：同时最多 %d 个币\n", riskControl.MaxPositions))
 	sb.WriteString(fmt.Sprintf("- 仓位价值上限（山寨币）：最高 %.0f USDT（= 总权益 %.0f × %.1fx)\n", accountEquity*altcoinPosValueRatio, accountEquity, altcoinPosValueRatio))
-	sb.WriteString(fmt.Sprintf("- 仓位价值上限(BTC/ETH): 最高 %.0f USDT（= 总权益 %.0f × %.1fx)\n", accountEquity*btcEthPosValueRatio, accountEquity, btcEthPosValueRatio))
+	sb.WriteString(fmt.Sprintf("- 仓位价值上限（BTC/ETH）：最高 %.0f USDT（= 总权益 %.0f × %.1fx)\n", accountEquity*btcEthPosValueRatio, accountEquity, btcEthPosValueRatio))
 	sb.WriteString(fmt.Sprintf("- 最大保证金使用率：≤%.0f%%\n", riskControl.MaxMarginUsage*100))
 	sb.WriteString(fmt.Sprintf("- 最小持仓规模：≥%.0f USDT\n", riskControl.MinPositionSize))
 	sb.WriteString(fmt.Sprintf("- 默认交易杠杆：山寨币最高 %dx | BTC/ETH 最高 %dx\n", riskControl.AltcoinMaxLeverage, riskControl.BTCETHMaxLeverage))
