@@ -125,3 +125,4 @@ dmypy.json
 .pyre/
 PR_DESCRIPTION.md
 data.tar.gz
+/.trae
