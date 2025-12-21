@@ -770,8 +770,9 @@ func (e *StrategyEngine) BuildSystemPrompt(accountEquity float64, variant string
 		sb.WriteString("3. 先写出推理链，再输出结构化 JSON\n\n")
 	}
 
-	// 7. Output format
-	e.writeOutputFormatChaos(&sb, accountEquity) // 混沌模式
+	// 7. Output format 
+	// 暂时移除固定的输出模式
+	//e.writeOutputFormatChaos(&sb, accountEquity) // 混沌模式
 	//e.writeOutputFormatNofx(&sb, accountEquity) // nofx 模式
 
 	// 8. Custom Prompt
