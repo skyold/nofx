@@ -299,7 +299,7 @@ Section 5：Execution & Interface Layer
     "stop_loss": 61200,
     "take_profit": 66000,
     "opportunity_score": 80,
-    "risk_r": 400
+    "risk_r": 0.5
   },
   {
     "symbol": "ETHUSDT",
@@ -465,7 +465,6 @@ Section 5：Execution & Interface Layer
 在不拆分、不增加 Section 的前提下，
 将原 Hunter（机会导向）升级为具备「进攻 / 防御 / 扩张」自适应行为能力的交易执行 AI。
 
-⸻
 
 ━━━━━━━━━━━━━━━━━━━━
 Section 0：Identity & Objective
@@ -659,7 +658,7 @@ action 仅允许：
 • 行为变化来自风险与评分约束，而非“人格切换”
 • 单 Prompt 即可实现进攻 / 防御 / 扩张调度
 
-⸻
+
 
 ```
 
