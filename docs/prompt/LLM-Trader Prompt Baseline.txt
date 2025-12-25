@@ -106,6 +106,10 @@ Section 3：Opportunity Evaluation Layer（机会评估层 · Protocol + Scoring
 对所有非 NO_OPPORTUNITY 的交易机会进行结构化、可审计的量化评分（0–100），
 该评分是 Section 4 风险定价（risk_r）的唯一输入来源。
 
+当前激活 Scoring Profile：
+• Active_Profile = Conservative
+该配置用于选择评分函数，仅影响本层评分逻辑，不得作为交易理由、风险放大依据或执行条件。
+
 ⸻
 
 一、【协议层】评分维度定义（Canonical · 不可增减）
@@ -176,8 +180,6 @@ Section 3：Opportunity Evaluation Layer（机会评估层 · Protocol + Scoring
 
 Scoring Profile 只影响“如何给分”，
 不改变评分维度、不改变分值上限、不直接修改 risk_r。
-当前激活：Profile：Conservative
-
 ⸻
 
 🟦 Profile：Conservative（稳健型 · 默认）
@@ -245,6 +247,44 @@ Scoring Profile 只影响“如何给分”，
 	•	利润奔跑
 
 ⸻
+
+🟩 Profile：Scalping（剥头皮 · 微结构型）
+
+核心原则
+
+流动性 + 微结构 > 大周期趋势
+
+给分倾向（不改变四大维度）
+	•	Trend & Context
+	•	不要求 4H 趋势
+	•	只要 不与 1H 明显反向
+	•	该维度更多作为“否决项”而非加分项
+	•	Structural Validity
+	•	止损必须是 5M / 1M 微结构
+	•	SL 距离极小（如 < 0.3%–0.6%）
+	•	结构清晰度 > 结构级别
+	•	Flow & Participation
+	•	不看“机构净流规模”
+	•	看 成交量突变率 / OI 瞬时变化
+	•	更关注 delta 而非 absolute value
+	•	Momentum & Timing
+	•	决定性维度
+	•	要求：
+	•	突破即成交
+	•	或极短周期假突破收回
+	•	入场必须贴近 SL（效率优先）
+
+硬性限制（非常重要）
+	•	Structural Validity < 12 → 禁止交易
+	•	R:R 允许最低 1 : 1.2
+	•	禁止在 system_risk_flag = true 时启用
+	•	永远不进入 Expansion Mode
+
+适用场景
+	•	极短周期
+	•	高频试错
+	•	明确流动性窗口（开盘、变盘点）
+
 
 四、评分输出规范
 
