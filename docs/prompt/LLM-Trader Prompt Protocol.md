@@ -90,6 +90,33 @@ Section 1：Decision Context Layer（决策上下文层）
 
 ---
 
+## 附加规范：结构锚点段（Physical Structural Anchors）
+
+### 目的
+
+为 LLM 提供稳定的价格结构参照，避免“无层级感”分析。
+
+### 分层
+
+- Session Anchors（24H/Daily）：过去 24h 的最高/最低价
+- Structural Anchors（4H/1H）：最近 48 根（1H）内的 Swing High/Low
+- Local Anchors（15M/5M）：最近 12–24 根内的局部 Pivot
+
+### 展示格式（示例）
+
+```
+### 物理结构锚点 (Physical Structural Anchors):
+- [Major Support]: 86800.5 (24H Daily Low, 10:00)
+- [Swing Low]: 87219.0 (1H Structure, 10:35)
+- [Local Support]: 87430.0 (15M Pivot, 10:50)
+- [Major Resistance]: 88330.0 (24H Daily High, 03:20)
+
+### 动态参考 (Dynamic References):
+- BB_Lower (5M): 87432.0
+- EMA50 (1H): 87630.0
+```
+
+
 ## Section 2：Opportunity Classification Layer （机会分类层）
 
 ### 机会分类目标
@@ -861,4 +888,3 @@ Section 5：Execution & Interface Layer
 ⸻
 
 ```
-

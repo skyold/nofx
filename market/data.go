@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"nofx/logger"
 	"math"
+	"nofx/logger"
 	"strconv"
 	"strings"
 	"sync"
@@ -19,9 +19,16 @@ type FundingRateCache struct {
 	UpdatedAt time.Time
 }
 
+type DailyLowCache struct {
+	Low       float64
+	UpdatedAt time.Time
+}
+
 var (
 	fundingRateMap sync.Map // map[string]*FundingRateCache
 	frCacheTTL     = 1 * time.Hour
+	dailyLowMap    sync.Map // map[string]*DailyLowCache
+	dailyLowTTL    = 30 * time.Second
 )
 
 // Get retrieves market data for the specified token
@@ -81,6 +88,14 @@ func Get(symbol string) (*Data, error) {
 		}
 	}
 
+	localSupport, localSupportTime, _ := CalculateLocalSupport(klines3m, 50)
+	dailyLow, err := getDailyLow(symbol)
+	if err != nil {
+		if v, ok := CalculateDailyLowUTC(klines3m); ok {
+			dailyLow = v
+		}
+	}
+
 	// Get OI data
 	oiData, err := getOpenInterestData(symbol)
 	if err != nil {
@@ -105,6 +120,9 @@ func Get(symbol string) (*Data, error) {
 		CurrentEMA20:      currentEMA20,
 		CurrentMACD:       currentMACD,
 		CurrentRSI7:       currentRSI7,
+		LocalSupport:      localSupport,
+		LocalSupportTime:  localSupportTime,
+		DailyLow:          dailyLow,
 		OpenInterest:      oiData,
 		FundingRate:       fundingRate,
 		IntradaySeries:    intradayData,
@@ -185,8 +203,16 @@ func GetWithTimeframes(symbol string, timeframes []string, primaryTimeframe stri
 	currentRSI7 := calculateRSI(primaryKlines, 7)
 
 	// Calculate price changes
-	priceChange1h := calculatePriceChangeByBars(primaryKlines, primaryTimeframe, 60) // 1 hour
+	priceChange1h := calculatePriceChangeByBars(primaryKlines, primaryTimeframe, 60)  // 1 hour
 	priceChange4h := calculatePriceChangeByBars(primaryKlines, primaryTimeframe, 240) // 4 hours
+
+	localSupport, localSupportTime, _ := CalculateLocalSupport(primaryKlines, count)
+	dailyLow, err := getDailyLow(symbol)
+	if err != nil {
+		if v, ok := CalculateDailyLowUTC(primaryKlines); ok {
+			dailyLow = v
+		}
+	}
 
 	// Get OI data
 	oiData, err := getOpenInterestData(symbol)
@@ -198,16 +224,19 @@ func GetWithTimeframes(symbol string, timeframes []string, primaryTimeframe stri
 	fundingRate, _ := getFundingRate(symbol)
 
 	return &Data{
-		Symbol:        symbol,
-		CurrentPrice:  currentPrice,
-		PriceChange1h: priceChange1h,
-		PriceChange4h: priceChange4h,
-		CurrentEMA20:  currentEMA20,
-		CurrentMACD:   currentMACD,
-		CurrentRSI7:   currentRSI7,
-		OpenInterest:  oiData,
-		FundingRate:   fundingRate,
-		TimeframeData: timeframeData,
+		Symbol:           symbol,
+		CurrentPrice:     currentPrice,
+		PriceChange1h:    priceChange1h,
+		PriceChange4h:    priceChange4h,
+		CurrentEMA20:     currentEMA20,
+		CurrentMACD:      currentMACD,
+		CurrentRSI7:      currentRSI7,
+		LocalSupport:     localSupport,
+		LocalSupportTime: localSupportTime,
+		DailyLow:         dailyLow,
+		OpenInterest:     oiData,
+		FundingRate:      fundingRate,
+		TimeframeData:    timeframeData,
 	}, nil
 }
 
@@ -294,6 +323,142 @@ func calculateTimeframeSeries(klines []Kline, timeframe string, count int) *Time
 	data.ATR14 = calculateATR(klines, 14)
 
 	return data
+}
+
+type Anchor struct {
+	Type      string
+	Price     float64
+	Time      int64
+	Timeframe string
+}
+
+// ComputeAnchors extracts multi-level physical structure anchors for LLM consumption.
+// Rationale:
+// - Session Anchors: Use Daily(1d) high/low if available; fallback to recent 24 bars on 1h.
+// - Structural Anchors: Pivot-based Swing High/Low on 1h/4h within a bounded lookback window.
+// - Local Anchors: Pivot-based local support/resistance on 15m/5m to capture micro structure.
+// Design:
+// - Read-only calculation on existing TimeframeSeriesData; no API/DB/WS dependencies.
+// - Minimal footprint: no global state, no config coupling; safe to call in prompt building.
+func ComputeAnchors(series map[string]*TimeframeSeriesData) []Anchor {
+	if series == nil || len(series) == 0 {
+		return nil
+	}
+	var anchors []Anchor
+	window := 3
+	if tf := series["1d"]; tf != nil && len(tf.Klines) > 0 {
+		lastIdx := len(tf.Klines) - 1
+		dayBar := tf.Klines[lastIdx]
+		anchors = append(anchors, Anchor{Type: "Major Support", Price: dayBar.Low, Time: dayBar.Time, Timeframe: "1d"})
+		anchors = append(anchors, Anchor{Type: "Major Resistance", Price: dayBar.High, Time: dayBar.Time, Timeframe: "1d"})
+	} else if tf := series["1h"]; tf != nil && len(tf.Klines) > 0 {
+		start := len(tf.Klines) - 24
+		if start < 0 {
+			start = 0
+		}
+		sub := tf.Klines[start:]
+		hi := sub[0].High
+		lo := sub[0].Low
+		hiTime := sub[0].Time
+		loTime := sub[0].Time
+		for _, k := range sub {
+			if k.High > hi {
+				hi = k.High
+				hiTime = k.Time
+			}
+			if k.Low < lo {
+				lo = k.Low
+				loTime = k.Time
+			}
+		}
+		anchors = append(anchors, Anchor{Type: "Major Support", Price: lo, Time: loTime, Timeframe: "1h"})
+		anchors = append(anchors, Anchor{Type: "Major Resistance", Price: hi, Time: hiTime, Timeframe: "1h"})
+	}
+	if tf := series["1h"]; tf != nil && len(tf.Klines) > 0 {
+		res := pivotAnchors(tf.Klines, window, 48, "1h", "Swing Low", "Swing High")
+		anchors = append(anchors, res...)
+	} else if tf := series["4h"]; tf != nil && len(tf.Klines) > 0 {
+		res := pivotAnchors(tf.Klines, window, 24, "4h", "Swing Low", "Swing High")
+		anchors = append(anchors, res...)
+	}
+	if tf := series["15m"]; tf != nil && len(tf.Klines) > 0 {
+		res := pivotAnchors(tf.Klines, window, 24, "15m", "Local Support", "Local Resistance")
+		anchors = append(anchors, res...)
+	} else if tf := series["5m"]; tf != nil && len(tf.Klines) > 0 {
+		res := pivotAnchors(tf.Klines, window, 24, "5m", "Local Support", "Local Resistance")
+		anchors = append(anchors, res...)
+	}
+	anchors = dedupAnchors(anchors, 9)
+	return anchors
+}
+
+// pivotAnchors detects local extrema using a symmetric window around the center bar.
+// A Swing Low: center low equals the minimum across [i-window, i+window].
+// A Swing High: center high equals the maximum across [i-window, i+window].
+// Notes:
+// - The lookback is bounded to keep prompt concise and avoid redundant anchors.
+// - Returns at most the latest 3 anchors to ensure LLM has clear structural levels.
+func pivotAnchors(bars []KlineBar, window int, lookback int, timeframe string, lowLabel string, highLabel string) []Anchor {
+	if len(bars) == 0 {
+		return nil
+	}
+	start := len(bars) - lookback
+	if start < 0 {
+		start = 0
+	}
+	var res []Anchor
+	for i := start + window; i < len(bars)-window; i++ {
+		low := bars[i].Low
+		high := bars[i].High
+		isSwingLow := true
+		isSwingHigh := true
+		for j := i - window; j <= i+window; j++ {
+			if bars[j].Low < low {
+				isSwingLow = false
+			}
+			if bars[j].High > high {
+				isSwingHigh = false
+			}
+			if !isSwingLow && !isSwingHigh {
+				break
+			}
+		}
+		if isSwingLow {
+			res = append(res, Anchor{Type: lowLabel, Price: low, Time: bars[i].Time, Timeframe: timeframe})
+		}
+		if isSwingHigh {
+			res = append(res, Anchor{Type: highLabel, Price: high, Time: bars[i].Time, Timeframe: timeframe})
+		}
+	}
+	if len(res) > 3 {
+		res = res[len(res)-3:]
+	}
+	return res
+}
+
+// dedupAnchors removes near-duplicate anchors by price-timeframe-type with a fixed precision.
+// This prevents flooding the prompt when multiple adjacent pivots share similar prices.
+func dedupAnchors(in []Anchor, precision int) []Anchor {
+	if len(in) == 0 {
+		return in
+	}
+	type key struct {
+		p int64
+		t string
+		k string
+	}
+	seen := make(map[key]bool)
+	var out []Anchor
+	f := math.Pow10(precision)
+	for _, a := range in {
+		p := int64(math.Round(a.Price * f))
+		k := key{p: p, t: a.Timeframe, k: a.Type}
+		if !seen[k] {
+			seen[k] = true
+			out = append(out, a)
+		}
+	}
+	return out
 }
 
 // calculatePriceChangeByBars calculates how many K-lines to look back for price change based on timeframe
@@ -689,6 +854,33 @@ func getFundingRate(symbol string) (float64, error) {
 	return rate, nil
 }
 
+func getDailyLow(symbol string) (float64, error) {
+	symbol = Normalize(symbol)
+
+	if cached, ok := dailyLowMap.Load(symbol); ok {
+		cache := cached.(*DailyLowCache)
+		if time.Since(cache.UpdatedAt) < dailyLowTTL {
+			return cache.Low, nil
+		}
+	}
+
+	apiClient := NewAPIClient()
+	klines, err := apiClient.GetKlines(symbol, "1d", 2)
+	if err != nil {
+		return 0, err
+	}
+	if len(klines) == 0 {
+		return 0, fmt.Errorf("1d kline data is empty")
+	}
+
+	low := klines[len(klines)-1].Low
+	dailyLowMap.Store(symbol, &DailyLowCache{
+		Low:       low,
+		UpdatedAt: time.Now(),
+	})
+	return low, nil
+}
+
 // Format formats and outputs market data
 func Format(data *Data) string {
 	var sb strings.Builder
@@ -894,6 +1086,58 @@ func parseFloat(v interface{}) (float64, error) {
 	}
 }
 
+func CalculateLocalSupport(klines []Kline, lookback int) (float64, int64, bool) {
+	if len(klines) == 0 {
+		return 0, 0, false
+	}
+	if lookback <= 0 || lookback > len(klines) {
+		lookback = len(klines)
+	}
+
+	start := len(klines) - lookback
+	low := math.Inf(1)
+	var lowTime int64
+	ok := false
+
+	for i := start; i < len(klines); i++ {
+		if klines[i].Low < low {
+			low = klines[i].Low
+			lowTime = klines[i].OpenTime
+			ok = true
+		}
+	}
+
+	if !ok || math.IsInf(low, 1) {
+		return 0, 0, false
+	}
+	return low, lowTime, true
+}
+
+func CalculateDailyLowUTC(klines []Kline) (float64, bool) {
+	if len(klines) == 0 {
+		return 0, false
+	}
+
+	last := time.UnixMilli(klines[len(klines)-1].OpenTime).UTC()
+	dayStart := time.Date(last.Year(), last.Month(), last.Day(), 0, 0, 0, 0, time.UTC).UnixMilli()
+
+	low := math.Inf(1)
+	ok := false
+	for i := len(klines) - 1; i >= 0; i-- {
+		if klines[i].OpenTime < dayStart {
+			break
+		}
+		if klines[i].Low < low {
+			low = klines[i].Low
+			ok = true
+		}
+	}
+	if !ok || math.IsInf(low, 1) {
+		return 0, false
+	}
+	return low, true
+}
+
 // BuildDataFromKlines constructs market data snapshot from preloaded K-line series (for backtesting/simulation).
 func BuildDataFromKlines(symbol string, primary []Kline, longer []Kline) (*Data, error) {
 	if len(primary) == 0 {
@@ -903,6 +1147,8 @@ func BuildDataFromKlines(symbol string, primary []Kline, longer []Kline) (*Data,
 	symbol = Normalize(symbol)
 	current := primary[len(primary)-1]
 	currentPrice := current.Close
+	localSupport, localSupportTime, _ := CalculateLocalSupport(primary, len(primary))
+	dailyLow, _ := CalculateDailyLowUTC(primary)
 
 	data := &Data{
 		Symbol:            symbol,
@@ -910,6 +1156,9 @@ func BuildDataFromKlines(symbol string, primary []Kline, longer []Kline) (*Data,
 		CurrentEMA20:      calculateEMA(primary, 20),
 		CurrentMACD:       calculateMACD(primary),
 		CurrentRSI7:       calculateRSI(primary, 7),
+		LocalSupport:      localSupport,
+		LocalSupportTime:  localSupportTime,
+		DailyLow:          dailyLow,
 		PriceChange1h:     priceChangeFromSeries(primary, time.Hour),
 		PriceChange4h:     priceChangeFromSeries(primary, 4*time.Hour),
 		OpenInterest:      &OIData{Latest: 0, Average: 0},

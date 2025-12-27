@@ -992,9 +992,22 @@ func (e *StrategyEngine) BuildUserPrompt(ctx *Context) string {
 
 	// BTC market
 	if btcData, hasBTC := ctx.MarketDataMap["BTCUSDT"]; hasBTC {
-		sb.WriteString(fmt.Sprintf("BTC: %.2f (1h: %+.2f%%, 4h: %+.2f%%) | MACD: %.4f | RSI: %.2f\n\n",
-			btcData.CurrentPrice, btcData.PriceChange1h, btcData.PriceChange4h,
-			btcData.CurrentMACD, btcData.CurrentRSI7))
+		localSupportStr := ""
+		if btcData.LocalSupport > 0 {
+			timePart := ""
+			if btcData.LocalSupportTime > 0 {
+				timePart = fmt.Sprintf(" (%s Low)", time.Unix(btcData.LocalSupportTime/1000, 0).UTC().Format("15:04"))
+			}
+			localSupportStr = fmt.Sprintf(" | Local_Support: %s%s", formatPriceForPrompt(btcData.LocalSupport), timePart)
+		}
+		dailyLowStr := ""
+		if btcData.DailyLow > 0 {
+			dailyLowStr = fmt.Sprintf(" | Daily_Low: %s", formatPriceForPrompt(btcData.DailyLow))
+		}
+
+		sb.WriteString(fmt.Sprintf("BTC: %s (1h: %+.2f%%, 4h: %+.2f%%) | MACD: %.4f | RSI: %.2f%s%s\n\n",
+			formatPriceForPrompt(btcData.CurrentPrice), btcData.PriceChange1h, btcData.PriceChange4h,
+			btcData.CurrentMACD, btcData.CurrentRSI7, localSupportStr, dailyLowStr))
 	}
 
 	// Account information
@@ -1147,6 +1160,30 @@ func (e *StrategyEngine) formatMarketData(data *market.Data) string {
 
 	sb.WriteString("\n\n")
 
+	if data.LocalSupport > 0 || data.DailyLow > 0 {
+		localSupportStr := ""
+		if data.LocalSupport > 0 {
+			timePart := ""
+			if data.LocalSupportTime > 0 {
+				timePart = fmt.Sprintf(" (%s Low)", time.Unix(data.LocalSupportTime/1000, 0).UTC().Format("15:04"))
+			}
+			localSupportStr = fmt.Sprintf("Local_Support: %s%s", formatPriceForPrompt(data.LocalSupport), timePart)
+		}
+		dailyLowStr := ""
+		if data.DailyLow > 0 {
+			dailyLowStr = fmt.Sprintf("Daily_Low: %s", formatPriceForPrompt(data.DailyLow))
+		}
+
+		switch {
+		case localSupportStr != "" && dailyLowStr != "":
+			sb.WriteString(localSupportStr + ", " + dailyLowStr + "\n\n")
+		case localSupportStr != "":
+			sb.WriteString(localSupportStr + "\n\n")
+		case dailyLowStr != "":
+			sb.WriteString(dailyLowStr + "\n\n")
+		}
+	}
+
 	if indicators.EnableOI || indicators.EnableFundingRate {
 		sb.WriteString(fmt.Sprintf("Additional data for %s:\n\n", data.Symbol))
 
@@ -1166,6 +1203,48 @@ func (e *StrategyEngine) formatMarketData(data *market.Data) string {
 			if tfData, ok := data.TimeframeData[tf]; ok {
 				sb.WriteString(fmt.Sprintf("=== %s Timeframe (oldest → latest) ===\n\n", strings.ToUpper(tf)))
 				e.formatTimeframeSeriesData(&sb, tfData, indicators)
+			}
+		}
+		// Physical Structural Anchors injection:
+		// Compute read-only anchors from existing multi-timeframe series to give LLM
+		// clear structural levels (session/structural/local) without changing API or system prompt.
+		anchors := market.ComputeAnchors(data.TimeframeData)
+		if len(anchors) > 0 {
+			sb.WriteString("### 物理结构锚点 (Physical Structural Anchors):\n")
+			for _, a := range anchors {
+				priceStr := formatPriceForPrompt(a.Price)
+				t := time.Unix(a.Time/1000, 0).UTC().Format("01-02 15:04")
+				src := ""
+				switch a.Timeframe {
+				case "1d":
+					if a.Type == "Major Support" {
+						src = "24H Daily Low"
+					} else {
+						src = "24H Daily High"
+					}
+				case "1h", "4h":
+					src = a.Timeframe + " Structure"
+				default:
+					src = a.Timeframe + " Pivot"
+				}
+				sb.WriteString(fmt.Sprintf("- [%s]: %s (%s, %s)\n", a.Type, priceStr, src, t))
+			}
+			sb.WriteString("\n")
+			// Dynamic references: provide minimal indicator context (BOLL lower/EMA50)
+			// from existing series' latest values to aid local decision precision.
+			refParts := []string{}
+			if tf, ok := data.TimeframeData["5m"]; ok && len(tf.BOLLLower) > 0 {
+				refParts = append(refParts, fmt.Sprintf("BB_Lower (5M): %s", formatPriceForPrompt(tf.BOLLLower[len(tf.BOLLLower)-1])))
+			}
+			if tf, ok := data.TimeframeData["1h"]; ok && len(tf.EMA50Values) > 0 {
+				refParts = append(refParts, fmt.Sprintf("EMA50 (1H): %.4f", tf.EMA50Values[len(tf.EMA50Values)-1]))
+			}
+			if len(refParts) > 0 {
+				sb.WriteString("### 动态参考 (Dynamic References):\n")
+				for _, p := range refParts {
+					sb.WriteString(fmt.Sprintf("- %s\n", p))
+				}
+				sb.WriteString("\n")
 			}
 		}
 	} else {
@@ -1393,6 +1472,23 @@ func formatFlowValue(v float64) string {
 		return fmt.Sprintf("%s%.2fK", sign, v/1e3)
 	}
 	return fmt.Sprintf("%s%.2f", sign, v)
+}
+
+func formatPriceForPrompt(price float64) string {
+	switch {
+	case price < 0.0001:
+		return fmt.Sprintf("%.8f", price)
+	case price < 0.001:
+		return fmt.Sprintf("%.6f", price)
+	case price < 0.01:
+		return fmt.Sprintf("%.6f", price)
+	case price < 1.0:
+		return fmt.Sprintf("%.4f", price)
+	case price < 100:
+		return fmt.Sprintf("%.4f", price)
+	default:
+		return fmt.Sprintf("%.2f", price)
+	}
 }
 
 func formatFloatSlice(values []float64) string {

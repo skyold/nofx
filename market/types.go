@@ -4,13 +4,19 @@ import "time"
 
 // Data market data structure
 type Data struct {
-	Symbol            string
-	CurrentPrice      float64
-	PriceChange1h     float64 // 1-hour price change percentage
-	PriceChange4h     float64 // 4-hour price change percentage
-	CurrentEMA20      float64
-	CurrentMACD       float64
-	CurrentRSI7       float64
+	Symbol        string
+	CurrentPrice  float64
+	PriceChange1h float64 // 1-hour price change percentage
+	PriceChange4h float64 // 4-hour price change percentage
+	CurrentEMA20  float64
+	CurrentMACD   float64
+	CurrentRSI7   float64
+	// LocalSupport: recent micro-level support (from intraday pivot)
+	LocalSupport float64
+	// LocalSupportTime: UTC ms timestamp for LocalSupport bar
+	LocalSupportTime int64
+	// DailyLow: session-level guardrail (24h low), used by anchors
+	DailyLow          float64
 	OpenInterest      *OIData
 	FundingRate       float64
 	IntradaySeries    *IntradayData
