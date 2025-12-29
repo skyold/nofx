@@ -403,9 +403,33 @@ func (e *StrategyEngine) GetCandidateCoins() ([]CandidateCoin, error) {
 		return candidates, nil
 
 	case "coinpool":
+		// 检查 use_coin_pool 标志，如果为 false 则回退到静态币种
+		if !coinSource.UseCoinPool {
+			logger.Infof("⚠️  source_type is 'coinpool' but use_coin_pool is false, falling back to static coins")
+			for _, symbol := range coinSource.StaticCoins {
+				symbol = market.Normalize(symbol)
+				candidates = append(candidates, CandidateCoin{
+					Symbol:  symbol,
+					Sources: []string{"static"},
+				})
+			}
+			return candidates, nil
+		}
 		return e.getCoinPoolCoins(coinSource.CoinPoolLimit)
 
 	case "oi_top":
+		// 检查 use_oi_top 标志，如果为 false 则回退到静态币种
+		if !coinSource.UseOITop {
+			logger.Infof("⚠️  source_type is 'oi_top' but use_oi_top is false, falling back to static coins")
+			for _, symbol := range coinSource.StaticCoins {
+				symbol = market.Normalize(symbol)
+				candidates = append(candidates, CandidateCoin{
+					Symbol:  symbol,
+					Sources: []string{"static"},
+				})
+			}
+			return candidates, nil
+		}
 		return e.getOITopCoins(coinSource.OITopLimit)
 
 	case "mixed":
@@ -702,6 +726,13 @@ func (e *StrategyEngine) BuildSystemPrompt(accountEquity float64, variant string
 	var sb strings.Builder
 	riskControl := e.config.RiskControl
 	promptSections := e.config.PromptSections
+
+	// 0. Data Dictionary & Schema (ensure AI understands all fields)
+	lang := detectLanguage(promptSections.RoleDefinition)
+	schemaPrompt := GetSchemaPrompt(lang)
+	sb.WriteString(schemaPrompt)
+	sb.WriteString("\n\n")
+	sb.WriteString("---\n\n")
 
 	// 1. Role definition (editable)
 	if promptSections.RoleDefinition != "" {
@@ -1036,6 +1067,67 @@ func (e *StrategyEngine) BuildUserPrompt(ctx *Context) string {
 		sb.WriteString("\n")
 	}
 
+	// Historical trading statistics (helps AI understand past performance)
+	if ctx.TradingStats != nil && ctx.TradingStats.TotalTrades > 0 {
+		// Detect language from strategy config
+		lang := detectLanguage(e.config.PromptSections.RoleDefinition)
+
+		// Win/Loss ratio
+		var winLossRatio float64
+		if ctx.TradingStats.AvgLoss > 0 {
+			winLossRatio = ctx.TradingStats.AvgWin / ctx.TradingStats.AvgLoss
+		}
+
+		if lang == LangChinese {
+			sb.WriteString("## 历史交易统计\n")
+			sb.WriteString(fmt.Sprintf("总交易: %d 笔 | 盈利因子: %.2f | 夏普比率: %.2f | 盈亏比: %.2f\n",
+				ctx.TradingStats.TotalTrades,
+				ctx.TradingStats.ProfitFactor,
+				ctx.TradingStats.SharpeRatio,
+				winLossRatio))
+			sb.WriteString(fmt.Sprintf("总盈亏: %+.2f USDT | 平均盈利: +%.2f | 平均亏损: -%.2f | 最大回撤: %.1f%%\n",
+				ctx.TradingStats.TotalPnL,
+				ctx.TradingStats.AvgWin,
+				ctx.TradingStats.AvgLoss,
+				ctx.TradingStats.MaxDrawdownPct))
+
+			// Performance hints based on profit factor, sharpe, and drawdown
+			if ctx.TradingStats.ProfitFactor >= 1.5 && ctx.TradingStats.SharpeRatio >= 1 {
+				sb.WriteString("表现: 良好 - 保持当前策略\n")
+			} else if ctx.TradingStats.ProfitFactor < 1 {
+				sb.WriteString("表现: 需改进 - 提高盈亏比，优化止盈止损\n")
+			} else if ctx.TradingStats.MaxDrawdownPct > 30 {
+				sb.WriteString("表现: 风险偏高 - 减少仓位，控制回撤\n")
+			} else {
+				sb.WriteString("表现: 正常 - 有优化空间\n")
+			}
+		} else {
+			sb.WriteString("## Historical Trading Statistics\n")
+			sb.WriteString(fmt.Sprintf("Total Trades: %d | Profit Factor: %.2f | Sharpe: %.2f | Win/Loss Ratio: %.2f\n",
+				ctx.TradingStats.TotalTrades,
+				ctx.TradingStats.ProfitFactor,
+				ctx.TradingStats.SharpeRatio,
+				winLossRatio))
+			sb.WriteString(fmt.Sprintf("Total PnL: %+.2f USDT | Avg Win: +%.2f | Avg Loss: -%.2f | Max Drawdown: %.1f%%\n",
+				ctx.TradingStats.TotalPnL,
+				ctx.TradingStats.AvgWin,
+				ctx.TradingStats.AvgLoss,
+				ctx.TradingStats.MaxDrawdownPct))
+
+			// Performance hints based on profit factor, sharpe, and drawdown
+			if ctx.TradingStats.ProfitFactor >= 1.5 && ctx.TradingStats.SharpeRatio >= 1 {
+				sb.WriteString("Performance: GOOD - maintain current strategy\n")
+			} else if ctx.TradingStats.ProfitFactor < 1 {
+				sb.WriteString("Performance: NEEDS IMPROVEMENT - improve win/loss ratio, optimize TP/SL\n")
+			} else if ctx.TradingStats.MaxDrawdownPct > 30 {
+				sb.WriteString("Performance: HIGH RISK - reduce position size, control drawdown\n")
+			} else {
+				sb.WriteString("Performance: NORMAL - room for optimization\n")
+			}
+		}
+		sb.WriteString("\n")
+	}
+
 	// Position information
 	if len(ctx.Positions) > 0 {
 		sb.WriteString("## Current Positions\n")
@@ -1046,10 +1138,23 @@ func (e *StrategyEngine) BuildUserPrompt(ctx *Context) string {
 		sb.WriteString("Current Positions: None\n\n")
 	}
 
-	// Candidate coins
+	// Candidate coins (exclude coins already in positions to avoid duplicate data)
+	positionSymbols := make(map[string]bool)
+	for _, pos := range ctx.Positions {
+		// Normalize symbol to handle both "ETH" and "ETHUSDT" formats
+		normalizedSymbol := market.Normalize(pos.Symbol)
+		positionSymbols[normalizedSymbol] = true
+	}
+
 	sb.WriteString(fmt.Sprintf("## Candidate Coins (%d coins)\n\n", len(ctx.MarketDataMap)))
 	displayedCount := 0
 	for _, coin := range ctx.CandidateCoins {
+		// Skip if this coin is already a position (data already shown in positions section)
+		normalizedCoinSymbol := market.Normalize(coin.Symbol)
+		if positionSymbols[normalizedCoinSymbol] {
+			continue
+		}
+
 		marketData, hasData := ctx.MarketDataMap[coin.Symbol]
 		if !hasData {
 			continue
@@ -1144,6 +1249,8 @@ func (e *StrategyEngine) formatMarketData(data *market.Data) string {
 	var sb strings.Builder
 	indicators := e.config.Indicators
 
+	// 明确标注币种
+	sb.WriteString(fmt.Sprintf("=== %s Market Data ===\n\n", data.Symbol))
 	sb.WriteString(fmt.Sprintf("current_price = %.4f", data.CurrentPrice))
 
 	if indicators.EnableEMA {
@@ -1381,7 +1488,7 @@ func (e *StrategyEngine) formatQuantData(data *QuantData) string {
 	}
 
 	var sb strings.Builder
-	sb.WriteString("📊 Quantitative Data:\n")
+	sb.WriteString(fmt.Sprintf("📊 %s Quantitative Data:\n", data.Symbol))
 
 	if len(data.PriceChange) > 0 {
 		sb.WriteString("Price Change: ")
@@ -1789,4 +1896,19 @@ func validateDecision(d *Decision, accountEquity float64, btcEthLeverage, altcoi
 	}
 
 	return nil
+}
+
+// ============================================================================
+// Helper Functions
+// ============================================================================
+
+// detectLanguage detects language from text content
+// Returns LangChinese if text contains Chinese characters, otherwise LangEnglish
+func detectLanguage(text string) Language {
+	for _, r := range text {
+		if r >= 0x4E00 && r <= 0x9FFF {
+			return LangChinese
+		}
+	}
+	return LangEnglish
 }

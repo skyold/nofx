@@ -19,6 +19,7 @@ import { t, type Language } from './i18n/translations'
 import { confirmToast, notify } from './lib/notify'
 import { useSystemConfig } from './hooks/useSystemConfig'
 import { DecisionCard } from './components/DecisionCard'
+import { PositionHistory } from './components/PositionHistory'
 import { PunkAvatar, getTraderAvatar } from './components/PunkAvatar'
 import { OFFICIAL_LINKS } from './constants/branding'
 import { BacktestPage } from './components/BacktestPage'
@@ -72,15 +73,15 @@ function getExchangeDisplayNameFromList(
     : typeName
 }
 
-// Helper function to get exchange type from exchange ID (UUID) - for TradingView charts
+// Helper function to get exchange type from exchange ID (UUID) - for kline charts
 function getExchangeTypeFromList(
   exchangeId: string | undefined,
   exchanges: Exchange[] | undefined
 ): string {
-  if (!exchangeId) return 'BINANCE'
+  if (!exchangeId) return 'binance'
   const exchange = exchanges?.find((e) => e.id === exchangeId)
-  if (!exchange) return 'BINANCE' // Default to BINANCE for charts
-  return exchange.exchange_type?.toUpperCase() || 'BINANCE'
+  if (!exchange) return 'binance' // Default to binance for charts
+  return exchange.exchange_type?.toLowerCase() || 'binance'
 }
 
 // Helper function to check if exchange is a perp-dex type (wallet-based)
@@ -817,6 +818,16 @@ function TraderDetailsPage({
     }
   }
 
+  // Handle symbol click from Decision Card
+  const handleSymbolClick = (symbol: string) => {
+    // Set the selected symbol
+    setSelectedChartSymbol(symbol)
+    // Scroll to chart section
+    setTimeout(() => {
+      chartSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }, 100)
+  }
+
   // 平仓操作
   const handleClosePosition = async (symbol: string, side: string) => {
     if (!selectedTraderId) return
@@ -1484,7 +1495,7 @@ function TraderDetailsPage({
           >
             {decisions && decisions.length > 0 ? (
               decisions.map((decision, i) => (
-                <DecisionCard key={i} decision={decision} language={language} />
+                <DecisionCard key={i} decision={decision} language={language} onSymbolClick={handleSymbolClick} />
               ))
             ) : (
               <div className="py-16 text-center">
@@ -1504,6 +1515,25 @@ function TraderDetailsPage({
         </div>
         {/* 右侧结束 */}
       </div>
+
+      {/* Position History Section */}
+      {selectedTraderId && (
+        <div
+          className="binance-card p-6 animate-slide-in"
+          style={{ animationDelay: '0.25s' }}
+        >
+          <div className="flex items-center justify-between mb-5">
+            <h2
+              className="text-xl font-bold flex items-center gap-2"
+              style={{ color: '#EAECEF' }}
+            >
+              <span className="text-2xl">📜</span>
+              {t('positionHistory.title', language)}
+            </h2>
+          </div>
+          <PositionHistory traderId={selectedTraderId} />
+        </div>
+      )}
     </div>
   )
 }
