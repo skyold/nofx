@@ -177,6 +177,9 @@ type RiskControlConfig struct {
 	MinRiskRewardRatio float64 `json:"min_risk_reward_ratio"`
 	// Min AI confidence to open position (AI guided)
 	MinConfidence int `json:"min_confidence"`
+
+	// Base risk percentage per trade (e.g., 0.01 for 1%)
+	BaseRiskPercent float64 `json:"base_risk_percent"`
 }
 
 func (s *StrategyStore) initTables() error {
@@ -272,6 +275,7 @@ func GetDefaultStrategyConfig(lang string) StrategyConfig {
 			MinPositionSize:                 12,  // Min 12 USDT per position (CODE ENFORCED)
 			MinRiskRewardRatio:              3.0, // Min 3:1 profit/loss ratio (AI guided)
 			MinConfidence:                   75,  // Min 75% confidence (AI guided)
+			BaseRiskPercent:                 0.01, // Default 1% risk per trade
 		},
 	}
 

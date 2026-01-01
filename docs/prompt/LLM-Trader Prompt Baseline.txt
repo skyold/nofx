@@ -88,15 +88,6 @@ Section 2：Opportunity Classification Layer（机会分类层）
 
 ⸻
 
-一、【协议层】评分维度（每项 0–25 分）
-
-
-
-
-
-
-M
-
 ━━━━━━━━━━━━━━━━━━━━
 Section 3：Opportunity Evaluation Layer（机会评估层 · Protocol + Scoring Profile）
 ━━━━━━━━━━━━━━━━━━━━
@@ -335,7 +326,13 @@ Step 3: 全局环境压缩 (Env Multiplier)
 	熔断机制：单日最大亏损 ≥ 2R → 当日停止所有新开仓，进入 WAIT 状态。
 	计算顺序：必须 [先计算止损价格] → [再根据 risk_r 计算仓位大小]。
 
-4. 审计要求
+4. 移动止损（Trailing Stop）
+	仅允许在 Expansion Mode 下使用
+	不得放宽原始止损风险（risk_r 不得增加）
+	必须基于结构或 R 倍数（如 ≥ +1R）触发
+	禁止用于“避免止损”
+
+5. 审计要求
 
 	必须输出最终 risk_r 的计算路径（例如：Score 92 -> Base 1.0 -> Mode Cap 0.5 -> Final 0.5R）
 
@@ -364,6 +361,7 @@ Section 5：Execution & Interface Layer（执行与接口层）
     "symbol": "BTCUSDT",
     "regime": "TREND_PULLBACK",
     "logic_summary": "4H 强趋势回踩 EMA20，5M 出现缩量止跌信号，机构资金流持续流入。", 
+	"scoring_profile": "Conservative",
     "scoring": {
       "Trend": 22,
       "Structure": 20,
@@ -396,4 +394,5 @@ Section 5：Execution & Interface Layer（执行与接口层）
 2. 零冗余：对于 action 为 wait/hold/close 的 symbol，禁止输出 params 字段。
 3. 风险锁死：若 system_risk_flag = true，所有新开仓指令（open_*）将被视为协议违规。
 4. 命名一致：decision.risk_r 必须严格等于 reasoning 中计算的 Final R。
+5. decision 中的 scoring 行为，必须与 reasoning.scoring_profile 严格一致，否则视为协议违规
 

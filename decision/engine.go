@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"nofx/logger"
 	"nofx/market"
@@ -133,8 +134,10 @@ type Decision struct {
 	// Opening position parameters
 	Leverage        int     `json:"leverage,omitempty"`
 	PositionSizeUSD float64 `json:"position_size_usd,omitempty"`
+	EntryPrice      float64 `json:"entry,omitempty"` // Entry price for risk calculation (json tag "entry" to match prompt example)
 	StopLoss        float64 `json:"stop_loss,omitempty"`
 	TakeProfit      float64 `json:"take_profit,omitempty"`
+	RiskR           float64 `json:"risk_r,omitempty"` // Risk factor (0.0-1.0)
 
 	// Common parameters
 	Confidence int     `json:"confidence,omitempty"` // Confidence level (0-100)
@@ -275,6 +278,7 @@ func GetFullDecisionWithStrategy(ctx *Context, mcpClient mcp.AIClient, engine *S
 		riskConfig.AltcoinMaxLeverage,
 		riskConfig.BTCETHMaxPositionValueRatio,
 		riskConfig.AltcoinMaxPositionValueRatio,
+		riskConfig.BaseRiskPercent,
 	)
 
 	if decision != nil {
@@ -801,7 +805,7 @@ func (e *StrategyEngine) BuildSystemPrompt(accountEquity float64, variant string
 		sb.WriteString("3. 先写出推理链，再输出结构化 JSON\n\n")
 	}
 
-	// 7. Output format 
+	// 7. Output format
 	// 暂时移除固定的输出模式
 	//e.writeOutputFormatChaos(&sb, accountEquity) // 混沌模式
 	//e.writeOutputFormatNofx(&sb, accountEquity) // nofx 模式
@@ -970,14 +974,15 @@ func (e *StrategyEngine) writeOutputFormatChaos(sb *strings.Builder, accountEqui
 	sb.WriteString("</reasoning>\n\n")
 	sb.WriteString("<decision>\n")
 	sb.WriteString("[\n")
-	sb.WriteString(fmt.Sprintf("  {\n    \"symbol\": \"BTCUSDT\",\n    \"action\": \"open_long\",\n    \"leverage\": %d,\n    \"position_size_usd\": %.0f,\n    \"stop_loss\": 61200,\n    \"take_profit\": 66000,\n    \"confidence\": 80,\n    \"risk_usd\": 400\n  },\n", riskControl.BTCETHMaxLeverage, accountEquity*btcEthPosValueRatio))
+	sb.WriteString(fmt.Sprintf("  {\n    \"symbol\": \"BTCUSDT\",\n    \"action\": \"open_long\",\n    \"leverage\": %d,\n    \"risk_r\": 0.8,\n    \"entry\": 62000,\n    \"stop_loss\": 61200,\n    \"take_profit\": 66000,\n    \"confidence\": 80,\n    \"risk_usd\": 400\n  },\n", riskControl.BTCETHMaxLeverage))
 	sb.WriteString("  {\"symbol\": \"ETHUSDT\", \"action\": \"wait\"}\n")
 	sb.WriteString("]\n")
 	sb.WriteString("</decision>\n\n")
 	sb.WriteString("## 字段说明\n\n")
 	sb.WriteString("- `action`: open_long | open_short | close_long | close_short | hold | wait\n")
-	sb.WriteString("- 开仓必填：leverage, position_size_usd, stop_loss, take_profit, confidence, risk_usd\n")
-	sb.WriteString("- **重要**：所有数值必须是计算结果，而非公式/表达式（例如使用 `27.76`，不要写 `3000 * 0.01`）\n\n")
+	sb.WriteString("- 开仓必填：leverage, risk_r, entry, stop_loss, take_profit, confidence, risk_usd\n")
+	sb.WriteString("- **重要**：所有数值必须是计算结果，而非公式/表达式（例如使用 `27.76`，不要写 `3000 * 0.01`）\n")
+	sb.WriteString("- **RiskR**：风险因子（0.0-1.0），代码将根据账户余额自动计算仓位。\n\n")
 }
 
 func (e *StrategyEngine) writeOutputFormatNofx(sb *strings.Builder, accountEquity float64) {
@@ -996,17 +1001,17 @@ func (e *StrategyEngine) writeOutputFormatNofx(sb *strings.Builder, accountEquit
 	sb.WriteString("<decision>\n")
 	sb.WriteString("步骤2：JSON 决策数组\n\n")
 	sb.WriteString("```json\n[\n")
-	examplePositionSize := accountEquity * btcEthPosValueRatio
-	sb.WriteString(fmt.Sprintf("  {\"symbol\": \"BTCUSDT\", \"action\": \"open_short\", \"leverage\": %d, \"position_size_usd\": %.0f, \"stop_loss\": 97000, \"take_profit\": 91000, \"confidence\": 85, \"risk_usd\": 300},\n",
-		riskControl.BTCETHMaxLeverage, examplePositionSize))
+	sb.WriteString(fmt.Sprintf("  {\"symbol\": \"BTCUSDT\", \"action\": \"open_short\", \"leverage\": %d, \"risk_r\": 0.8, \"entry\": 98000, \"stop_loss\": 97000, \"take_profit\": 91000, \"confidence\": 85, \"risk_usd\": 300},\n",
+		riskControl.BTCETHMaxLeverage))
 	sb.WriteString("  {\"symbol\": \"ETHUSDT\", \"action\": \"close_long\"}\n")
 	sb.WriteString("]\n```\n")
 	sb.WriteString("</decision>\n\n")
 	sb.WriteString("## 字段说明\n\n")
 	sb.WriteString("- `action`: open_long | open_short | close_long | close_short | hold | wait\n")
 	sb.WriteString(fmt.Sprintf("- `confidence`: 0-100（推荐开仓 ≥ %d）\n", riskControl.MinConfidence))
-	sb.WriteString("- 开仓必填：leverage, position_size_usd, stop_loss, take_profit, confidence, risk_usd\n")
-	sb.WriteString("- **重要**：所有数值必须是计算结果，而非公式/表达式（例如使用 `27.76`，不要写 `3000 * 0.01`）\n\n")
+	sb.WriteString("- 开仓必填：leverage, risk_r, entry, stop_loss, take_profit, confidence, risk_usd\n")
+	sb.WriteString("- **重要**：所有数值必须是计算结果，而非公式/表达式（例如使用 `27.76`，不要写 `3000 * 0.01`）\n")
+	sb.WriteString("- **RiskR**：风险因子（0.0-1.0），代码将根据账户余额自动计算仓位。\n\n")
 }
 
 // ============================================================================
@@ -1610,7 +1615,7 @@ func formatFloatSlice(values []float64) string {
 // AI Response Parsing
 // ============================================================================
 
-func parseFullDecisionResponse(aiResponse string, accountEquity float64, btcEthLeverage, altcoinLeverage int, btcEthPosRatio, altcoinPosRatio float64) (*FullDecision, error) {
+func parseFullDecisionResponse(aiResponse string, accountEquity float64, btcEthLeverage, altcoinLeverage int, btcEthPosRatio, altcoinPosRatio, baseRiskPercent float64) (*FullDecision, error) {
 	cotTrace := extractCoTTrace(aiResponse)
 
 	decisions, err := extractDecisions(aiResponse)
@@ -1621,7 +1626,7 @@ func parseFullDecisionResponse(aiResponse string, accountEquity float64, btcEthL
 		}, fmt.Errorf("failed to extract decisions: %w", err)
 	}
 
-	if err := validateDecisions(decisions, accountEquity, btcEthLeverage, altcoinLeverage, btcEthPosRatio, altcoinPosRatio); err != nil {
+	if err := validateDecisions(decisions, accountEquity, btcEthLeverage, altcoinLeverage, btcEthPosRatio, altcoinPosRatio, baseRiskPercent); err != nil {
 		return &FullDecision{
 			CoTTrace:  cotTrace,
 			Decisions: decisions,
@@ -1787,16 +1792,18 @@ func compactArrayOpen(s string) string {
 // Decision Validation
 // ============================================================================
 
-func validateDecisions(decisions []Decision, accountEquity float64, btcEthLeverage, altcoinLeverage int, btcEthPosRatio, altcoinPosRatio float64) error {
+func validateDecisions(decisions []Decision, accountEquity float64, btcEthLeverage, altcoinLeverage int, btcEthPosRatio, altcoinPosRatio, baseRiskPercent float64) error {
 	for i, decision := range decisions {
-		if err := validateDecision(&decision, accountEquity, btcEthLeverage, altcoinLeverage, btcEthPosRatio, altcoinPosRatio); err != nil {
+		if err := validateDecision(&decision, accountEquity, btcEthLeverage, altcoinLeverage, btcEthPosRatio, altcoinPosRatio, baseRiskPercent); err != nil {
 			return fmt.Errorf("decision #%d validation failed: %w", i+1, err)
 		}
+		// Update the decision in the slice since validateDecision might modify it (e.g. leverage cap or PositionSizeUSD calculation)
+		decisions[i] = decision
 	}
 	return nil
 }
 
-func validateDecision(d *Decision, accountEquity float64, btcEthLeverage, altcoinLeverage int, btcEthPosRatio, altcoinPosRatio float64) error {
+func validateDecision(d *Decision, accountEquity float64, btcEthLeverage, altcoinLeverage int, btcEthPosRatio, altcoinPosRatio, baseRiskPercent float64) error {
 	validActions := map[string]bool{
 		"open_long":   true,
 		"open_short":  true,
@@ -1828,6 +1835,43 @@ func validateDecision(d *Decision, accountEquity float64, btcEthLeverage, altcoi
 				d.Symbol, d.Leverage, maxLeverage, maxLeverage)
 			d.Leverage = maxLeverage
 		}
+
+		// RiskR Calculation Logic
+		if d.RiskR > 0 {
+			// Validate RiskR limit (hard cap 1.5 to prevent hallucination)
+			const MaxRiskR = 1.5
+			if d.RiskR > MaxRiskR {
+				logger.Infof("⚠️  RiskR %.2f exceeds limit %.2f, capped at %.2f", d.RiskR, MaxRiskR, MaxRiskR)
+				d.RiskR = MaxRiskR
+			}
+
+			if baseRiskPercent <= 0 {
+				baseRiskPercent = 0.01 // Default 1%
+			}
+
+			if d.EntryPrice <= 0 {
+				return fmt.Errorf("entry price required for RiskR calculation")
+			}
+			if d.StopLoss <= 0 {
+				return fmt.Errorf("stop loss required for RiskR calculation")
+			}
+
+			priceDiff := math.Abs(d.EntryPrice - d.StopLoss)
+			if priceDiff == 0 {
+				return fmt.Errorf("entry price equals stop loss, cannot calculate position size")
+			}
+
+			// Formula: Quantity = (Equity * BaseRisk * RiskR) / |Entry - StopLoss|
+			riskAmount := accountEquity * baseRiskPercent * d.RiskR
+			quantity := riskAmount / priceDiff
+
+			// Convert to USD value for system consistency
+			d.PositionSizeUSD = quantity * d.EntryPrice
+
+			logger.Infof("✓ Calculated position size from RiskR %.2f: %.2f USDT (Risk: %.2f USDT, BaseRisk: %.1f%%)",
+				d.RiskR, d.PositionSizeUSD, riskAmount, baseRiskPercent*100)
+		}
+
 		if d.PositionSizeUSD <= 0 {
 			return fmt.Errorf("position size must be greater than 0: %.2f", d.PositionSizeUSD)
 		}
@@ -1868,10 +1912,15 @@ func validateDecision(d *Decision, accountEquity float64, btcEthLeverage, altcoi
 		}
 
 		var entryPrice float64
-		if d.Action == "open_long" {
-			entryPrice = d.StopLoss + (d.TakeProfit-d.StopLoss)*0.2
+		if d.EntryPrice > 0 {
+			entryPrice = d.EntryPrice
 		} else {
-			entryPrice = d.StopLoss - (d.StopLoss-d.TakeProfit)*0.2
+			// Fallback if not provided (should be provided if RiskR is used, but for legacy compatibility)
+			if d.Action == "open_long" {
+				entryPrice = d.StopLoss + (d.TakeProfit-d.StopLoss)*0.2
+			} else {
+				entryPrice = d.StopLoss - (d.StopLoss-d.TakeProfit)*0.2
+			}
 		}
 
 		var riskPercent, rewardPercent, riskRewardRatio float64
