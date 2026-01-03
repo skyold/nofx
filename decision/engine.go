@@ -727,9 +727,24 @@ func (e *StrategyEngine) FetchOIRankingData() *provider.OIRankingData {
 
 // BuildSystemPrompt builds System Prompt according to strategy configuration
 func (e *StrategyEngine) BuildSystemPrompt(accountEquity float64, variant string) string {
+
 	var sb strings.Builder
 	riskControl := e.config.RiskControl
 	promptSections := e.config.PromptSections
+
+
+    // If OverrideBasePrompt is enabled and CustomPrompt is provided, use it directly
+	// This allows users to use complete custom prompts (like LLM-Trader Prompt Baseline)
+	// bypassing the system's automatic assembly logic
+	if e.config.CustomPrompt != "" {
+
+		sb.WriteString("\n\n你拥有以下市场数据和指标:\n")
+		e.writeAvailableIndicators(&sb)
+		sb.WriteString("\n\n")
+		sb.WriteString(e.config.CustomPrompt)
+
+		return sb.String()
+	}
 
 	// 0. Data Dictionary & Schema (ensure AI understands all fields)
 	lang := detectLanguage(promptSections.RoleDefinition)
@@ -811,12 +826,12 @@ func (e *StrategyEngine) BuildSystemPrompt(accountEquity float64, variant string
 	//e.writeOutputFormatNofx(&sb, accountEquity) // nofx 模式
 
 	// 8. Custom Prompt
-	if e.config.CustomPrompt != "" {
-		sb.WriteString("# 📌 个性化交易策略\n\n")
-		sb.WriteString(e.config.CustomPrompt)
-		sb.WriteString("\n\n")
-		sb.WriteString("说明：上述个性化策略是对基础规则的补充，不得违反基本风险控制原则。\n")
-	}
+	//if e.config.CustomPrompt != "" {
+	//	sb.WriteString("# 📌 个性化交易策略\n\n")
+	//	sb.WriteString(e.config.CustomPrompt)
+	//	sb.WriteString("\n\n")
+	//	sb.WriteString("说明：上述个性化策略是对基础规则的补充，不得违反基本风险控制原则。\n")
+	//}
 
 	return sb.String()
 }
@@ -1185,7 +1200,7 @@ func (e *StrategyEngine) BuildUserPrompt(ctx *Context) string {
 	}
 
 	sb.WriteString("---\n\n")
-	sb.WriteString("Now please analyze and output your decision (Chain of Thought + JSON)\n")
+	//sb.WriteString("Now please analyze and output your decision (Chain of Thought + JSON)\n")
 
 	return sb.String()
 }
