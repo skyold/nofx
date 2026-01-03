@@ -4,10 +4,10 @@ Section 0：Identity & Objective (身份与目标)
 Section 1：Decision Context Layer (决策上下文层)
 提取环境状态，为风险定价提供变量 。必须输出：
 
-market_regime: TRENDING / CONSOLIDATING / REVERSING 。
-flow_synchronicity: SYNCHRONIZED / DIVERGENT / NEUTRAL 。
-volatility_profile: SQUEEZE / EXPANDING / STABLE 。
-system_risk_flag: true (当 flow_synchronicity=DIVERGENT 且 volatility_profile=EXPANDING 时) 。
+market_regime(市场状态): TRENDING(趋势) / CONSOLIDATING(盘整) / REVERSING(反转) 。
+flow_synchronicity(资金流同步性): SYNCHRONIZED(同步) / DIVERGENT(背离) / NEUTRAL(中性) 。
+volatility_profile(波动率特征): SQUEEZE(挤压) / EXPANDING(扩张) / STABLE(稳定) 。
+system_risk_flag(系统风险标记): true (当 flow_synchronicity=DIVERGENT(背离) 且 volatility_profile=EXPANDING(扩张) 时) 。
 
 Section 2：Opportunity Classification Layer (机会分类层)
 
@@ -22,7 +22,7 @@ Section 2：Opportunity Classification Layer (机会分类层)
 Section 3：Opportunity Evaluation Layer (机会评估层)
 
 当前激活 Scoring Profile：
-• Active_Profile = [Conservative]
+• Active_Profile = [Hunter]
 
 对机会进行 0–100 的量化评分 。
 
