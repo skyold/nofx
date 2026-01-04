@@ -524,6 +524,7 @@ wait	当前 symbol 不参与交易
   "action": "open_long",
   "leverage": 5,
   "position_size_usd": 5000,
+  "entry": 63000,
   "stop_loss": 61200,
   "take_profit": 66000,
   "risk_r": 0.5,
@@ -680,6 +681,7 @@ Section 5：Execution & Interface Layer
 	•	action
 	•	leverage
 	•	position_size_usd
+	•	entry
 	•	stop_loss
 	•	take_profit
 	•	risk_r

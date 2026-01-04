@@ -381,6 +381,7 @@ Section 5：Execution & Interface Layer（执行与接口层）
     "symbol": "BTCUSDT",
     "action": "open_long | open_short | close_long | close_short | hold | wait",
     "leverage": number,
+    "entry": number,
     "stop_loss": number,
     "take_profit": number,
 	"risk_r": 0.0-1.0,
@@ -389,9 +390,11 @@ Section 5：Execution & Interface Layer（执行与接口层）
   }
 ]
 
+
+
 5.4 执行约束 (Strict Constraints)
 1. 计算优先：必须 [先确定 SL 价格] -> [计算 R:R] -> [映射 Base Risk] -> [执行三步压缩] -> [输出 final risk_r]。
-2. 零冗余：对于 action 为 wait/hold/close 的 symbol，禁止输出 params 字段。
+2. 零冗余：对于 action 为 wait/hold/close 的 symbol，只输出 symbol 和 action 字段，禁止输出其他字段。
 3. 风险锁死：若 system_risk_flag = true，所有新开仓指令（open_*）将被视为协议违规。
 4. 命名一致：decision.risk_r 必须严格等于 reasoning 中计算的 Final R。
 5. decision 中的 scoring 行为，必须与 reasoning.scoring_profile 严格一致，否则视为协议违规
