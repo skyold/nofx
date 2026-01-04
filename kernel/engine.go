@@ -915,7 +915,7 @@ func (e *StrategyEngine) BuildSystemPrompt(accountEquity float64, variant string
 		altcoinPosValueRatio = 1.0
 	}
 
-	e.writeRiskConstraintsChaos(&sb, accountEquity)
+	e.writeRiskConstraints(&sb, accountEquity)
 
 	// 4. Trading frequency (editable)
 	if promptSections.TradingFrequency != "" {
@@ -934,7 +934,7 @@ func (e *StrategyEngine) BuildSystemPrompt(accountEquity float64, variant string
 		sb.WriteString(promptSections.EntryStandards)
 		sb.WriteString("\n\n你拥有以下市场数据和指标:\n")
 		e.writeAvailableIndicators(&sb)
-		//sb.WriteString(fmt.Sprintf("\n**Confidence ≥ %d** required to open positions.\n\n", riskControl.MinConfidence))
+		sb.WriteString(fmt.Sprintf("\n**Confidence ≥ %d** required to open positions.\n\n", riskControl.MinConfidence))
 	} else {
 		sb.WriteString("# 🎯 入场标准（严格）\n\n")
 		sb.WriteString("仅在多项信号共振时开仓。你具备以下数据：\n")
@@ -954,11 +954,9 @@ func (e *StrategyEngine) BuildSystemPrompt(accountEquity float64, variant string
 	}
 
 	// 7. Output format
-	// 暂时移除固定的输出模式
-	//e.writeOutputFormatChaos(&sb, accountEquity) // 混沌模式
-	//e.writeOutputFormatNofx(&sb, accountEquity) // nofx 模式
+	e.writeOutputFormat(&sb, accountEquity) // nofx 模式
 
-	// 8. Custom Prompt
+	// 8. Custom Prompt 完全重新定义 custom prompt 的机制
 	//if e.config.CustomPrompt != "" {
 	//	sb.WriteString("# 📌 个性化交易策略\n\n")
 	//	sb.WriteString(e.config.CustomPrompt)
@@ -1037,28 +1035,7 @@ func (e *StrategyEngine) writeAvailableIndicators(sb *strings.Builder) {
 	}
 }
 
-func (e *StrategyEngine) writeRiskConstraintsChaos(sb *strings.Builder, accountEquity float64) {
-	riskControl := e.config.RiskControl
-	btcEthPosValueRatio := riskControl.BTCETHMaxPositionValueRatio
-	if btcEthPosValueRatio <= 0 {
-		btcEthPosValueRatio = 5.0
-	}
-	altcoinPosValueRatio := riskControl.AltcoinMaxPositionValueRatio
-	if altcoinPosValueRatio <= 0 {
-		altcoinPosValueRatio = 1.0
-	}
-	sb.WriteString("# 硬性约束（风险控制）\n\n")
-	sb.WriteString("## 代码强制（后端校验，无法绕过）：\n")
-	sb.WriteString(fmt.Sprintf("- 最大持仓数：同时最多 %d 个币\n", riskControl.MaxPositions))
-	sb.WriteString(fmt.Sprintf("- 仓位价值上限（山寨币）：最高 %.0f USDT（= 总权益 %.0f × %.1fx)\n", accountEquity*altcoinPosValueRatio, accountEquity, altcoinPosValueRatio))
-	sb.WriteString(fmt.Sprintf("- 仓位价值上限（BTC/ETH）：最高 %.0f USDT（= 总权益 %.0f × %.1fx)\n", accountEquity*btcEthPosValueRatio, accountEquity, btcEthPosValueRatio))
-	sb.WriteString(fmt.Sprintf("- 最大保证金使用率：≤%.0f%%\n", riskControl.MaxMarginUsage*100))
-	sb.WriteString(fmt.Sprintf("- 最小持仓规模：≥%.0f USDT\n", riskControl.MinPositionSize))
-	sb.WriteString(fmt.Sprintf("- 默认交易杠杆：山寨币最高 %dx | BTC/ETH 最高 %dx\n", riskControl.AltcoinMaxLeverage, riskControl.BTCETHMaxLeverage))
-	sb.WriteString(fmt.Sprintf("- 默认风险回报比:≥1:%.1f(止盈/止损）\n\n", riskControl.MinRiskRewardRatio))
-}
-
-func (e *StrategyEngine) writeRiskConstraintsNofx(sb *strings.Builder, accountEquity float64) {
+func (e *StrategyEngine) writeRiskConstraints(sb *strings.Builder, accountEquity float64) {
 	riskControl := e.config.RiskControl
 	btcEthPosValueRatio := riskControl.BTCETHMaxPositionValueRatio
 	if btcEthPosValueRatio <= 0 {
@@ -1088,52 +1065,7 @@ func (e *StrategyEngine) writeRiskConstraintsNofx(sb *strings.Builder, accountEq
 	sb.WriteString("- **不要** 仅用 `available_balance` 作为 `position_size_usd`。请使用仓位价值上限！\n\n")
 }
 
-func (e *StrategyEngine) writeOutputFormatChaos(sb *strings.Builder, accountEquity float64) {
-	riskControl := e.config.RiskControl
-	btcEthPosValueRatio := riskControl.BTCETHMaxPositionValueRatio
-	if btcEthPosValueRatio <= 0 {
-		btcEthPosValueRatio = 5.0
-	}
-	sb.WriteString("━━━━━━━━━━━━━━━━━━━━\n")
-	sb.WriteString("【最终输出格式】\n")
-	sb.WriteString("━━━━━━━━━━━━━━━━━━━━\n\n")
-	sb.WriteString("**你的输出必须且仅包含以下两部分，按顺序排列：**\n")
-	sb.WriteString("    - **第一部分**：一个 `<reasoning>` 标签，内含JSON格式的**完整决策依据**。\n")
-	sb.WriteString("    - **第二部分**：一个 `<decision>` 标签，内含JSON格式的**纯粹执行指令数组**。\n")
-	sb.WriteString("不得输出任何其他解释、分析或文本。\n\n")
-	sb.WriteString("严格按照此示例输出：\n\n")
-	sb.WriteString("<reasoning>\n")
-	sb.WriteString("{\n")
-	sb.WriteString("  \"regime\": \"STRONG_TREND\",\n")
-	sb.WriteString("  \"regime_debug\": {\n")
-	sb.WriteString("    \"primary_reason\": \"4h与1h EMA多头排列明确，夹角>15度\",\n")
-	sb.WriteString("    \"volatility_state\": \"ATR正常\"\n")
-	sb.WriteString("  },\n")
-	sb.WriteString("  \"confidence_factors\": {\n")
-	sb.WriteString("    \"trend\": 20,\n")
-	sb.WriteString("    \"momentum\": 20,\n")
-	sb.WriteString("    \"volatility\": 20,\n")
-	sb.WriteString("    \"participation\": 20,\n")
-	sb.WriteString("    \"funding\": 0\n")
-	sb.WriteString("  },\n")
-	sb.WriteString("  \"calculated_confidence\": 80,\n")
-	sb.WriteString("  \"risk_params_note\": \"Regime=STRONG_TREND，应用100%仓位与杠杆上限，置信度要求≥80。\"\n")
-	sb.WriteString("}\n")
-	sb.WriteString("</reasoning>\n\n")
-	sb.WriteString("<decision>\n")
-	sb.WriteString("[\n")
-	sb.WriteString(fmt.Sprintf("  {\n    \"symbol\": \"BTCUSDT\",\n    \"action\": \"open_long\",\n    \"leverage\": %d,\n    \"risk_r\": 0.8,\n    \"entry\": 62000,\n    \"stop_loss\": 61200,\n    \"take_profit\": 66000,\n    \"confidence\": 80,\n    \"risk_usd\": 400\n  },\n", riskControl.BTCETHMaxLeverage))
-	sb.WriteString("  {\"symbol\": \"ETHUSDT\", \"action\": \"wait\"}\n")
-	sb.WriteString("]\n")
-	sb.WriteString("</decision>\n\n")
-	sb.WriteString("## 字段说明\n\n")
-	sb.WriteString("- `action`: open_long | open_short | close_long | close_short | hold | wait\n")
-	sb.WriteString("- 开仓必填：leverage, risk_r, entry, stop_loss, take_profit, confidence, risk_usd\n")
-	sb.WriteString("- **重要**：所有数值必须是计算结果，而非公式/表达式（例如使用 `27.76`，不要写 `3000 * 0.01`）\n")
-	sb.WriteString("- **RiskR**：风险因子（0.0-1.0），代码将根据账户余额自动计算仓位。\n\n")
-}
-
-func (e *StrategyEngine) writeOutputFormatNofx(sb *strings.Builder, accountEquity float64) {
+func (e *StrategyEngine) writeOutputFormat(sb *strings.Builder, accountEquity float64) {
 	riskControl := e.config.RiskControl
 	btcEthPosValueRatio := riskControl.BTCETHMaxPositionValueRatio
 	if btcEthPosValueRatio <= 0 {
