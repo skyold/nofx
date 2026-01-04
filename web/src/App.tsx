@@ -1,4 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
+// Force HMR Update - Reliability Fix v3 (Emergency Recovery)
 import useSWR, { mutate } from 'swr'
 import { api } from './lib/api'
 import { ChartTabs } from './components/ChartTabs'
@@ -11,6 +13,8 @@ import { LandingPage } from './pages/LandingPage'
 import { FAQPage } from './pages/FAQPage'
 import { StrategyStudioPage } from './pages/StrategyStudioPage'
 import { DebateArenaPage } from './pages/DebateArenaPage'
+import { StrategyMarketPage } from './pages/StrategyMarketPage'
+import { LoginRequiredOverlay } from './components/LoginRequiredOverlay'
 import HeaderBar from './components/HeaderBar'
 import { LanguageProvider, useLanguage } from './contexts/LanguageContext'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
@@ -40,6 +44,7 @@ type Page =
   | 'trader'
   | 'backtest'
   | 'strategy'
+  | 'strategy-market'
   | 'debate'
   | 'faq'
   | 'login'
@@ -119,6 +124,11 @@ function App() {
   const { loading: configLoading } = useSystemConfig()
   const [route, setRoute] = useState(window.location.pathname)
 
+  // Debug log
+  useEffect(() => {
+    console.log('[App] Mounted. Route:', window.location.pathname);
+  }, []);
+
   // 从URL路径读取初始页面状态（支持刷新保持页面）
   const getInitialPage = (): Page => {
     const path = window.location.pathname
@@ -127,10 +137,42 @@ function App() {
     if (path === '/traders' || hash === 'traders') return 'traders'
     if (path === '/backtest' || hash === 'backtest') return 'backtest'
     if (path === '/strategy' || hash === 'strategy') return 'strategy'
+    if (path === '/strategy-market' || hash === 'strategy-market') return 'strategy-market'
     if (path === '/debate' || hash === 'debate') return 'debate'
     if (path === '/dashboard' || hash === 'trader' || hash === 'details')
       return 'trader'
     return 'competition' // 默认为竞赛页面
+  }
+
+  // Login required overlay state
+  const [loginOverlayOpen, setLoginOverlayOpen] = useState(false)
+  const [loginOverlayFeature, setLoginOverlayFeature] = useState('')
+
+  const handleLoginRequired = (featureName: string) => {
+    setLoginOverlayFeature(featureName)
+    setLoginOverlayOpen(true)
+  }
+
+  // Unified page navigation handler
+  const navigateToPage = (page: Page) => {
+    const pathMap: Record<Page, string> = {
+      'competition': '/competition',
+      'strategy-market': '/strategy-market',
+      'traders': '/traders',
+      'trader': '/dashboard',
+      'backtest': '/backtest',
+      'strategy': '/strategy',
+      'debate': '/debate',
+      'faq': '/faq',
+      'login': '/login',
+      'register': '/register',
+    }
+    const path = pathMap[page]
+    if (path) {
+      window.history.pushState({}, '', path)
+      setRoute(path)
+      setCurrentPage(page)
+    }
   }
 
   const [currentPage, setCurrentPage] = useState<Page>(getInitialPage())
@@ -178,6 +220,8 @@ function App() {
         setCurrentPage('backtest')
       } else if (path === '/strategy' || hash === 'strategy') {
         setCurrentPage('strategy')
+      } else if (path === '/strategy-market' || hash === 'strategy-market') {
+        setCurrentPage('strategy-market')
       } else if (path === '/debate' || hash === 'debate') {
         setCurrentPage('debate')
       } else if (
@@ -381,154 +425,28 @@ function App() {
           onLanguageChange={setLanguage}
           user={user}
           onLogout={logout}
-          onPageChange={(page: Page) => {
-            if (page === 'competition') {
-              window.history.pushState({}, '', '/competition')
-              setRoute('/competition')
-              setCurrentPage('competition')
-            } else if (page === 'traders') {
-              window.history.pushState({}, '', '/traders')
-              setRoute('/traders')
-              setCurrentPage('traders')
-            } else if (page === 'trader') {
-              window.history.pushState({}, '', '/dashboard')
-              setRoute('/dashboard')
-              setCurrentPage('trader')
-            } else if (page === 'faq') {
-              window.history.pushState({}, '', '/faq')
-              setRoute('/faq')
-            } else if (page === 'backtest') {
-              window.history.pushState({}, '', '/backtest')
-              setRoute('/backtest')
-              setCurrentPage('backtest')
-            } else if (page === 'strategy') {
-              window.history.pushState({}, '', '/strategy')
-              setRoute('/strategy')
-              setCurrentPage('strategy')
-            } else if (page === 'debate') {
-              window.history.pushState({}, '', '/debate')
-              setRoute('/debate')
-              setCurrentPage('debate')
-            }
-          }}
+          onLoginRequired={handleLoginRequired}
+          onPageChange={navigateToPage}
         />
         <FAQPage />
+        <LoginRequiredOverlay
+          isOpen={loginOverlayOpen}
+          onClose={() => setLoginOverlayOpen(false)}
+          featureName={loginOverlayFeature}
+        />
       </div>
     )
   }
   if (route === '/reset-password') {
     return <ResetPasswordPage />
   }
-  if (route === '/competition') {
-    return (
-      <div
-        className="min-h-screen"
-        style={{ background: '#000000', color: '#EAECEF' }}
-      >
-        <HeaderBar
-          isLoggedIn={!!user}
-          currentPage="competition"
-          language={language}
-          onLanguageChange={setLanguage}
-          user={user}
-          onLogout={logout}
-          onPageChange={(page: Page) => {
-            console.log('Competition page onPageChange called with:', page)
-            console.log('Current route:', route, 'Current page:', currentPage)
-
-            if (page === 'competition') {
-              console.log('Navigating to competition')
-              window.history.pushState({}, '', '/competition')
-              setRoute('/competition')
-              setCurrentPage('competition')
-            } else if (page === 'traders') {
-              console.log('Navigating to traders')
-              window.history.pushState({}, '', '/traders')
-              setRoute('/traders')
-              setCurrentPage('traders')
-            } else if (page === 'trader') {
-              console.log('Navigating to trader/dashboard')
-              window.history.pushState({}, '', '/dashboard')
-              setRoute('/dashboard')
-              setCurrentPage('trader')
-            } else if (page === 'faq') {
-              console.log('Navigating to faq')
-              window.history.pushState({}, '', '/faq')
-              setRoute('/faq')
-            } else if (page === 'backtest') {
-              console.log('Navigating to backtest')
-              window.history.pushState({}, '', '/backtest')
-              setRoute('/backtest')
-              setCurrentPage('backtest')
-            } else if (page === 'strategy') {
-              console.log('Navigating to strategy')
-              window.history.pushState({}, '', '/strategy')
-              setRoute('/strategy')
-              setCurrentPage('strategy')
-            } else if (page === 'debate') {
-              console.log('Navigating to debate')
-              window.history.pushState({}, '', '/debate')
-              setRoute('/debate')
-              setCurrentPage('debate')
-            }
-
-            console.log(
-              'After navigation - route:',
-              route,
-              'currentPage:',
-              currentPage
-            )
-          }}
-        />
-        <main className="max-w-[1920px] mx-auto px-6 py-6 pt-24">
-          <CompetitionPage />
-        </main>
-      </div>
-    )
-  }
-
   // Show landing page for root route
   if (route === '/' || route === '') {
     return <LandingPage />
   }
 
-  // Allow unauthenticated users to open backtest page directly (others仍展示 Landing)
+  // Redirect unauthenticated users to landing page
   if (!user || !token) {
-    if (route === '/backtest' || currentPage === 'backtest') {
-      return (
-        <div
-          className="min-h-screen"
-          style={{ background: '#0B0E11', color: '#EAECEF' }}
-        >
-          <HeaderBar
-            isLoggedIn={false}
-            currentPage="backtest"
-            language={language}
-            onLanguageChange={setLanguage}
-            onPageChange={(page: Page) => {
-              if (page === 'competition') {
-                window.history.pushState({}, '', '/competition')
-                setRoute('/competition')
-                setCurrentPage('competition')
-              } else if (page === 'traders') {
-                window.history.pushState({}, '', '/traders')
-                setRoute('/traders')
-                setCurrentPage('traders')
-              }
-            }}
-          />
-          <main className="max-w-[1920px] mx-auto px-6 py-6 pt-24">
-            <BacktestPage />
-          </main>
-        </div>
-      )
-    }
-    return <LandingPage />
-  }
-
-  // Show main app for authenticated users on other routes
-  if (!user || !token) {
-    // Default to landing page when not authenticated and no specific route
     return <LandingPage />
   }
 
@@ -544,41 +462,11 @@ function App() {
         onLanguageChange={setLanguage}
         user={user}
         onLogout={logout}
-        onPageChange={(page: Page) => {
-          console.log('Main app onPageChange called with:', page)
-
-          if (page === 'competition') {
-            window.history.pushState({}, '', '/competition')
-            setRoute('/competition')
-            setCurrentPage('competition')
-          } else if (page === 'traders') {
-            window.history.pushState({}, '', '/traders')
-            setRoute('/traders')
-            setCurrentPage('traders')
-          } else if (page === 'trader') {
-            window.history.pushState({}, '', '/dashboard')
-            setRoute('/dashboard')
-            setCurrentPage('trader')
-          } else if (page === 'backtest') {
-            window.history.pushState({}, '', '/backtest')
-            setRoute('/backtest')
-            setCurrentPage('backtest')
-          } else if (page === 'strategy') {
-            window.history.pushState({}, '', '/strategy')
-            setRoute('/strategy')
-            setCurrentPage('strategy')
-          } else if (page === 'faq') {
-            window.history.pushState({}, '', '/faq')
-            setRoute('/faq')
-          } else if (page === 'debate') {
-            window.history.pushState({}, '', '/debate')
-            setRoute('/debate')
-            setCurrentPage('debate')
-          }
-        }}
+        onLoginRequired={handleLoginRequired}
+        onPageChange={navigateToPage}
       />
 
-      {/* Main Content */}
+      {/* Main Content with Page Transitions */}
       <main
         className={
           currentPage === 'debate'
@@ -586,56 +474,68 @@ function App() {
             : 'max-w-[1920px] mx-auto px-6 py-6 pt-24'
         }
       >
-        {currentPage === 'competition' ? (
-          <CompetitionPage />
-        ) : currentPage === 'traders' ? (
-          <AITradersPage
-            onTraderSelect={(traderId) => {
-              setSelectedTraderId(traderId)
-              window.history.pushState({}, '', '/dashboard')
-              setRoute('/dashboard')
-              setCurrentPage('trader')
-            }}
-          />
-        ) : currentPage === 'backtest' ? (
-          <BacktestPage />
-        ) : currentPage === 'strategy' ? (
-          <StrategyStudioPage />
-        ) : currentPage === 'debate' ? (
-          <DebateArenaPage />
-        ) : (
-          <TraderDetailsPage
-            selectedTrader={selectedTrader}
-            status={status}
-            account={account}
-            positions={positions}
-            decisions={decisions}
-            decisionsLimit={decisionsLimit}
-            onDecisionsLimitChange={setDecisionsLimit}
-            stats={stats}
-            lastUpdate={lastUpdate}
-            language={language}
-            traders={traders}
-            tradersError={tradersError}
-            selectedTraderId={selectedTraderId}
-            onTraderSelect={(traderId) => {
-              setSelectedTraderId(traderId)
-              // 更新 URL 参数（使用 slug: name-id前4位）
-              const trader = traders?.find(t => t.trader_id === traderId)
-              if (trader) {
-                const url = new URL(window.location.href)
-                url.searchParams.set('trader', getTraderSlug(trader))
-                window.history.replaceState({}, '', url.toString())
-              }
-            }}
-            onNavigateToTraders={() => {
-              window.history.pushState({}, '', '/traders')
-              setRoute('/traders')
-              setCurrentPage('traders')
-            }}
-            exchanges={exchanges}
-          />
-        )}
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={currentPage}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.15, ease: 'easeOut' }}
+          >
+            {currentPage === 'competition' ? (
+              <CompetitionPage />
+            ) : currentPage === 'strategy-market' ? (
+              <StrategyMarketPage />
+            ) : currentPage === 'traders' ? (
+              <AITradersPage
+                onTraderSelect={(traderId) => {
+                  setSelectedTraderId(traderId)
+                  window.history.pushState({}, '', '/dashboard')
+                  setRoute('/dashboard')
+                  setCurrentPage('trader')
+                }}
+              />
+            ) : currentPage === 'backtest' ? (
+              <BacktestPage />
+            ) : currentPage === 'strategy' ? (
+              <StrategyStudioPage />
+            ) : currentPage === 'debate' ? (
+              <DebateArenaPage />
+            ) : (
+              <TraderDetailsPage
+                selectedTrader={selectedTrader}
+                status={status}
+                account={account}
+                positions={positions}
+                decisions={decisions}
+                decisionsLimit={decisionsLimit}
+                onDecisionsLimitChange={setDecisionsLimit}
+                stats={stats}
+                lastUpdate={lastUpdate}
+                language={language}
+                traders={traders}
+                tradersError={tradersError}
+                selectedTraderId={selectedTraderId}
+                onTraderSelect={(traderId) => {
+                  setSelectedTraderId(traderId)
+                  // 更新 URL 参数（使用 slug: name-id前4位）
+                  const trader = traders?.find(t => t.trader_id === traderId)
+                  if (trader) {
+                    const url = new URL(window.location.href)
+                    url.searchParams.set('trader', getTraderSlug(trader))
+                    window.history.replaceState({}, '', url.toString())
+                  }
+                }}
+                onNavigateToTraders={() => {
+                  window.history.pushState({}, '', '/traders')
+                  setRoute('/traders')
+                  setCurrentPage('traders')
+                }}
+                exchanges={exchanges}
+              />
+            )}
+          </motion.div>
+        </AnimatePresence>
       </main>
 
       {/* Footer - Hidden on debate page */}
@@ -751,6 +651,13 @@ function App() {
           </div>
         </footer>
       )}
+
+      {/* Login Required Overlay */}
+      <LoginRequiredOverlay
+        isOpen={loginOverlayOpen}
+        onClose={() => setLoginOverlayOpen(false)}
+        featureName={loginOverlayFeature}
+      />
     </div>
   )
 }
@@ -798,6 +705,23 @@ function TraderDetailsPage({
   const chartSectionRef = useRef<HTMLDivElement>(null)
   const [showWalletAddress, setShowWalletAddress] = useState<boolean>(false)
   const [copiedAddress, setCopiedAddress] = useState<boolean>(false)
+
+  // Current positions pagination
+  const [positionsPageSize, setPositionsPageSize] = useState<number>(20)
+  const [positionsCurrentPage, setPositionsCurrentPage] = useState<number>(1)
+
+  // Calculate paginated positions
+  const totalPositions = positions?.length || 0
+  const totalPositionPages = Math.ceil(totalPositions / positionsPageSize)
+  const paginatedPositions = positions?.slice(
+    (positionsCurrentPage - 1) * positionsPageSize,
+    positionsCurrentPage * positionsPageSize
+  ) || []
+
+  // Reset page when positions change
+  useEffect(() => {
+    setPositionsCurrentPage(1)
+  }, [selectedTraderId, positionsPageSize])
 
   // Get current exchange info for perp-dex wallet display
   const currentExchange = exchanges?.find(
@@ -1129,7 +1053,7 @@ function TraderDetailsPage({
             >
               {getModelDisplayName(
                 selectedTrader.ai_model.split('_').pop() ||
-                  selectedTrader.ai_model
+                selectedTrader.ai_model
               )}
             </span>
           </span>
@@ -1250,180 +1174,269 @@ function TraderDetailsPage({
               )}
             </div>
             {positions && positions.length > 0 ? (
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs">
-                  <thead className="text-left border-b border-gray-800">
-                    <tr>
-                      <th className="px-1 pb-3 font-semibold text-gray-400 whitespace-nowrap text-left">
-                        {t('symbol', language)}
-                      </th>
-                      <th className="px-1 pb-3 font-semibold text-gray-400 whitespace-nowrap text-center">
-                        {t('side', language)}
-                      </th>
-                      <th className="px-1 pb-3 font-semibold text-gray-400 whitespace-nowrap text-center">
-                        {language === 'zh' ? '操作' : 'Action'}
-                      </th>
-                      <th
-                        className="px-1 pb-3 font-semibold text-gray-400 whitespace-nowrap text-right"
-                        title={t('entryPrice', language)}
-                      >
-                        {language === 'zh' ? '入场价' : 'Entry'}
-                      </th>
-                      <th
-                        className="px-1 pb-3 font-semibold text-gray-400 whitespace-nowrap text-right"
-                        title={t('markPrice', language)}
-                      >
-                        {language === 'zh' ? '标记价' : 'Mark'}
-                      </th>
-                      <th
-                        className="px-1 pb-3 font-semibold text-gray-400 whitespace-nowrap text-right"
-                        title={t('quantity', language)}
-                      >
-                        {language === 'zh' ? '数量' : 'Qty'}
-                      </th>
-                      <th
-                        className="px-1 pb-3 font-semibold text-gray-400 whitespace-nowrap text-right"
-                        title={t('positionValue', language)}
-                      >
-                        {language === 'zh' ? '价值' : 'Value'}
-                      </th>
-                      <th
-                        className="px-1 pb-3 font-semibold text-gray-400 whitespace-nowrap text-center"
-                        title={t('leverage', language)}
-                      >
-                        {language === 'zh' ? '杠杆' : 'Lev.'}
-                      </th>
-                      <th
-                        className="px-1 pb-3 font-semibold text-gray-400 whitespace-nowrap text-right"
-                        title={t('unrealizedPnL', language)}
-                      >
-                        {language === 'zh' ? '未实现盈亏' : 'uPnL'}
-                      </th>
-                      <th
-                        className="px-1 pb-3 font-semibold text-gray-400 whitespace-nowrap text-right"
-                        title={t('liqPrice', language)}
-                      >
-                        {language === 'zh' ? '强平价' : 'Liq.'}
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {positions.map((pos, i) => (
-                      <tr
-                        key={i}
-                        className="border-b border-gray-800 last:border-0 transition-colors hover:bg-opacity-10 hover:bg-yellow-500 cursor-pointer"
-                        onClick={() => {
-                          setSelectedChartSymbol(pos.symbol)
-                          setChartUpdateKey(Date.now())
-                          // Smooth scroll to chart with ref
-                          if (chartSectionRef.current) {
-                            chartSectionRef.current.scrollIntoView({
-                              behavior: 'smooth',
-                              block: 'start',
-                            })
-                          }
-                        }}
-                      >
-                        <td className="px-1 py-3 font-mono font-semibold whitespace-nowrap text-left">
-                          {pos.symbol}
-                        </td>
-                        <td className="px-1 py-3 whitespace-nowrap text-center">
-                          <span
-                            className="px-1.5 py-0.5 rounded text-[10px] font-bold"
-                            style={
-                              pos.side === 'long'
-                                ? {
+              <div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead className="text-left border-b border-gray-800">
+                      <tr>
+                        <th className="px-1 pb-3 font-semibold text-gray-400 whitespace-nowrap text-left">
+                          {t('symbol', language)}
+                        </th>
+                        <th className="px-1 pb-3 font-semibold text-gray-400 whitespace-nowrap text-center">
+                          {t('side', language)}
+                        </th>
+                        <th className="px-1 pb-3 font-semibold text-gray-400 whitespace-nowrap text-center">
+                          {language === 'zh' ? '操作' : 'Action'}
+                        </th>
+                        <th
+                          className="px-1 pb-3 font-semibold text-gray-400 whitespace-nowrap text-right"
+                          title={t('entryPrice', language)}
+                        >
+                          {language === 'zh' ? '入场价' : 'Entry'}
+                        </th>
+                        <th
+                          className="px-1 pb-3 font-semibold text-gray-400 whitespace-nowrap text-right"
+                          title={t('markPrice', language)}
+                        >
+                          {language === 'zh' ? '标记价' : 'Mark'}
+                        </th>
+                        <th
+                          className="px-1 pb-3 font-semibold text-gray-400 whitespace-nowrap text-right"
+                          title={t('quantity', language)}
+                        >
+                          {language === 'zh' ? '数量' : 'Qty'}
+                        </th>
+                        <th
+                          className="px-1 pb-3 font-semibold text-gray-400 whitespace-nowrap text-right"
+                          title={t('positionValue', language)}
+                        >
+                          {language === 'zh' ? '价值' : 'Value'}
+                        </th>
+                        <th
+                          className="px-1 pb-3 font-semibold text-gray-400 whitespace-nowrap text-center"
+                          title={t('leverage', language)}
+                        >
+                          {language === 'zh' ? '杠杆' : 'Lev.'}
+                        </th>
+                        <th
+                          className="px-1 pb-3 font-semibold text-gray-400 whitespace-nowrap text-right"
+                          title={t('unrealizedPnL', language)}
+                        >
+                          {language === 'zh' ? '未实现盈亏' : 'uPnL'}
+                        </th>
+                        <th
+                          className="px-1 pb-3 font-semibold text-gray-400 whitespace-nowrap text-right"
+                          title={t('liqPrice', language)}
+                        >
+                          {language === 'zh' ? '强平价' : 'Liq.'}
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {paginatedPositions.map((pos, i) => (
+                        <tr
+                          key={i}
+                          className="border-b border-gray-800 last:border-0 transition-colors hover:bg-opacity-10 hover:bg-yellow-500 cursor-pointer"
+                          onClick={() => {
+                            setSelectedChartSymbol(pos.symbol)
+                            setChartUpdateKey(Date.now())
+                            // Smooth scroll to chart with ref
+                            if (chartSectionRef.current) {
+                              chartSectionRef.current.scrollIntoView({
+                                behavior: 'smooth',
+                                block: 'start',
+                              })
+                            }
+                          }}
+                        >
+                          <td className="px-1 py-3 font-mono font-semibold whitespace-nowrap text-left">
+                            {pos.symbol}
+                          </td>
+                          <td className="px-1 py-3 whitespace-nowrap text-center">
+                            <span
+                              className="px-1.5 py-0.5 rounded text-[10px] font-bold"
+                              style={
+                                pos.side === 'long'
+                                  ? {
                                     background: 'rgba(14, 203, 129, 0.1)',
                                     color: '#0ECB81',
                                   }
-                                : {
+                                  : {
                                     background: 'rgba(246, 70, 93, 0.1)',
                                     color: '#F6465D',
                                   }
-                            }
+                              }
+                            >
+                              {t(
+                                pos.side === 'long' ? 'long' : 'short',
+                                language
+                              )}
+                            </span>
+                          </td>
+                          <td className="px-1 py-3 whitespace-nowrap text-center">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation() // Prevent row click
+                                handleClosePosition(
+                                  pos.symbol,
+                                  pos.side.toUpperCase()
+                                )
+                              }}
+                              disabled={closingPosition === pos.symbol}
+                              className="btn-danger inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed mx-auto"
+                              title={
+                                language === 'zh' ? '平仓' : 'Close Position'
+                              }
+                            >
+                              {closingPosition === pos.symbol ? (
+                                <Loader2 className="w-3 h-3 animate-spin" />
+                              ) : (
+                                <LogOut className="w-3 h-3" />
+                              )}
+                              {language === 'zh' ? '平仓' : 'Close'}
+                            </button>
+                          </td>
+                          <td
+                            className="px-1 py-3 font-mono whitespace-nowrap text-right"
+                            style={{ color: '#EAECEF' }}
                           >
-                            {t(
-                              pos.side === 'long' ? 'long' : 'short',
-                              language
-                            )}
-                          </span>
-                        </td>
-                        <td className="px-1 py-3 whitespace-nowrap text-center">
+                            {pos.entry_price.toFixed(4)}
+                          </td>
+                          <td
+                            className="px-1 py-3 font-mono whitespace-nowrap text-right"
+                            style={{ color: '#EAECEF' }}
+                          >
+                            {pos.mark_price.toFixed(4)}
+                          </td>
+                          <td
+                            className="px-1 py-3 font-mono whitespace-nowrap text-right"
+                            style={{ color: '#EAECEF' }}
+                          >
+                            {pos.quantity.toFixed(4)}
+                          </td>
+                          <td
+                            className="px-1 py-3 font-mono font-bold whitespace-nowrap text-right"
+                            style={{ color: '#EAECEF' }}
+                          >
+                            {(pos.quantity * pos.mark_price).toFixed(2)}
+                          </td>
+                          <td
+                            className="px-1 py-3 font-mono whitespace-nowrap text-center"
+                            style={{ color: '#F0B90B' }}
+                          >
+                            {pos.leverage}x
+                          </td>
+                          <td className="px-1 py-3 font-mono whitespace-nowrap text-right">
+                            <span
+                              style={{
+                                color:
+                                  pos.unrealized_pnl >= 0 ? '#0ECB81' : '#F6465D',
+                                fontWeight: 'bold',
+                              }}
+                            >
+                              {pos.unrealized_pnl >= 0 ? '+' : ''}
+                              {pos.unrealized_pnl.toFixed(2)}
+                            </span>
+                          </td>
+                          <td
+                            className="px-1 py-3 font-mono whitespace-nowrap text-right"
+                            style={{ color: '#848E9C' }}
+                          >
+                            {pos.liquidation_price.toFixed(4)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {/* Pagination footer - only show when there are many positions */}
+                {totalPositions > 10 && (
+                  <div
+                    className="flex flex-wrap items-center justify-between gap-3 pt-4 mt-4 text-xs"
+                    style={{ borderTop: '1px solid #2B3139', color: '#848E9C' }}
+                  >
+                    <span>
+                      {language === 'zh'
+                        ? `显示 ${paginatedPositions.length} / ${totalPositions} 个持仓`
+                        : `Showing ${paginatedPositions.length} of ${totalPositions} positions`}
+                    </span>
+                    <div className="flex items-center gap-3">
+                      {/* Page size selector */}
+                      <div className="flex items-center gap-2">
+                        <span style={{ color: '#848E9C' }}>
+                          {language === 'zh' ? '每页' : 'Per page'}:
+                        </span>
+                        <select
+                          value={positionsPageSize}
+                          onChange={(e) => setPositionsPageSize(Number(e.target.value))}
+                          className="rounded px-2 py-1 text-xs"
+                          style={{
+                            background: '#0B0E11',
+                            border: '1px solid #2B3139',
+                            color: '#EAECEF',
+                          }}
+                        >
+                          <option value={20}>20</option>
+                          <option value={50}>50</option>
+                          <option value={100}>100</option>
+                        </select>
+                      </div>
+                      {/* Page navigation */}
+                      {totalPositionPages > 1 && (
+                        <div className="flex items-center gap-1">
                           <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation() // Prevent row click
-                              handleClosePosition(
-                                pos.symbol,
-                                pos.side.toUpperCase()
-                              )
-                            }}
-                            disabled={closingPosition === pos.symbol}
-                            className="btn-danger inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed mx-auto"
-                            title={
-                              language === 'zh' ? '平仓' : 'Close Position'
-                            }
-                          >
-                            {closingPosition === pos.symbol ? (
-                              <Loader2 className="w-3 h-3 animate-spin" />
-                            ) : (
-                              <LogOut className="w-3 h-3" />
-                            )}
-                            {language === 'zh' ? '平仓' : 'Close'}
-                          </button>
-                        </td>
-                        <td
-                          className="px-1 py-3 font-mono whitespace-nowrap text-right"
-                          style={{ color: '#EAECEF' }}
-                        >
-                          {pos.entry_price.toFixed(4)}
-                        </td>
-                        <td
-                          className="px-1 py-3 font-mono whitespace-nowrap text-right"
-                          style={{ color: '#EAECEF' }}
-                        >
-                          {pos.mark_price.toFixed(4)}
-                        </td>
-                        <td
-                          className="px-1 py-3 font-mono whitespace-nowrap text-right"
-                          style={{ color: '#EAECEF' }}
-                        >
-                          {pos.quantity.toFixed(4)}
-                        </td>
-                        <td
-                          className="px-1 py-3 font-mono font-bold whitespace-nowrap text-right"
-                          style={{ color: '#EAECEF' }}
-                        >
-                          {(pos.quantity * pos.mark_price).toFixed(2)}
-                        </td>
-                        <td
-                          className="px-1 py-3 font-mono whitespace-nowrap text-center"
-                          style={{ color: '#F0B90B' }}
-                        >
-                          {pos.leverage}x
-                        </td>
-                        <td className="px-1 py-3 font-mono whitespace-nowrap text-right">
-                          <span
+                            onClick={() => setPositionsCurrentPage(1)}
+                            disabled={positionsCurrentPage === 1}
+                            className="px-2 py-1 rounded transition-colors disabled:opacity-30"
                             style={{
-                              color:
-                                pos.unrealized_pnl >= 0 ? '#0ECB81' : '#F6465D',
-                              fontWeight: 'bold',
+                              background: positionsCurrentPage === 1 ? 'transparent' : '#2B3139',
+                              color: '#EAECEF',
                             }}
                           >
-                            {pos.unrealized_pnl >= 0 ? '+' : ''}
-                            {pos.unrealized_pnl.toFixed(2)}
+                            «
+                          </button>
+                          <button
+                            onClick={() => setPositionsCurrentPage((p) => Math.max(1, p - 1))}
+                            disabled={positionsCurrentPage === 1}
+                            className="px-2 py-1 rounded transition-colors disabled:opacity-30"
+                            style={{
+                              background: positionsCurrentPage === 1 ? 'transparent' : '#2B3139',
+                              color: '#EAECEF',
+                            }}
+                          >
+                            ‹
+                          </button>
+                          <span className="px-3" style={{ color: '#EAECEF' }}>
+                            {positionsCurrentPage} / {totalPositionPages}
                           </span>
-                        </td>
-                        <td
-                          className="px-1 py-3 font-mono whitespace-nowrap text-right"
-                          style={{ color: '#848E9C' }}
-                        >
-                          {pos.liquidation_price.toFixed(4)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                          <button
+                            onClick={() => setPositionsCurrentPage((p) => Math.min(totalPositionPages, p + 1))}
+                            disabled={positionsCurrentPage === totalPositionPages}
+                            className="px-2 py-1 rounded transition-colors disabled:opacity-30"
+                            style={{
+                              background: positionsCurrentPage === totalPositionPages ? 'transparent' : '#2B3139',
+                              color: '#EAECEF',
+                            }}
+                          >
+                            ›
+                          </button>
+                          <button
+                            onClick={() => setPositionsCurrentPage(totalPositionPages)}
+                            disabled={positionsCurrentPage === totalPositionPages}
+                            className="px-2 py-1 rounded transition-colors disabled:opacity-30"
+                            style={{
+                              background: positionsCurrentPage === totalPositionPages ? 'transparent' : '#2B3139',
+                              color: '#EAECEF',
+                            }}
+                          >
+                            »
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="text-center py-16" style={{ color: '#848E9C' }}>
