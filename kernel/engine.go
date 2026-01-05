@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"math"
 	"net/http"
 	"nofx/logger"
 	"nofx/market"
@@ -107,25 +106,25 @@ type RecentOrder struct {
 
 // Context trading context (complete information passed to AI)
 type Context struct {
-	CurrentTime     string                             `json:"current_time"`
-	RuntimeMinutes  int                                `json:"runtime_minutes"`
-	CallCount       int                                `json:"call_count"`
-	Account         AccountInfo                        `json:"account"`
-	Positions       []PositionInfo                     `json:"positions"`
-	CandidateCoins  []CandidateCoin                    `json:"candidate_coins"`
-	PromptVariant   string                             `json:"prompt_variant,omitempty"`
-	TradingStats    *TradingStats                      `json:"trading_stats,omitempty"`
-	RecentOrders    []RecentOrder                      `json:"recent_orders,omitempty"`
-	MarketDataMap   map[string]*market.Data            `json:"-"`
-	MultiTFMarket   map[string]map[string]*market.Data `json:"-"`
-	OITopDataMap    map[string]*OITopData              `json:"-"`
-	QuantDataMap    map[string]*QuantData              `json:"-"`
-	OIRankingData      *nofxos.OIRankingData      `json:"-"` // Market-wide OI ranking data
-	NetFlowRankingData *nofxos.NetFlowRankingData `json:"-"` // Market-wide fund flow ranking data
-	PriceRankingData   *nofxos.PriceRankingData   `json:"-"` // Market-wide price gainers/losers
-	BTCETHLeverage     int                          `json:"-"`
-	AltcoinLeverage int                                `json:"-"`
-	Timeframes      []string                           `json:"-"`
+	CurrentTime        string                             `json:"current_time"`
+	RuntimeMinutes     int                                `json:"runtime_minutes"`
+	CallCount          int                                `json:"call_count"`
+	Account            AccountInfo                        `json:"account"`
+	Positions          []PositionInfo                     `json:"positions"`
+	CandidateCoins     []CandidateCoin                    `json:"candidate_coins"`
+	PromptVariant      string                             `json:"prompt_variant,omitempty"`
+	TradingStats       *TradingStats                      `json:"trading_stats,omitempty"`
+	RecentOrders       []RecentOrder                      `json:"recent_orders,omitempty"`
+	MarketDataMap      map[string]*market.Data            `json:"-"`
+	MultiTFMarket      map[string]map[string]*market.Data `json:"-"`
+	OITopDataMap       map[string]*OITopData              `json:"-"`
+	QuantDataMap       map[string]*QuantData              `json:"-"`
+	OIRankingData      *nofxos.OIRankingData              `json:"-"` // Market-wide OI ranking data
+	NetFlowRankingData *nofxos.NetFlowRankingData         `json:"-"` // Market-wide fund flow ranking data
+	PriceRankingData   *nofxos.PriceRankingData           `json:"-"` // Market-wide price gainers/losers
+	BTCETHLeverage     int                                `json:"-"`
+	AltcoinLeverage    int                                `json:"-"`
+	Timeframes         []string                           `json:"-"`
 }
 
 // Decision AI trading decision
@@ -136,15 +135,17 @@ type Decision struct {
 	// Opening position parameters
 	Leverage        int     `json:"leverage,omitempty"`
 	PositionSizeUSD float64 `json:"position_size_usd,omitempty"`
-	EntryPrice      float64 `json:"entry,omitempty"` // Entry price for risk calculation (json tag "entry" to match prompt example)
 	StopLoss        float64 `json:"stop_loss,omitempty"`
 	TakeProfit      float64 `json:"take_profit,omitempty"`
-	RiskR           float64 `json:"risk_r,omitempty"` // Risk factor (0.0-1.0)
 
 	// Common parameters
 	Confidence int     `json:"confidence,omitempty"` // Confidence level (0-100)
 	RiskUSD    float64 `json:"risk_usd,omitempty"`   // Maximum USD risk
 	Reasoning  string  `json:"reasoning"`
+
+	// Chaos 策略新加的参数，但保持 decision 结构体的兼容性所以不移除原因的元素
+	EntryPrice float64 `json:"entry,omitempty"`  // Entry price for risk calculation (json tag "entry" to match prompt example)
+	RiskR      float64 `json:"risk_r,omitempty"` // Risk factor (0.0-1.0)
 }
 
 // FullDecision AI's complete decision (including chain of thought)
@@ -304,7 +305,6 @@ func GetFullDecisionWithStrategy(ctx *Context, mcpClient mcp.AIClient, engine *S
 		riskConfig.AltcoinMaxLeverage,
 		riskConfig.BTCETHMaxPositionValueRatio,
 		riskConfig.AltcoinMaxPositionValueRatio,
-		riskConfig.BaseRiskPercent,
 	)
 
 	if decision != nil {
@@ -860,23 +860,30 @@ func (e *StrategyEngine) FetchPriceRankingData() *nofxos.PriceRankingData {
 
 // BuildSystemPrompt builds System Prompt according to strategy configuration
 func (e *StrategyEngine) BuildSystemPrompt(accountEquity float64, variant string) string {
-
 	var sb strings.Builder
 	riskControl := e.config.RiskControl
 	promptSections := e.config.PromptSections
 
-
-        // If OverrideBasePrompt is enabled and CustomPrompt is provided, use it directly
-	// This allows users to use complete custom prompts (like LLM-Trader Prompt Baseline)
-	// bypassing the system's automatic assembly logic
+	// 生成 Chaos 策略的 System Prompt 不影响原有策略
 	if e.config.CustomPrompt != "" {
+		cp := strings.TrimSpace(e.config.CustomPrompt)
+		chaosTags := []string{"这是一个Chaos策略"}
+		isChaos := false
+		for _, tag := range chaosTags {
+			if strings.HasPrefix(cp, tag) || strings.Contains(cp, tag) {
+				isChaos = true
+				break
+			}
+		}
+		if isChaos {
 
-		sb.WriteString("\n\n你拥有以下市场数据和指标:\n")
-		e.writeAvailableIndicators(&sb)
-		sb.WriteString("\n\n")
-		sb.WriteString(e.config.CustomPrompt)
+			sb.WriteString("\n\n你拥有以下市场数据和指标:\n")
+			e.writeAvailableIndicators(&sb)
+			sb.WriteString("\n\n")
+			sb.WriteString(e.config.CustomPrompt)
 
-		return sb.String()
+			return sb.String()
+		}
 	}
 
 	// 0. Data Dictionary & Schema (ensure AI understands all fields)
@@ -1254,7 +1261,7 @@ func (e *StrategyEngine) BuildUserPrompt(ctx *Context) string {
 	}
 
 	sb.WriteString("---\n\n")
-	sb.WriteString("Now please analyze and output your decision (Chain of Thought + JSON)\n")
+	//sb.WriteString("Now please analyze and output your decision (Chain of Thought + JSON)\n")
 
 	return sb.String()
 }
@@ -1684,7 +1691,7 @@ func formatFloatSlice(values []float64) string {
 // AI Response Parsing
 // ============================================================================
 
-func parseFullDecisionResponse(aiResponse string, accountEquity float64, btcEthLeverage, altcoinLeverage int, btcEthPosRatio, altcoinPosRatio, baseRiskPercent float64) (*FullDecision, error) {
+func parseFullDecisionResponse(aiResponse string, accountEquity float64, btcEthLeverage, altcoinLeverage int, btcEthPosRatio, altcoinPosRatio float64) (*FullDecision, error) {
 	cotTrace := extractCoTTrace(aiResponse)
 
 	decisions, err := extractDecisions(aiResponse)
@@ -1695,7 +1702,7 @@ func parseFullDecisionResponse(aiResponse string, accountEquity float64, btcEthL
 		}, fmt.Errorf("failed to extract decisions: %w", err)
 	}
 
-	if err := validateDecisions(decisions, accountEquity, btcEthLeverage, altcoinLeverage, btcEthPosRatio, altcoinPosRatio, baseRiskPercent); err != nil {
+	if err := validateDecisions(decisions, accountEquity, btcEthLeverage, altcoinLeverage, btcEthPosRatio, altcoinPosRatio); err != nil {
 		return &FullDecision{
 			CoTTrace:  cotTrace,
 			Decisions: decisions,
@@ -1861,18 +1868,16 @@ func compactArrayOpen(s string) string {
 // Decision Validation
 // ============================================================================
 
-func validateDecisions(decisions []Decision, accountEquity float64, btcEthLeverage, altcoinLeverage int, btcEthPosRatio, altcoinPosRatio, baseRiskPercent float64) error {
+func validateDecisions(decisions []Decision, accountEquity float64, btcEthLeverage, altcoinLeverage int, btcEthPosRatio, altcoinPosRatio float64) error {
 	for i, decision := range decisions {
-		if err := validateDecision(&decision, accountEquity, btcEthLeverage, altcoinLeverage, btcEthPosRatio, altcoinPosRatio, baseRiskPercent); err != nil {
+		if err := validateDecision(&decision, accountEquity, btcEthLeverage, altcoinLeverage, btcEthPosRatio, altcoinPosRatio); err != nil {
 			return fmt.Errorf("decision #%d validation failed: %w", i+1, err)
 		}
-		// Update the decision in the slice since validateDecision might modify it (e.g. leverage cap or PositionSizeUSD calculation)
-		decisions[i] = decision
 	}
 	return nil
 }
 
-func validateDecision(d *Decision, accountEquity float64, btcEthLeverage, altcoinLeverage int, btcEthPosRatio, altcoinPosRatio, baseRiskPercent float64) error {
+func validateDecision(d *Decision, accountEquity float64, btcEthLeverage, altcoinLeverage int, btcEthPosRatio, altcoinPosRatio float64) error {
 	validActions := map[string]bool{
 		"open_long":   true,
 		"open_short":  true,
@@ -1880,6 +1885,14 @@ func validateDecision(d *Decision, accountEquity float64, btcEthLeverage, altcoi
 		"close_short": true,
 		"hold":        true,
 		"wait":        true,
+	}
+
+	if d.RiskR > 0 {
+		// 这是一个 Chaos 策略的决策，需要验证 Chaos 相关参数
+		// Decision
+		// ├─ RiskR > 0  → auditChaosDecision (新体系)
+		// └─ RiskR = 0  → validateDecision (旧体系)
+		return auditChaosDecision(d, accountEquity, btcEthLeverage, altcoinLeverage, btcEthPosRatio, altcoinPosRatio)
 	}
 
 	if !validActions[d.Action] {
@@ -1904,43 +1917,6 @@ func validateDecision(d *Decision, accountEquity float64, btcEthLeverage, altcoi
 				d.Symbol, d.Leverage, maxLeverage, maxLeverage)
 			d.Leverage = maxLeverage
 		}
-
-		// RiskR Calculation Logic
-		if d.RiskR > 0 {
-			// Validate RiskR limit (hard cap 1.5 to prevent hallucination)
-			const MaxRiskR = 1.5
-			if d.RiskR > MaxRiskR {
-				logger.Infof("⚠️  RiskR %.2f exceeds limit %.2f, capped at %.2f", d.RiskR, MaxRiskR, MaxRiskR)
-				d.RiskR = MaxRiskR
-			}
-
-			if baseRiskPercent <= 0 {
-				baseRiskPercent = 0.01 // Default 1%
-			}
-
-			if d.EntryPrice <= 0 {
-				return fmt.Errorf("entry price required for RiskR calculation")
-			}
-			if d.StopLoss <= 0 {
-				return fmt.Errorf("stop loss required for RiskR calculation")
-			}
-
-			priceDiff := math.Abs(d.EntryPrice - d.StopLoss)
-			if priceDiff == 0 {
-				return fmt.Errorf("entry price equals stop loss, cannot calculate position size")
-			}
-
-			// Formula: Quantity = (Equity * BaseRisk * RiskR) / |Entry - StopLoss|
-			riskAmount := accountEquity * baseRiskPercent * d.RiskR
-			quantity := riskAmount / priceDiff
-
-			// Convert to USD value for system consistency
-			d.PositionSizeUSD = quantity * d.EntryPrice
-
-			logger.Infof("✓ Calculated position size from RiskR %.2f: %.2f USDT (Risk: %.2f USDT, BaseRisk: %.1f%%)",
-				d.RiskR, d.PositionSizeUSD, riskAmount, baseRiskPercent*100)
-		}
-
 		if d.PositionSizeUSD <= 0 {
 			return fmt.Errorf("position size must be greater than 0: %.2f", d.PositionSizeUSD)
 		}
@@ -1981,15 +1957,10 @@ func validateDecision(d *Decision, accountEquity float64, btcEthLeverage, altcoi
 		}
 
 		var entryPrice float64
-		if d.EntryPrice > 0 {
-			entryPrice = d.EntryPrice
+		if d.Action == "open_long" {
+			entryPrice = d.StopLoss + (d.TakeProfit-d.StopLoss)*0.2
 		} else {
-			// Fallback if not provided (should be provided if RiskR is used, but for legacy compatibility)
-			if d.Action == "open_long" {
-				entryPrice = d.StopLoss + (d.TakeProfit-d.StopLoss)*0.2
-			} else {
-				entryPrice = d.StopLoss - (d.StopLoss-d.TakeProfit)*0.2
-			}
+			entryPrice = d.StopLoss - (d.StopLoss-d.TakeProfit)*0.2
 		}
 
 		var riskPercent, rewardPercent, riskRewardRatio float64
@@ -2012,6 +1983,125 @@ func validateDecision(d *Decision, accountEquity float64, btcEthLeverage, altcoi
 				riskRewardRatio, riskPercent, rewardPercent, d.StopLoss, d.TakeProfit)
 		}
 	}
+
+	return nil
+}
+
+func auditChaosDecision(
+	d *Decision,
+	accountEquity float64,
+	btcEthLeverage, altcoinLeverage int,
+	btcEthPosRatio, altcoinPosRatio float64,
+) error {
+
+	// =========================
+	// 0. Action sanity check
+	// =========================
+	if d.Action != "open_long" && d.Action != "open_short" {
+		return fmt.Errorf("RiskR decision only supports open_long/open_short, got: %s", d.Action)
+	}
+
+	// =========================
+	// 1. RiskR hard constraints
+	// =========================
+	const MaxRiskR = 1.5
+	const baseRiskPercent = 0.01 // 1R = 1% equity
+
+	if d.RiskR <= 0 {
+		return fmt.Errorf("RiskR must be greater than 0 in Chaos decision")
+	}
+	if d.RiskR > MaxRiskR {
+		return fmt.Errorf("RiskR %.2f exceeds hard limit %.2f", d.RiskR, MaxRiskR)
+	}
+
+	// =========================
+	// 2. Mandatory price anchors
+	// =========================
+	if d.EntryPrice <= 0 {
+		return fmt.Errorf("entry price required for RiskR decision")
+	}
+	if d.StopLoss <= 0 {
+		return fmt.Errorf("stop loss required for RiskR decision")
+	}
+	if d.TakeProfit <= 0 {
+		return fmt.Errorf("take profit required for RiskR decision")
+	}
+
+	// Directional price logic
+	if d.Action == "open_long" {
+		if !(d.StopLoss < d.EntryPrice && d.EntryPrice < d.TakeProfit) {
+			return fmt.Errorf("invalid price structure for open_long (SL < Entry < TP)")
+		}
+	} else {
+		if !(d.TakeProfit < d.EntryPrice && d.EntryPrice < d.StopLoss) {
+			return fmt.Errorf("invalid price structure for open_short (TP < Entry < SL)")
+		}
+	}
+
+	// =========================
+	// 3. R:R validation (Chaos requires edge)
+	// =========================
+	var risk, reward float64
+	if d.Action == "open_long" {
+		risk = d.EntryPrice - d.StopLoss
+		reward = d.TakeProfit - d.EntryPrice
+	} else {
+		risk = d.StopLoss - d.EntryPrice
+		reward = d.EntryPrice - d.TakeProfit
+	}
+
+	if risk <= 0 || reward <= 0 {
+		return fmt.Errorf("invalid risk/reward distances (risk=%.4f reward=%.4f)", risk, reward)
+	}
+
+	riskRewardRatio := reward / risk
+	if riskRewardRatio < 3.0 {
+		return fmt.Errorf("Chaos decision requires R:R ≥ 3.0, got %.2f", riskRewardRatio)
+	}
+
+	// =========================
+	// 4. Position sizing via RiskR
+	// =========================
+	riskAmount := accountEquity * baseRiskPercent * d.RiskR
+	quantity := riskAmount / risk
+	d.PositionSizeUSD = quantity * d.EntryPrice
+
+	if d.PositionSizeUSD <= 0 {
+		return fmt.Errorf("calculated position size invalid: %.2f", d.PositionSizeUSD)
+	}
+
+	// =========================
+	// 5. Symbol-based caps
+	// =========================
+	maxLeverage := altcoinLeverage
+	maxPosValue := accountEquity * altcoinPosRatio
+
+	if d.Symbol == "BTCUSDT" || d.Symbol == "ETHUSDT" {
+		maxLeverage = btcEthLeverage
+		maxPosValue = accountEquity * btcEthPosRatio
+	}
+
+	if d.Leverage <= 0 {
+		return fmt.Errorf("leverage must be provided for Chaos decision")
+	}
+	if d.Leverage > maxLeverage {
+		return fmt.Errorf("leverage %dx exceeds limit %dx for %s", d.Leverage, maxLeverage, d.Symbol)
+	}
+
+	if d.PositionSizeUSD > maxPosValue {
+		return fmt.Errorf(
+			"position size %.2f exceeds max allowed %.2f for %s",
+			d.PositionSizeUSD, maxPosValue, d.Symbol,
+		)
+	}
+
+	// =========================
+	// 6. Logging (audit trail)
+	// =========================
+	logger.Infof(
+		"✓ Chaos decision validated | %s %s | RiskR=%.2f | Size=%.2f USDT | R:R=%.2f",
+		d.Action, d.Symbol, d.RiskR, d.PositionSizeUSD, riskRewardRatio,
+	)
 
 	return nil
 }
