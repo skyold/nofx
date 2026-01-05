@@ -1,6 +1,7 @@
 package kernel
 
 import (
+	"math"
 	"testing"
 )
 
@@ -100,6 +101,32 @@ func TestLeverageFallback(t *testing.T) {
 	}
 }
 
+func TestValidateDecisionsSliceUpdate(t *testing.T) {
+	decisions := []Decision{
+		{
+			Symbol:     "BTCUSDT",
+			Action:     "open_long",
+			RiskR:      1.0,
+			EntryPrice: 100,
+			StopLoss:   90,
+			TakeProfit: 130,
+			Leverage:   5,
+		},
+	}
+
+	err := validateDecisions(decisions, 10000, 10, 5, 10.0, 1.5)
+	if err != nil {
+		t.Fatalf("validateDecisions failed: %v", err)
+	}
+
+	if decisions[0].PositionSizeUSD <= 0 {
+		t.Fatalf("PositionSizeUSD was not updated in slice, got %.8f", decisions[0].PositionSizeUSD)
+	}
+
+	if math.Abs(decisions[0].PositionSizeUSD-1000) > 1e-6 {
+		t.Fatalf("PositionSizeUSD mismatch, got %.8f, want 1000", decisions[0].PositionSizeUSD)
+	}
+}
 
 // contains checks if string contains substring (helper function)
 func contains(s, substr string) bool {
