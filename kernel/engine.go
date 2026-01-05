@@ -1023,11 +1023,47 @@ func (e *StrategyEngine) writeAvailableIndicators(sb *strings.Builder) {
 	indicators := e.config.Indicators
 	kline := indicators.Klines
 
-	sb.WriteString(fmt.Sprintf("- %s price series", kline.PrimaryTimeframe))
-	if kline.EnableMultiTimeframe {
-		sb.WriteString(fmt.Sprintf(" + %s K-line series\n", kline.LongerTimeframe))
+	primaryTimeframe := strings.TrimSpace(kline.PrimaryTimeframe)
+	selectedTimeframes := kline.SelectedTimeframes
+	if len(selectedTimeframes) == 0 {
+		if primaryTimeframe != "" {
+			selectedTimeframes = append(selectedTimeframes, primaryTimeframe)
+		}
+		if kline.EnableMultiTimeframe && strings.TrimSpace(kline.LongerTimeframe) != "" {
+			selectedTimeframes = append(selectedTimeframes, strings.TrimSpace(kline.LongerTimeframe))
+		}
+	}
+	if primaryTimeframe == "" && len(selectedTimeframes) > 0 {
+		primaryTimeframe = selectedTimeframes[0]
+	}
+
+	ordered := make([]string, 0, len(selectedTimeframes)+1)
+	seen := map[string]struct{}{}
+	if primaryTimeframe != "" {
+		ordered = append(ordered, primaryTimeframe)
+		seen[primaryTimeframe] = struct{}{}
+	}
+	for _, tf := range selectedTimeframes {
+		tf = strings.TrimSpace(tf)
+		if tf == "" {
+			continue
+		}
+		if _, ok := seen[tf]; ok {
+			continue
+		}
+		ordered = append(ordered, tf)
+		seen[tf] = struct{}{}
+	}
+
+	if len(ordered) == 0 {
+		sb.WriteString("- price series\n")
 	} else {
-		sb.WriteString("\n")
+		sb.WriteString(fmt.Sprintf("- %s price series", ordered[0]))
+		if len(ordered) > 1 {
+			sb.WriteString(fmt.Sprintf(" + %s K-line series\n", strings.Join(ordered[1:], " + ")))
+		} else {
+			sb.WriteString("\n")
+		}
 	}
 
 	if indicators.EnableEMA {
