@@ -2030,11 +2030,18 @@ func auditChaosDecision(
 	btcEthPosRatio, altcoinPosRatio float64,
 ) error {
 
+	decisionInfo := func() string {
+		return fmt.Sprintf(
+			"decision[symbol=%s action=%s lev=%d entry=%.8f sl=%.8f tp=%.8f risk_r=%.2f pos_usd=%.2f conf=%d]",
+			d.Symbol, d.Action, d.Leverage, d.EntryPrice, d.StopLoss, d.TakeProfit, d.RiskR, d.PositionSizeUSD, d.Confidence,
+		)
+	}
+
 	// =========================
 	// 0. Action sanity check
 	// =========================
 	if d.Action != "open_long" && d.Action != "open_short" {
-		return fmt.Errorf("RiskR decision only supports open_long/open_short, got: %s", d.Action)
+		return fmt.Errorf("%s: RiskR decision only supports open_long/open_short, got: %s", decisionInfo(), d.Action)
 	}
 
 	// =========================
@@ -2044,33 +2051,33 @@ func auditChaosDecision(
 	const baseRiskPercent = 0.01 // 1R = 1% equity
 
 	if d.RiskR <= 0 {
-		return fmt.Errorf("RiskR must be greater than 0 in Chaos decision")
+		return fmt.Errorf("%s: RiskR must be greater than 0 in Chaos decision", decisionInfo())
 	}
 	if d.RiskR > MaxRiskR {
-		return fmt.Errorf("RiskR %.2f exceeds hard limit %.2f", d.RiskR, MaxRiskR)
+		return fmt.Errorf("%s: RiskR %.2f exceeds hard limit %.2f", decisionInfo(), d.RiskR, MaxRiskR)
 	}
 
 	// =========================
 	// 2. Mandatory price anchors
 	// =========================
 	if d.EntryPrice <= 0 {
-		return fmt.Errorf("entry price required for RiskR decision")
+		return fmt.Errorf("%s: entry price required for RiskR decision", decisionInfo())
 	}
 	if d.StopLoss <= 0 {
-		return fmt.Errorf("stop loss required for RiskR decision")
+		return fmt.Errorf("%s: stop loss required for RiskR decision", decisionInfo())
 	}
 	if d.TakeProfit <= 0 {
-		return fmt.Errorf("take profit required for RiskR decision")
+		return fmt.Errorf("%s: take profit required for RiskR decision", decisionInfo())
 	}
 
 	// Directional price logic
 	if d.Action == "open_long" {
 		if !(d.StopLoss < d.EntryPrice && d.EntryPrice < d.TakeProfit) {
-			return fmt.Errorf("invalid price structure for open_long (SL < Entry < TP)")
+			return fmt.Errorf("%s: invalid price structure for open_long (SL < Entry < TP)", decisionInfo())
 		}
 	} else {
 		if !(d.TakeProfit < d.EntryPrice && d.EntryPrice < d.StopLoss) {
-			return fmt.Errorf("invalid price structure for open_short (TP < Entry < SL)")
+			return fmt.Errorf("%s: invalid price structure for open_short (TP < Entry < SL)", decisionInfo())
 		}
 	}
 
@@ -2087,12 +2094,12 @@ func auditChaosDecision(
 	}
 
 	if risk <= 0 || reward <= 0 {
-		return fmt.Errorf("invalid risk/reward distances (risk=%.4f reward=%.4f)", risk, reward)
+		return fmt.Errorf("%s: invalid risk/reward distances (risk=%.4f reward=%.4f)", decisionInfo(), risk, reward)
 	}
 
 	riskRewardRatio := reward / risk
 	if riskRewardRatio < 3.0 {
-		return fmt.Errorf("Chaos decision requires R:R ≥ 3.0, got %.2f", riskRewardRatio)
+		return fmt.Errorf("%s: Chaos decision requires R:R ≥ 3.0, got %.2f", decisionInfo(), riskRewardRatio)
 	}
 
 	// =========================
@@ -2103,7 +2110,7 @@ func auditChaosDecision(
 	d.PositionSizeUSD = quantity * d.EntryPrice
 
 	if d.PositionSizeUSD <= 0 {
-		return fmt.Errorf("calculated position size invalid: %.2f", d.PositionSizeUSD)
+		return fmt.Errorf("%s: calculated position size invalid: %.2f", decisionInfo(), d.PositionSizeUSD)
 	}
 
 	// =========================
@@ -2118,16 +2125,16 @@ func auditChaosDecision(
 	}
 
 	if d.Leverage <= 0 {
-		return fmt.Errorf("leverage must be provided for Chaos decision")
+		return fmt.Errorf("%s: leverage must be provided for Chaos decision", decisionInfo())
 	}
 	if d.Leverage > maxLeverage {
-		return fmt.Errorf("leverage %dx exceeds limit %dx for %s", d.Leverage, maxLeverage, d.Symbol)
+		return fmt.Errorf("%s: leverage %dx exceeds limit %dx for %s", decisionInfo(), d.Leverage, maxLeverage, d.Symbol)
 	}
 
 	if d.PositionSizeUSD > maxPosValue {
 		return fmt.Errorf(
-			"position size %.2f exceeds max allowed %.2f for %s",
-			d.PositionSizeUSD, maxPosValue, d.Symbol,
+			"%s: position size %.2f exceeds max allowed %.2f for %s",
+			decisionInfo(), d.PositionSizeUSD, maxPosValue, d.Symbol,
 		)
 	}
 
