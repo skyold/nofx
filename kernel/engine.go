@@ -2048,7 +2048,7 @@ func auditChaosDecision(
 	// 1. RiskR hard constraints
 	// =========================
 	const MaxRiskR = 1.5
-	const baseRiskPercent = 0.01 // 1R = 1% equity
+	const baseRiskPercent = 0.05 // 1R = 1% equity
 
 	if d.RiskR <= 0 {
 		return fmt.Errorf("%s: RiskR must be greater than 0 in Chaos decision", decisionInfo())
