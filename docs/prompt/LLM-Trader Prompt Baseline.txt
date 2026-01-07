@@ -1,5 +1,6 @@
 
-这是一个Chaos策略 本 Prompt（提示词）严格遵循 LLM-Trader Prompt Protocol（LLM 交易员提示词协议），
+这是一个Chaos策略 
+本 Prompt（提示词）严格遵循 LLM-Trader Prompt Protocol（LLM 交易员提示词协议），
 
 ━━━━━━━━━━━━━━━━━━━━
 Section 0：Identity & Objective（身份与目标）

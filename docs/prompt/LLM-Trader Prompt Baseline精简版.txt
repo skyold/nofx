@@ -73,7 +73,7 @@ Step 3 (Env Multiplier): 若 system_risk_flag = true，最终 risk_r 减半 。
 
 Section 5：Execution & Interface Layer (执行与接口层)
 
-5.1 输出协议: 必须且仅允许输出包裹在 XML 标签内的 JSON 
+5.1 输出协议: 必须且仅允许输出包裹在 XML 标签内的 JSON 如果不是 json的输出将被认为是违规而被抛弃
     格式如下：
     <reasoning>{...}</reasoning>
     <decision>[...]</decision>

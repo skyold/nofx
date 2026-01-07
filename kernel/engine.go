@@ -2098,8 +2098,9 @@ func auditChaosDecision(
 	}
 
 	riskRewardRatio := reward / risk
-	if riskRewardRatio < 3.0 {
-		return fmt.Errorf("%s: Chaos decision requires R:R ≥ 3.0, got %.2f", decisionInfo(), riskRewardRatio)
+	if riskRewardRatio < 1.0 {
+		//临时减低 R：R 需求
+		return fmt.Errorf("%s: Chaos decision requires R:R ≥ 1.0, got %.2f", decisionInfo(), riskRewardRatio)
 	}
 
 	// =========================
