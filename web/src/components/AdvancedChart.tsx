@@ -346,8 +346,8 @@ export function AdvancedChart({
     if (!chartContainerRef.current) return
 
     const chart = createChart(chartContainerRef.current, {
-      width: chartContainerRef.current.clientWidth,
-      height: height,
+      width: chartContainerRef.current.clientWidth || 800,
+      height: chartContainerRef.current.clientHeight || height,
       layout: {
         background: { color: '#0B0E11' },
         textColor: '#B7BDC6',
@@ -447,16 +447,16 @@ export function AdvancedChart({
     })
     volumeSeriesRef.current = volumeSeries as any
 
-    // 响应式调整
-    const handleResize = () => {
-      if (chartContainerRef.current && chartRef.current) {
-        chartRef.current.applyOptions({
-          width: chartContainerRef.current.clientWidth,
-        })
-      }
-    }
+    // 响应式调整 (ResizeObserver)
+    const resizeObserver = new ResizeObserver((entries) => {
+      if (entries.length === 0 || !entries[0].contentRect) return
+      const { width, height } = entries[0].contentRect
+      chart.applyOptions({ width, height })
+    })
 
-    window.addEventListener('resize', handleResize)
+    if (chartContainerRef.current) {
+      resizeObserver.observe(chartContainerRef.current)
+    }
 
     // 监听鼠标移动，显示 OHLC 信息
     chart.subscribeCrosshairMove((param) => {
@@ -490,10 +490,11 @@ export function AdvancedChart({
     })
 
     return () => {
-      window.removeEventListener('resize', handleResize)
+      resizeObserver.disconnect()
       chart.remove()
     }
-  }, [height])
+  }, []) // Chart is created once, ResizeObserver handles dimension changes
+
 
   // 加载数据和指标
   useEffect(() => {
@@ -914,12 +915,15 @@ export function AdvancedChart({
         borderRadius: '12px',
         overflow: 'hidden',
         border: '1px solid rgba(43, 49, 57, 0.5)',
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
       }}
     >
       {/* Compact Professional Header */}
       <div
         className="flex items-center justify-between px-4 py-2"
-        style={{ borderBottom: '1px solid rgba(43, 49, 57, 0.6)', background: '#0D1117' }}
+        style={{ borderBottom: '1px solid rgba(43, 49, 57, 0.6)', background: '#0D1117', flexShrink: 0 }}
       >
         {/* Left: Symbol Info + Price */}
         <div className="flex items-center gap-4">
@@ -1076,8 +1080,8 @@ export function AdvancedChart({
       )}
 
       {/* 图表容器 */}
-      <div style={{ position: 'relative' }}>
-        <div ref={chartContainerRef} />
+      <div style={{ position: 'relative', flex: 1, minHeight: 0 }}>
+        <div ref={chartContainerRef} style={{ height: '100%', width: '100%' }} />
 
         {/* OHLC Tooltip */}
         {tooltipData && (
