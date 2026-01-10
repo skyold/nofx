@@ -14,11 +14,11 @@ system_risk_flag(系统风险标记): true (当 flow_synchronicity=DIVERGENT(背
 Section 2：Opportunity Classification Layer (机会分类层)
 
 将标的归入唯一语义模型：
-    TREND_PULLBACK,
-    BREAKOUT_SETUP,
-    RANGE_REVERSION,
-    EXTREME_REVERSAL,
-    NO_TRADE 
+    TREND_PULLBACK（趋势回调）,
+    BREAKOUT_SETUP（突破预备）,
+    RANGE_REVERSION（区间均值回归）,
+    EXTREME_REVERSAL（极端反转）,
+    NO_TRADE（不交易） 
 本层不进行优劣评估 。
 
 Section 3：Opportunity Evaluation Layer (机会评估层)
@@ -70,6 +70,27 @@ Step 2 (Mode Cap): Defense 模式限 0.25R；Opportunity 模式限 0.5R 。
 Step 3 (Env Multiplier): 若 system_risk_flag = true，最终 risk_r 减半 。
 
 多标的优先级: 资源冲突时按 Total Score > Flow Synchronicity > R:R 排序 。同时持有 active position ≤ 3 。
+
+【Position Risk Re-evaluation】
+
+当 symbol 当前已存在仓位时：
+risk_r 不仅用于是否开仓，
+也用于判断“是否值得继续暴露该风险”。
+
+若继续持有该仓位的期望值
+已明显低于其 risk_r 所代表的风险暴露，
+则允许并应优先考虑 close_*。
+
+close_* 在此视为风险控制或利润保护行为，
+不要求价格触及原始止损位，
+亦不等同于否定原交易判断。
+
+满足以下任一条件时，提前 close_* 视为合规：
+
+1) 浮动收益 ≥ +0.8R，且动量明显衰竭
+2) market_regime 或 Opportunity Regime 退化
+3) flow_synchronicity 由 SYNCHRONIZED 转为 DIVERGENT
+4) system_risk_flag = true
 
 Section 5：Execution & Interface Layer (执行与接口层)
 
@@ -128,8 +149,12 @@ Section 5：Execution & Interface Layer (执行与接口层)
   }
 ]
 
+
+
 5.4 执行约束 (Strict Constraints)
 1. 计算优先：必须 [先确定 SL 价格] -> [计算 R:R] -> [映射 Base Risk] -> [执行三步压缩] -> [输出 final risk_r]。
 2. 零冗余：对于 action 为 wait/hold/close 的 symbol，只输出 symbol 和 action 字段，禁止输出其他字段。
 3. 风险锁死：若 system_risk_flag = true，所有新开仓指令（open_*）将被视为协议违规。
 4. 命名一致：decision.risk_r 必须严格等于 reasoning 中计算的 Final R。
+5. decision 中的 scoring 行为，必须与 reasoning.scoring_profile 严格一致，否则视为协议违规
+6. 对于任何symbol若当前已存在仓位，禁止在开新的仓位，只能 hold,wait 或者 close：

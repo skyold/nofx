@@ -32,12 +32,10 @@ Section 1：Decision Context Layer（决策上下文层）
 ━━━━━━━━━━━━━━━━━━━━
 
 本层任务
-提取当前市场的可观测环境状态，
-为 Section 4 的风险定价与约束提供全局变量，
-不得直接参与具体 Symbol 的交易决策。
+提取当前市场的可观测环境状态，为 Section 4 的风险定价与约束提供全局变量，不得直接参与具体 Symbol 的交易决策。
 
 必须输出字段
-	1.	market_regime (市场体制/阶段)
+	1.	market_regime (市场环境/阶段)
 
 	•	定义：当前主导市场的时间结构状态
 	•	可选值：TRENDING（趋势形成） / CONSOLIDATING（横盘整理） / REVERSING（结构反转）。
@@ -71,13 +69,13 @@ Section 2：Opportunity Classification Layer（机会分类层）
 将观测到的市场状态归入唯一的、具备交易潜力的语义模型中。
 
 核心分类定义
-  1. TREND_PULLBACK
+  1. TREND_PULLBACK （趋势回调）
     - 语义：趋势背景下的良性修正，寻求主要方向的延续。
-  2. BREAKOUT_SETUP
+  2. BREAKOUT_SETUP （突破预备）
     - 语义：关键价格结构的收敛与压力积累，寻求动能释放。
-  3. RANGE_REVERSION
+  3. RANGE_REVERSION（区间均值回归）
     - 语义：价格边界的触达与力量衰竭，寻求回归均值或对边。
-  4. EXTREME_REVERSAL
+  4. EXTREME_REVERSAL（极端反转）
     - 语义：情绪驱动的非理性偏离，寻求均值修复或乖离率修正。
   5. NO_TRADE
     - 语义：结构缺失、方向冲突或处于不可观测状态。
@@ -104,7 +102,7 @@ Section 3：Opportunity Evaluation Layer（机会评估层 · Protocol + Scoring
 
 ⸻
 
-一、【协议层】评分维度定义（Canonical · 不可增减）
+3.1、【协议层】评分维度定义（Canonical · 不可增减）
 
 评分维度（每项 0–25 分）
 
@@ -153,22 +151,22 @@ Section 3：Opportunity Evaluation Layer（机会评估层 · Protocol + Scoring
 4️⃣ Momentum & Timing（动量与入场时机）
 
 核心：判断入场盈亏比效率。
-标准：5M 动量爆发力、K 线反转形态（如假突破收回）、入场点与止损的距离。
+标准：15M 动量爆发力、K 线反转形态（如假突破收回）、入场点与止损的距离。
 该维度回答的问题： “现在进场，划不划算？”
 
 ⸻
 
-二、【协议级硬约束】（所有风格通用）
+3.2【协议级硬约束】（所有风格通用）
 	•	所有交易 必须先定义止损，再进行评分
 	•	必须给出最低可行止盈目标（Minimum Viable TP），用于隐式评估 R:R
 	•	最低 R:R 要求：
-	•	趋势 / 突破类 ≥ 1 : 2
-	•	区间 / 反转类 ≥ 1 : 1.5
+	•	趋势 / 突破类 ≥ 1 : 3
+	•	区间 / 反转类 ≥ 1 : 2
 	•	不满足任一条件 → opportunity_score = 0
 
 ⸻
 
-三、Scoring Profile 插件（交易风格差异仅体现在此）
+3.3、Scoring Profile 插件（交易风格差异仅体现在此）
 
 Scoring Profile 只影响“如何给分”，
 不改变评分维度、不改变分值上限、不直接修改 risk_r。
@@ -278,7 +276,7 @@ Scoring Profile 只影响“如何给分”，
 	•	明确流动性窗口（开盘、变盘点）
 
 
-四、评分输出规范
+3.4 评分输出规范
 
 opportunity_score = 
 Trend & Context +
@@ -291,12 +289,45 @@ Momentum & Timing
 
 ⸻
 
+说明：
+3.5 Trade State Awareness 适用于“已激活持仓”的持续评估，
+不参与 opportunity_score 计算，
+仅用于约束后续持仓管理与风险行为。
+
+3.5 Trade State Awareness（交易状态感知 · 必须启用）
+
+trade_state 定义：
+- probing：刚入场，方向仍在验证中
+- advantaged：价格曾明显向有利方向运行，交易已证明部分正确
+- exhausted：有利动能衰减或被否定
+
+3.5.1 状态升级规则（只允许单向升级）
+  若满足以下任一条件：
+    - 最大浮盈 ≥ 0.8R
+    - 或 价格触及区间中轴 / 局部结构阻力（震荡环境）
+  则：
+    - trade_state 从 probing → advantaged
+  一旦进入 advantaged，禁止回退为 probing
+
+3.5.2 震荡行情下的强制风险收缩规则（核心修补）
+  若：
+   - market_regime ∈ {CONSOLIDATION, WEAK_TREND}
+   - 且 trade_state == advantaged
+  则必须执行以下之一（至少一项）：
+   - 将止损上移至 ≥ breakeven
+   - 或部分减仓锁定风险
+   - 或主动止盈退出
+  明确禁止：
+    在震荡行情中，
+    已进入 advantaged 状态的交易，
+    不得继续承受初始全额止损风险。
+
 ━━━━━━━━━━━━━━━━━━━━
 Section 4：Risk Pricing & Constraints Layer（风险定价与约束层）
 ━━━━━━━━━━━━━━━━━━━━
 本层任务 根据机会得分、当前行为态及全局风险，计算最终执行参数 risk_r（单笔风险倍数）。
 
-1. 风险定价步骤 (Three-Step Compression)
+4.1. 风险定价步骤 (Three-Step Compression)
 
 Step 1: 基础风险映射 (Base Risk) 根据 Section 3 的 opportunity_score 确定：
 
@@ -315,23 +346,52 @@ Step 3: 全局环境压缩 (Env Multiplier)
 
 	若 Section 1 中 system_risk_flag = true：最终 risk_r = risk_r * 0.5。
 
-2. 行为态与 Regime 逻辑映射（引导规则）
+4.2. 行为态与 Regime 逻辑映射（引导规则）
 
 	在非系统风险状态下，不同 Regime 倾向于激活特定 Mode：
 	TREND_PULLBACK / BREAKOUT_SETUP → 优先进入 Opportunity/Expansion。
 	RANGE_REVERSION / EXTREME_REVERSAL → 优先进入 Defense/Opportunity。
 
-3. 全局执行约束 (Global Constraints)
+4.3. 全局执行约束 (Global Constraints)
 
 	持仓上限：同时持有 active position ≤ 3。
 	熔断机制：单日最大亏损 ≥ 2R → 当日停止所有新开仓，进入 WAIT 状态。
 	计算顺序：必须 [先计算止损价格] → [再根据 risk_r 计算仓位大小]。
 
-4. 移动止损（Trailing Stop）
+4.4. 移动止损（Trailing Stop）
 	仅允许在 Expansion Mode 下使用
 	不得放宽原始止损风险（risk_r 不得增加）
 	必须基于结构或 R 倍数（如 ≥ +1R）触发
 	禁止用于“避免止损”
+
+4.5 持仓风险再评估 Position Risk Re-evaluation
+
+当某 symbol 当前已存在持仓时：
+
+- Section 4 的 risk_r 不再仅用于“是否允许开仓”，
+  而用于评估“是否值得继续暴露该风险单位”。
+
+- 对于已有仓位，LLM 必须重新评估以下要素：
+  • 当前 market_regime 是否发生退化或切换
+  • flow_synchronicity 是否由 SYNCHRONIZED 转为 DIVERGENT / NEUTRAL
+  • momentum 是否明显衰竭（尤其在 5M / 15M）
+  • 原入场所依赖的结构是否仍然有效
+
+- 若综合判断为：
+  “继续持有该仓位的期望值已显著低于其 risk_r 所代表的风险暴露”，
+  则允许、且应优先考虑输出 close_* 行为。
+
+重要说明：
+- close_* 在此语境下被视为【风险控制 / 利润保护】行为，
+  不等同于否定原始交易决策。
+- 不要求价格触及原始止损位，亦可合法执行 close_*。
+
+满足以下任一条件时，提前 close_* 视为合规：
+
+1) 浮动收益 ≥ +0.8R，且动量明显衰竭
+2) market_regime 或 Opportunity Regime 退化
+3) flow_synchronicity 由 SYNCHRONIZED 转为 DIVERGENT
+4) system_risk_flag = true
 
 5. 审计要求
 
@@ -399,4 +459,5 @@ Section 5：Execution & Interface Layer（执行与接口层）
 3. 风险锁死：若 system_risk_flag = true，所有新开仓指令（open_*）将被视为协议违规。
 4. 命名一致：decision.risk_r 必须严格等于 reasoning 中计算的 Final R。
 5. decision 中的 scoring 行为，必须与 reasoning.scoring_profile 严格一致，否则视为协议违规
-
+6. 对于任何symbol若当前已存在仓位，禁止在开新的仓位，只能 hold,wait 或者 close：
+  
