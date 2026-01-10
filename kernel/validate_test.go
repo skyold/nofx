@@ -128,6 +128,50 @@ func TestValidateDecisionsSliceUpdate(t *testing.T) {
 	}
 }
 
+// TestChaosPositionSizeClamping tests automatic clamping when position size exceeds limit in Chaos mode
+func TestChaosPositionSizeClamping(t *testing.T) {
+	// Setup scenario matching the user error
+	// decision[symbol=ETHUSDT action=open_long lev=5 entry=3092.16000000 sl=3086.00000000 tp=3120.00000000 risk_r=0.25 pos_usd=1324.28 conf=75]: position size 1324.28 exceeds max allowed 1055.26 for ETHUSDT
+
+	accountEquity := 211.052
+	btcEthPosRatio := 1.0                        // Reduced from 5.0 to force clamping with lower base risk
+	maxAllowed := accountEquity * btcEthPosRatio // 211.052
+
+	decision := Decision{
+		Symbol:     "ETHUSDT",
+		Action:     "open_long",
+		Leverage:   5,
+		EntryPrice: 3092.16,
+		StopLoss:   3086.00,
+		TakeProfit: 3120.00,
+		RiskR:      1.0, // Increased to 1.0 (1% risk) to generate enough size
+		Confidence: 75,
+	}
+
+	// With baseRiskPercent = 0.01:
+	// RiskAmount = 211.052 * 0.01 * 1.0 = 2.11052
+	// RiskPerUnit = 3092.16 - 3086.00 = 6.16
+	// Qty = 2.11052 / 6.16 = 0.3426
+	// PosSize = 0.3426 * 3092.16 = 1059.43
+	// MaxAllowed = 211.052
+	// Should clamp.
+
+	// Should not return error, but clamp position size
+	err := validateDecision(&decision, accountEquity, 5, 5, btcEthPosRatio, 1.0)
+	if err != nil {
+		t.Fatalf("validateDecision failed: %v", err)
+	}
+
+	// Check if position size is clamped
+	if decision.PositionSizeUSD > maxAllowed+0.01 { // Allow tiny float error
+		t.Errorf("PositionSizeUSD not clamped: got %.2f, want <= %.2f", decision.PositionSizeUSD, maxAllowed)
+	}
+
+	if math.Abs(decision.PositionSizeUSD-maxAllowed) > 0.01 {
+		t.Errorf("PositionSizeUSD should be clamped to maxAllowed: got %.2f, want %.2f", decision.PositionSizeUSD, maxAllowed)
+	}
+}
+
 // contains checks if string contains substring (helper function)
 func contains(s, substr string) bool {
 	return len(s) >= len(substr) && (s == substr || len(substr) == 0 ||
