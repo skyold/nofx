@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import useSWR from 'swr'
 import { api } from './lib/api'
 import { TraderDashboardPage } from './pages/TraderDashboardPage'
-
+import { ChaosDashboardPage } from './pages/ChaosDashboardPage'
 import { AITradersPage } from './components/AITradersPage'
 import { LoginPage } from './components/LoginPage'
 import { RegisterPage } from './components/RegisterPage'
@@ -38,6 +38,7 @@ type Page =
   | 'competition'
   | 'traders'
   | 'trader'
+  | 'chaos'
   | 'backtest'
   | 'strategy'
   | 'strategy-market'
@@ -65,6 +66,7 @@ function App() {
     const hash = window.location.hash.slice(1) // 去掉 #
 
     if (path === '/traders' || hash === 'traders') return 'traders'
+    if (path === '/chaos' || hash === 'chaos') return 'chaos'
     if (path === '/backtest' || hash === 'backtest') return 'backtest'
     if (path === '/strategy' || hash === 'strategy') return 'strategy'
     if (path === '/strategy-market' || hash === 'strategy-market') return 'strategy-market'
@@ -90,6 +92,7 @@ function App() {
       'strategy-market': '/strategy-market',
       'traders': '/traders',
       'trader': '/dashboard',
+      'chaos': '/chaos',
       'backtest': '/backtest',
       'strategy': '/strategy',
       'debate': '/debate',
@@ -146,6 +149,8 @@ function App() {
 
       if (path === '/traders' || hash === 'traders') {
         setCurrentPage('traders')
+      } else if (path === '/chaos' || hash === 'chaos') {
+        setCurrentPage('chaos')
       } else if (path === '/backtest' || hash === 'backtest') {
         setCurrentPage('backtest')
       } else if (path === '/strategy' || hash === 'strategy') {
@@ -228,7 +233,7 @@ function App() {
 
   // 如果在trader页面，获取该trader的数据
   const { data: status } = useSWR<SystemStatus>(
-    currentPage === 'trader' && selectedTraderId
+    (currentPage === 'trader' || currentPage === 'chaos') && selectedTraderId
       ? `status-${selectedTraderId}`
       : null,
     () => api.getStatus(selectedTraderId),
@@ -240,7 +245,7 @@ function App() {
   )
 
   const { data: account } = useSWR<AccountInfo>(
-    currentPage === 'trader' && selectedTraderId
+    (currentPage === 'trader' || currentPage === 'chaos') && selectedTraderId
       ? `account-${selectedTraderId}`
       : null,
     () => api.getAccount(selectedTraderId),
@@ -252,7 +257,7 @@ function App() {
   )
 
   const { data: positions } = useSWR<Position[]>(
-    currentPage === 'trader' && selectedTraderId
+    (currentPage === 'trader' || currentPage === 'chaos') && selectedTraderId
       ? `positions-${selectedTraderId}`
       : null,
     () => api.getPositions(selectedTraderId),
@@ -264,7 +269,7 @@ function App() {
   )
 
   const { data: decisions } = useSWR<DecisionRecord[]>(
-    currentPage === 'trader' && selectedTraderId
+    (currentPage === 'trader' || currentPage === 'chaos') && selectedTraderId
       ? `decisions/latest-${selectedTraderId}-${decisionsLimit}`
       : null,
     () => api.getLatestDecisions(selectedTraderId, decisionsLimit),
@@ -276,7 +281,7 @@ function App() {
   )
 
   const { data: stats } = useSWR<Statistics>(
-    currentPage === 'trader' && selectedTraderId
+    (currentPage === 'trader' || currentPage === 'chaos') && selectedTraderId
       ? `statistics-${selectedTraderId}`
       : null,
     () => api.getStatistics(selectedTraderId),
@@ -425,6 +430,38 @@ function App() {
               <StrategyStudioPage />
             ) : currentPage === 'debate' ? (
               <DebateArenaPage />
+            ) : currentPage === 'chaos' ? (
+              <ChaosDashboardPage
+                selectedTrader={selectedTrader}
+                status={status}
+                account={account}
+                positions={positions}
+                decisions={decisions}
+                decisionsLimit={decisionsLimit}
+                onDecisionsLimitChange={setDecisionsLimit}
+                stats={stats}
+                lastUpdate={lastUpdate}
+                language={language}
+                traders={traders}
+                tradersError={tradersError}
+                selectedTraderId={selectedTraderId}
+                onTraderSelect={(traderId) => {
+                  setSelectedTraderId(traderId)
+                  // 更新 URL 参数（使用 slug: name-id前4位）
+                  const trader = traders?.find(t => t.trader_id === traderId)
+                  if (trader) {
+                    const url = new URL(window.location.href)
+                    url.searchParams.set('trader', getTraderSlug(trader))
+                    window.history.replaceState({}, '', url.toString())
+                  }
+                }}
+                onNavigateToTraders={() => {
+                  window.history.pushState({}, '', '/traders')
+                  setRoute('/traders')
+                  setCurrentPage('traders')
+                }}
+                exchanges={exchanges}
+              />
             ) : (
               <TraderDashboardPage
                 selectedTrader={selectedTrader}
