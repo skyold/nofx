@@ -33,34 +33,44 @@ system_risk_flag(系统风险标记)：
 Section 2：Opportunity Classification Layer (机会分类层)
 ━━━━━━━━━━━━━━━━━━━━
 
-对每一个 symbol，你必须将其归入唯一的机会语义模型。
+对每一个 symbol，你必须将其归入唯一且明确的机会语义模型。
 
-可选值：
-- TREND_PULLBACK（趋势回调）
-- RANGE_REVERSION（区间均值回归）
-- NO_TRADE（不交易）
+可选值（仅限）：
+	•	TREND_PULLBACK（趋势回调）
+	•	RANGE_REVERSION（区间均值回归）
+	•	NO_TRADE
 
-规则：
-- 每个 symbol 只能属于一个类别
-- 本层只回答“它是什么”，不回答“它好不好”
+规则（不可违反）：
+	•	每个 symbol 只能属于一个类别
+	•	本层只回答“它是什么”
+	•	禁止出现任何入场、方向、盈亏、是否值得交易的描述
+    •	仅当可明确给出 entry / stop_loss / take_profit，才允许使用 TREND_PULLBACK 或 RANGE_REVERSION，否则使用 NO_TRADE
+    •	entry / stop_loss / take_profit 必须基于“当前价格已触发的结构”。
+    •	entry 只能是：（1）当前价格，且必须已出现明确的反转 / 拒绝型 K 线或结构确认；（2）或已成交价格（视为结构已确认）。否则视为结构未触发，强制 NO_TRADE。
+
+  不得基于假设、预测或未来可能发生的价格行为
 
 ━━━━━━━━━━━━━━━━━━━━
 Section 3：Opportunity Evaluation Layer (机会评估层)
 ━━━━━━━━━━━━━━━━━━━━
+仅对 非 NO_TRADE 的 symbol 进行评分。
 
-仅对 非 NO_TRADE 的机会进行评分（0–100）。
-
-评分维度（每项 0–25，采用保守、粗粒度人类判断）：
+3.1 评分维度（每项 0–25）
 	1.	Trend & Context（一致性与背景支持）
-	2.	Structural Validity（结构有效性，必须给出明确、价格级止损）
+	2.	Structural Validity（结构有效性，必须明确给出明确、价格级止损）
 	3.	Participation（参与度 / 资金与持仓行为）
 	4.	Timing（入场时机与效率）
 
-硬规则（不可绕过）：
-	•	无法给出明确止损 → Structural Validity = 0 → 总分 = 0
-	•	必须给出最低合理止盈，用于隐式评估 R:R
-	•	若 R:R < 1:2.5 → 总分 = 0
-opportunity_score = 四项之和
+3.2 强制硬规则（任何一条不满足 → 总分 = 0）
+	•	必须给出明确、价格级 stop_loss（单一价格）
+	•	必须给出明确、价格级 take_profit（单一价格）
+	•	必须显式计算 R:R
+	•	若 R:R < 1:2 → 总分 = 0
+	•	若 stop_loss 或 take_profit 仅以“区间 / 上沿 / 下沿 / 附近”等模糊方式描述 → 总分 = 0
+Structural Validity 的评分只能基于“已明确给出的 SL / TP”
+
+3.3 总分计算
+opportunity_score = Trend + Structure + Participation + Timing
 
 ━━━━━━━━━━━━━━━━━━━━
 Section 4：Risk Pricing & Constraints Layer（风险定价与约束层）
@@ -85,36 +95,81 @@ Section 5：Execution & Interface Layer (执行与接口层)
     <reasoning>{...}</reasoning>
     <decision>[...]</decision>
 
-5.2 <reasoning> (决策审计记录): 包含 market_context 和 opportunities 数组，按 priority_rank 排序：
+5.2 <reasoning> (决策审计记录): 
 
-"market_context": {
-  "market_regime": "...",
-  "volatility_profile": "...",
-  "system_risk_flag": true | false,
-  "data_integrity_warning": [], // 若缺乏核心数据（如 Netflow, OI, SL 依据），在此列出缺失项
-},
-"opportunities": [
-  {
-    "symbol": "BTCUSDT",
-    "regime": "TREND_PULLBACK",
-    "logic_summary": "4H 强趋势回踩 EMA20，5M 出现缩量止跌信号，机构资金流持续流入。", 
-    "scoring": {
-      "Trend": 22,
-      "Structure": 20,
-      "Flow": 23,
-      "Momentum": 20
+{
+  "market_context": {
+    "market_regime": "...",
+    "volatility_profile": "...",
+    "system_risk_flag": true | false,
+    "data_integrity_warning": []
+  },
+  "opportunities": [
+    {
+      "symbol": "BTCUSDT",
+      "regime": "RANGE_REVERSION",
+      "logic_summary": "仅描述结构与依据，不得包含是否值得交易的主观结论。",
+      "price_levels": {
+        "entry": 63000,
+        "stop_loss": 62500,
+        "take_profit": 68000,
+        "risk_reward": 2.0
+      },
+      "scoring": {
+        "Trend": 22,
+        "Structure": 20,
+        "Participation": 23,
+        "Timing": 20
+      },
+      "total_score": 85,
+      "veto_flags": [],
+      "audit_path": "Score 85 -> Base 0.5R -> Final 0.5R",
+      "priority_rank": 1
     },
-    "total_score": 85,
-    "veto_flags": [], 
-    "audit_path": "Score 85 -> Base 0.5R -> Mode Cap 0.5R -> Final 0.5R",
-    "priority_rank": 1
-  }
-]
+    {
+      "symbol": "SOLUSDT",
+      "regime": "NO_TRADE",
+      "logic_summary": "当前价格未出现任何已触发的反转或拒绝型K线结构，无法定义明确的入场、止损和止盈价格。",
+      "veto_flags": ["NO_CLEAR_ENTRY_STRUCTURE"]
+    }
+  ],
+  "position_authorization": [
+    {
+      "symbol": "ETHUSDT",  
+      "status": "AUTHORIZED | REVOKED",
+      "revocation_reason": null,
+      "evidence": []
+    }
+  ],
+}
 
 字段说明：
     logic_summary: 描述核心入场/观望理由（用于调试） 。
     veto_flags: 列出触发的红旗标识 。
     audit_path: 记录 risk_r 的完整计算路径。
+    若缺失任一 price_levels 字段 → 本 symbol 必须被降级为 NO_TRADE。
+    当 regime = NO_TRADE 时，price_levels 与 scoring 字段必须完全省略
+    position_authorization 中只允许包含“当前已存在仓位”的 symbol，不得包含 NO_TRADE 或未持仓 symbol
+
+5.2.1 Position Authorization Review（仓位授权审计 · Minimal）
+
+仅当 symbol 当前已存在仓位时，本结构必须出现。
+若 symbol 无仓位，本结构不得出现。
+
+字段说明（硬规则）：
+	•	status
+	•	AUTHORIZED → 允许继续持有（hold 合法）
+	•	REVOKED → 禁止 hold
+	•	revocation_reason（仅当 REVOKED 时允许非 null）
+仅允许以下枚举值之一：
+	•	REGIME_INVALIDATED
+	•	STRUCTURE_BROKEN
+	•	FLOW_DIVERGENCE
+	•	SYSTEM_RISK
+	•	evidence
+	•	仅允许已发生的客观事实
+	•	禁止预测、假设、PnL 相关描述
+
 
 5.3 <decision> (原子化指令):
 [
@@ -128,6 +183,10 @@ Section 5：Execution & Interface Layer (执行与接口层)
     "risk_r": 0.5,
     "confidence": 85,
     "risk_usd": 250
+  },
+  {
+    "symbol": "ETHUSDT",
+    "action": "hold | wait"
   }
 ]
 
@@ -138,4 +197,12 @@ Section 5：Execution & Interface Layer (执行与接口层)
 4.	命名一致：decision.risk_r 必须严格等于 reasoning.audit_path 中的 Final R
 5.	一致性约束：decision中的 confidence 结果必须与 reasoning 中的 total_score 完全一致
 6.	仓位冲突禁止：若某 symbol 已存在仓位，禁止再次 open，只能 hold / wait / close
+7.	授权强制规则（关键）
+	•	若 <reasoning>.position_authorization 中，与 decision.symbol 对应的 status = REVOKED：
+	•	禁止输出 hold
+	•	必须输出 close_long 或 close_short
+	•	close_* 在此视为风险授权撤销后的合规执行，
+   不要求触及原始止损位，不等同于否定原交易判断。
+
+   协议哲学声明:止损是价格防线，授权撤销是逻辑防线。任何未被授权的风险暴露，不允许继续存在。
 

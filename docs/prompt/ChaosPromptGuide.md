@@ -94,7 +94,7 @@ system_risk_flag(系统风险标记)：
 硬规则（不可绕过）：
 - 无法给出明确止损 → Structural Validity = 0 → 总分 = 0
 - 必须给出最低合理止盈，用于隐式评估 R:R
-- 若 R:R < 1:2 → 总分 = 0
+- 若 R:R < 1:3 → 总分 = 0
 
 opportunity_score = 四项之和
 

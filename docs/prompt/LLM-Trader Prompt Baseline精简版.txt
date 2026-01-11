@@ -146,6 +146,10 @@ Section 5：Execution & Interface Layer (执行与接口层)
     "risk_r": 0.5,
     "confidence": 85,
     "risk_usd": 250
+  },
+  {
+    "symbol": "ETHUSDT",
+    "action": "hold | wait"
   }
 ]
 
