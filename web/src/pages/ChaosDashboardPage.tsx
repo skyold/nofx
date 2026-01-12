@@ -7,7 +7,7 @@ import { PositionHistory } from '../components/PositionHistory'
 import { PunkAvatar, getTraderAvatar } from '../components/PunkAvatar'
 import { confirmToast, notify } from '../lib/notify'
 import { t, type Language } from '../i18n/translations'
-import { LogOut, Loader2, Eye, EyeOff, Copy, Check } from 'lucide-react'
+import { LogOut, Loader2, Eye, EyeOff, Copy, Check, Download } from 'lucide-react'
 import { DeepVoidBackground } from '../components/DeepVoidBackground'
 import type {
     SystemStatus,
@@ -238,6 +238,39 @@ export function ChaosDashboardPage({
         if (filterType === 'rejected') return !d.success
         return true
     }) || []
+
+    // Export decisions to JSON file
+    const handleExportDecisions = () => {
+        if (!filteredDecisions || filteredDecisions.length === 0) {
+            notify.error(language === 'zh' ? '没有可导出的数据' : 'No data to export')
+            return
+        }
+
+        const dataToExport = filteredDecisions.map(d => ({
+            timestamp: d.timestamp,
+            cycle_number: d.cycle_number,
+            system_prompt: d.system_prompt,
+            input_prompt: d.input_prompt,
+            cot_trace: d.cot_trace,
+            decisions: d.decisions,
+            success: d.success,
+            error_message: d.error_message
+        }))
+
+        const jsonString = JSON.stringify(dataToExport, null, 2)
+        const blob = new Blob([jsonString], { type: 'application/json' })
+        const url = URL.createObjectURL(blob)
+        const link = document.createElement('a')
+        link.href = url
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
+        link.download = `chaos_decisions_${filterType}_${timestamp}.json`
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+        URL.revokeObjectURL(url)
+
+        notify.success(language === 'zh' ? '导出成功' : 'Export successful')
+    }
 
     // If API failed with error, show empty state (likely backend not running)
     if (tradersError) {
@@ -795,6 +828,15 @@ export function ChaosDashboardPage({
                                     {language === 'zh' ? '已否决' : 'Rejected'}
                                 </button>
                             </div>
+
+                            {/* Export Button */}
+                            <button
+                                onClick={handleExportDecisions}
+                                className="p-1.5 rounded-lg text-nofx-text-muted hover:text-nofx-gold hover:bg-nofx-gold/10 border border-transparent hover:border-nofx-gold/20 transition-all"
+                                title={language === 'zh' ? '导出记录 (JSON)' : 'Export Records (JSON)'}
+                            >
+                                <Download className="w-4 h-4" />
+                            </button>
 
                             {/* Limit Selector */}
                             <select
