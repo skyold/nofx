@@ -127,10 +127,15 @@ Section 5：Execution & Interface Layer (执行与接口层)
       "priority_rank": 1
     },
     {
-      "symbol": "SOLUSDT",
+      "symbol": "BTCUSDT",
       "regime": "NO_TRADE",
-      "logic_summary": "当前价格未出现任何已触发的反转或拒绝型K线结构，无法定义明确的入场、止损和止盈价格。",
-      "veto_flags": ["NO_CLEAR_ENTRY_STRUCTURE"]
+      "logic_summary": "仅描述已发生的价格与结构事实，不包含是否值得交易的结论性语句。",
+      "price_levels": {},
+      "scoring": {},
+      "total_score": 0,
+      "veto_flags": ["NO_CLEAR_ENTRY_STRUCTURE"],
+      "audit_path": "NO_TRADE",
+      "priority_rank": 0
     }
   ],
   "position_authorization": [
@@ -144,12 +149,17 @@ Section 5：Execution & Interface Layer (执行与接口层)
 }
 
 字段说明：
-    logic_summary: 描述核心入场/观望理由（用于调试） 。
+    logic_summary: 描述核心入场/观望理由仅描述事实和已发生的价格，不包含是否值得交易的语句和暗示 。
     veto_flags: 列出触发的红旗标识 。
     audit_path: 记录 risk_r 的完整计算路径。
     若缺失任一 price_levels 字段 → 本 symbol 必须被降级为 NO_TRADE。
-    当 regime = NO_TRADE 时，price_levels 与 scoring 字段必须完全省略
+    当 regime = NO_TRADE 时，price_levels 与 scoring 字段必须为空白或者完全省略
     position_authorization 中只允许包含“当前已存在仓位”的 symbol，不得包含 NO_TRADE 或未持仓 symbol
+    priority_rank 说明：
+      • priority_rank 为正整数，数值越小表示优先级越高；
+      • priority_rank = 1 表示当前风险预算下的首选执行对象；
+      • priority_rank = 0 仅用于 NO_TRADE，不参与任何执行或排序；
+      • 禁止出现负数、非整数或重复的 priority_rank = 1。
 
 5.2.1 Position Authorization Review（仓位授权审计 · Minimal）
 
@@ -205,4 +215,10 @@ Section 5：Execution & Interface Layer (执行与接口层)
    不要求触及原始止损位，不等同于否定原交易判断。
 
    协议哲学声明:止损是价格防线，授权撤销是逻辑防线。任何未被授权的风险暴露，不允许继续存在。
+
+8. 强制选择约束（Forced Choice Rule）
+   • 当 reasoning.opportunities 中存在 ≥2 个 symbol，其 total_score ≥70 且 risk_r > 0：
+   • 只允许 priority_rank 最小（最优先） 的 symbol 输出 open_*；
+   • 其余 symbol 即使满足开仓条件，也必须输出 action = wait；
+   • wait 不视为否定该机会，仅表示在当前风险预算下未被授权执行。
 

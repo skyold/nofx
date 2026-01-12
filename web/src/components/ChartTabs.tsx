@@ -11,6 +11,7 @@ interface ChartTabsProps {
   selectedSymbol?: string // 从外部选择的币种
   updateKey?: number // 强制更新的 key
   exchangeId?: string // 交易所ID
+  defaultVisibleCandles?: number // 默认显示的 K 线数量
 }
 
 type ChartTab = 'equity' | 'kline'
@@ -51,7 +52,7 @@ function getMarketTypeFromExchange(exchangeId: string | undefined): MarketType {
   return 'crypto'
 }
 
-export function ChartTabs({ traderId, selectedSymbol, updateKey, exchangeId }: ChartTabsProps) {
+export function ChartTabs({ traderId, selectedSymbol, updateKey, exchangeId, defaultVisibleCandles }: ChartTabsProps) {
   const { language } = useLanguage()
   const [activeTab, setActiveTab] = useState<ChartTab>('equity')
   const [chartSymbol, setChartSymbol] = useState<string>('BTC')
@@ -328,6 +329,7 @@ export function ChartTabs({ traderId, selectedSymbol, updateKey, exchangeId }: C
                 // Dynamic auto-sizing via ResizeObserver
                 exchange={currentExchange}
                 onSymbolChange={setChartSymbol}
+                defaultVisibleCandles={defaultVisibleCandles}
               />
             </motion.div>
           )}

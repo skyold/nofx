@@ -51,6 +51,7 @@ interface AdvancedChartProps {
   height?: number
   exchange?: string // 交易所类型：binance, bybit, okx, bitget, hyperliquid, aster, lighter
   onSymbolChange?: (symbol: string) => void // 币种切换回调
+  defaultVisibleCandles?: number // 默认显示的 K 线数量
 }
 
 // 指标配置
@@ -101,6 +102,7 @@ export function AdvancedChart({
   height = 550,
   exchange = 'binance', // 默认使用 binance
   onSymbolChange: _onSymbolChange, // Available for future use
+  defaultVisibleCandles,
 }: AdvancedChartProps) {
   void _onSymbolChange // Prevent unused warning
   const { language } = useLanguage()
@@ -723,7 +725,14 @@ export function AdvancedChart({
 
         // 只在初始加载时自动适配视图，避免刷新时抖动
         if (isInitialLoadRef.current) {
-          chartRef.current?.timeScale().fitContent()
+          if (defaultVisibleCandles && klineData.length > defaultVisibleCandles) {
+            chartRef.current?.timeScale().setVisibleLogicalRange({
+              from: klineData.length - defaultVisibleCandles,
+              to: klineData.length,
+            })
+          } else {
+            chartRef.current?.timeScale().fitContent()
+          }
           isInitialLoadRef.current = false
         }
         setLoading(false)

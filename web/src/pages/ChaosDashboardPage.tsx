@@ -564,6 +564,7 @@ export function ChaosDashboardPage({
                                     selectedTrader.exchange_id,
                                     exchanges
                                 )}
+                                defaultVisibleCandles={200}
                             />
                         </div>
 
