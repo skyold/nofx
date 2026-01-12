@@ -7,7 +7,7 @@ import { PositionHistory } from '../components/PositionHistory'
 import { PunkAvatar, getTraderAvatar } from '../components/PunkAvatar'
 import { confirmToast, notify } from '../lib/notify'
 import { t, type Language } from '../i18n/translations'
-import { LogOut, Loader2, Eye, EyeOff, Copy, Check, Filter } from 'lucide-react'
+import { LogOut, Loader2, Eye, EyeOff, Copy, Check } from 'lucide-react'
 import { DeepVoidBackground } from '../components/DeepVoidBackground'
 import type {
     SystemStatus,
