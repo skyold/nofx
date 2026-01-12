@@ -143,7 +143,7 @@ export function ChaosDashboardPage({
     const chartSectionRef = useRef<HTMLDivElement>(null)
     const [showWalletAddress, setShowWalletAddress] = useState<boolean>(false)
     const [copiedAddress, setCopiedAddress] = useState<boolean>(false)
-    const [filterTradesOnly, setFilterTradesOnly] = useState<boolean>(false)
+    const [filterType, setFilterType] = useState<'all' | 'trades' | 'rejected'>('all')
 
     // Current positions pagination
     const [positionsPageSize, setPositionsPageSize] = useState<number>(20)
@@ -233,7 +233,11 @@ export function ChaosDashboardPage({
     }
 
     // Filter decisions
-    const filteredDecisions = decisions?.filter(d => !filterTradesOnly || hasTradeActions(d)) || []
+    const filteredDecisions = decisions?.filter(d => {
+        if (filterType === 'trades') return hasTradeActions(d)
+        if (filterType === 'rejected') return !d.success
+        return true
+    }) || []
 
     // If API failed with error, show empty state (likely backend not running)
     if (tradersError) {
@@ -761,21 +765,36 @@ export function ChaosDashboardPage({
                                 )}
                             </div>
 
-                            {/* Filter Button */}
-                            <button
-                                onClick={() => setFilterTradesOnly(!filterTradesOnly)}
-                                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-all border ${
-                                    filterTradesOnly
-                                        ? 'bg-nofx-gold/20 text-nofx-gold border-nofx-gold/50'
-                                        : 'bg-black/40 text-nofx-text-muted border-white/10 hover:border-nofx-accent'
-                                }`}
-                                title={language === 'zh' ? '只显示有交易的决策' : 'Show trades only'}
-                            >
-                                <Filter className="w-4 h-4" />
-                                <span className="hidden sm:inline">
-                                    {language === 'zh' ? '只看交易' : 'Trades Only'}
-                                </span>
-                            </button>
+                            {/* Filter Controls */}
+                            <div className="flex items-center gap-1 bg-black/40 rounded-lg p-1 border border-white/10">
+                                <button
+                                    onClick={() => setFilterType('all')}
+                                    className={`px-3 py-1 rounded text-xs font-medium transition-all ${filterType === 'all'
+                                        ? 'bg-white/10 text-white shadow-sm'
+                                        : 'text-nofx-text-muted hover:text-white hover:bg-white/5'
+                                        }`}
+                                >
+                                    {language === 'zh' ? '全部' : 'All'}
+                                </button>
+                                <button
+                                    onClick={() => setFilterType('trades')}
+                                    className={`px-3 py-1 rounded text-xs font-medium transition-all ${filterType === 'trades'
+                                        ? 'bg-nofx-gold/20 text-nofx-gold shadow-sm shadow-nofx-gold/10'
+                                        : 'text-nofx-text-muted hover:text-nofx-gold hover:bg-nofx-gold/5'
+                                        }`}
+                                >
+                                    {language === 'zh' ? '只看交易' : 'Trades'}
+                                </button>
+                                <button
+                                    onClick={() => setFilterType('rejected')}
+                                    className={`px-3 py-1 rounded text-xs font-medium transition-all ${filterType === 'rejected'
+                                        ? 'bg-nofx-red/20 text-nofx-red shadow-sm shadow-nofx-red/10'
+                                        : 'text-nofx-text-muted hover:text-nofx-red hover:bg-nofx-red/5'
+                                        }`}
+                                >
+                                    {language === 'zh' ? '已否决' : 'Rejected'}
+                                </button>
+                            </div>
 
                             {/* Limit Selector */}
                             <select
@@ -804,15 +823,15 @@ export function ChaosDashboardPage({
                                 <div className="py-16 text-center text-nofx-text-muted opacity-60">
                                     <div className="text-6xl mb-4 opacity-30 grayscale">🧠</div>
                                     <div className="text-lg font-semibold mb-2 text-nofx-text-main">
-                                        {filterTradesOnly ? (
-                                            language === 'zh' ? '没有找到交易决策' : 'No trade decisions found'
+                                        {filterType !== 'all' ? (
+                                            language === 'zh' ? '没有找到符合条件的决策' : 'No matching decisions found'
                                         ) : (
                                             t('noDecisionsYet', language)
                                         )}
                                     </div>
                                     <div className="text-sm">
-                                        {filterTradesOnly ? (
-                                            language === 'zh' ? '请尝试取消筛选或等待新的交易' : 'Try removing the filter or wait for new trades'
+                                        {filterType !== 'all' ? (
+                                            language === 'zh' ? '请尝试切换筛选条件' : 'Try changing the filter'
                                         ) : (
                                             t('aiDecisionsWillAppear', language)
                                         )}
