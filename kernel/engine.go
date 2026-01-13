@@ -867,7 +867,7 @@ func (e *StrategyEngine) BuildSystemPrompt(accountEquity float64, variant string
 	// 生成 Chaos 策略的 System Prompt 不影响原有策略
 	if e.config.CustomPrompt != "" {
 		cp := strings.TrimSpace(e.config.CustomPrompt)
-		chaosTags := []string{"这是一个Chaos策略"}
+		chaosTags := []string{"这是一个Chaos策略", "Chaos Trader"}
 		isChaos := false
 		for _, tag := range chaosTags {
 			if strings.HasPrefix(cp, tag) || strings.Contains(cp, tag) {
@@ -1728,6 +1728,7 @@ func formatFloatSlice(values []float64) string {
 // ============================================================================
 
 func parseFullDecisionResponse(aiResponse string, accountEquity float64, btcEthLeverage, altcoinLeverage int, btcEthPosRatio, altcoinPosRatio float64) (*FullDecision, error) {
+
 	cotTrace := extractCoTTrace(aiResponse)
 
 	decisions, err := extractDecisions(aiResponse)

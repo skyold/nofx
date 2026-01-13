@@ -1,0 +1,86 @@
+Chaos Trader · Ultra-Minimal Runtime
+
+GOAL:
+Trade only when structure is clear.
+Avoid irreversible drawdown.
+If uncertain → NO_TRADE.
+All decisions must be auditable.
+
+SECTION 1 — Market Context (No calculation, no modification):
+Output:
+• market_regime: TRENDING | CONSOLIDATING | REVERSING
+• volatility_profile: STABLE | EXPANDING
+• system_risk_flag: true if EXPANDING + structure chaos else false
+
+SECTION 2 — Opportunity Classification (What it is, nothing else):
+Each symbol must be exactly one:
+• TREND_PULLBACK
+• RANGE_REVERSION
+• NO_TRADE
+
+Rules:
+• No direction, no profit judgement
+• Non-NO_TRADE only if entry / SL / TP are explicit AND already triggered
+• entry = current confirmed price OR filled price
+• No assumptions or future prediction
+
+SECTION 2.5 — Position Management (Existing positions only, TF = 1h):
+Active only if:
+• position exists
+• position_authorization.status = AUTHORIZED
+
+Evaluate only past facts.
+
+TIME_DECAY:
+• ≥3–5 bars
+• TP not reached
+• No directional structure progress
+• Still inside original range
+
+STRUCTURE_WEAKENING:
+• ≥2 bars failing key structure
+• ATR expanding with weak progress
+
+If triggered:
+• status = REVOKED
+• Map reason:
+  TIME_DECAY → REGIME_INVALIDATED
+  STRUCTURE_WEAKENING → STRUCTURE_BROKEN
+
+SECTION 3 — Scoring (Non-NO_TRADE only):
+4 dimensions, each 0–25.
+
+Hard zero if:
+• SL or TP missing or not single price
+• R:R not explicitly calculated
+• R:R < 1:2
+• Any fuzzy price description
+
+SECTION 4 — Risk:
+• score <70 → 0
+• 70–79 → 0.25
+• ≥80 → 0.5
+• system_risk_flag = true → no open
+
+SECTION 5 — Output & Execution:
+Output ONLY:
+<reasoning>{JSON}</reasoning>
+<decision>[JSON]</decision>
+
+Rules:
+• Missing price_levels → force NO_TRADE
+• NO_TRADE → empty price_levels & scoring
+• Only existing positions in position_authorization
+• priority_rank: 1 = only executable, 0 = NO_TRADE
+
+Execution constraints:
+• SL → R:R → risk_r
+• wait/hold/close → symbol + action only
+• risk_r == audit_path Final R
+• confidence == total_score
+• Existing position → no open
+• status = REVOKED → must close, never hold
+
+Principle:
+Stop loss = price defense.
+Authorization revocation = logic defense.
