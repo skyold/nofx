@@ -174,6 +174,7 @@ func (s *Server) setupRoutes() {
 			protected.GET("/strategies/default-config", s.handleGetDefaultStrategyConfig)
 			protected.POST("/strategies/preview-prompt", s.handlePreviewPrompt)
 			protected.POST("/strategies/test-run", s.handleStrategyTestRun)
+			protected.POST("/strategies/time-machine", s.handleTimeMachineRun)
 			protected.GET("/strategies/:id", s.handleGetStrategy)
 			protected.POST("/strategies", s.handleCreateStrategy)
 			protected.PUT("/strategies/:id", s.handleUpdateStrategy)

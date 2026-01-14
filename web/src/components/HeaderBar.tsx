@@ -14,6 +14,7 @@ type Page =
   | 'backtest'
   | 'strategy'
   | 'strategy-market'
+  | 'time-machine'
   | 'debate'
   | 'faq'
   | 'login'
@@ -100,6 +101,7 @@ export default function HeaderBar({
               // Define all navigation tabs
               const navTabs: { page: Page; path: string; label: string; requiresAuth: boolean }[] = [
                 { page: 'strategy-market', path: '/strategy-market', label: language === 'zh' ? '策略市场' : 'Market', requiresAuth: true },
+                { page: 'time-machine', path: '/time-machine', label: language === 'zh' ? '时光机' : 'Time Machine', requiresAuth: true },
                 { page: 'traders', path: '/traders', label: t('configNav', language), requiresAuth: true },
                 { page: 'trader', path: '/dashboard', label: t('dashboardNav', language), requiresAuth: true },
                 { page: 'chaos', path: '/chaos', label: 'Chaos', requiresAuth: true },
@@ -330,6 +332,7 @@ export default function HeaderBar({
                 {(() => {
                   const navTabs: { page: Page; path: string; label: string; requiresAuth: boolean }[] = [
                     { page: 'strategy-market', path: '/strategy-market', label: language === 'zh' ? '策略市场' : 'Market', requiresAuth: true },
+                    { page: 'time-machine', path: '/time-machine', label: language === 'zh' ? '时光机' : 'Time Machine', requiresAuth: true },
                     { page: 'traders', path: '/traders', label: t('configNav', language), requiresAuth: true },
                     { page: 'trader', path: '/dashboard', label: t('dashboardNav', language), requiresAuth: true },
                     { page: 'chaos', path: '/chaos', label: 'Chaos', requiresAuth: true },

@@ -14,6 +14,7 @@ import { FAQPage } from './pages/FAQPage'
 import { StrategyStudioPage } from './pages/StrategyStudioPage'
 import { DebateArenaPage } from './pages/DebateArenaPage'
 import { StrategyMarketPage } from './pages/StrategyMarketPage'
+import { TimeMachinePage } from './pages/TimeMachinePage'
 import { LoginRequiredOverlay } from './components/LoginRequiredOverlay'
 import HeaderBar from './components/HeaderBar'
 import { LanguageProvider, useLanguage } from './contexts/LanguageContext'
@@ -42,6 +43,7 @@ type Page =
   | 'backtest'
   | 'strategy'
   | 'strategy-market'
+  | 'time-machine'
   | 'debate'
   | 'faq'
   | 'login'
@@ -70,6 +72,7 @@ function App() {
     if (path === '/backtest' || hash === 'backtest') return 'backtest'
     if (path === '/strategy' || hash === 'strategy') return 'strategy'
     if (path === '/strategy-market' || hash === 'strategy-market') return 'strategy-market'
+    if (path === '/time-machine' || hash === 'time-machine') return 'time-machine'
     if (path === '/debate' || hash === 'debate') return 'debate'
     if (path === '/dashboard' || hash === 'trader' || hash === 'details')
       return 'trader'
@@ -90,6 +93,7 @@ function App() {
     const pathMap: Record<Page, string> = {
       'competition': '/competition',
       'strategy-market': '/strategy-market',
+      'time-machine': '/time-machine',
       'traders': '/traders',
       'trader': '/dashboard',
       'chaos': '/chaos',
@@ -157,6 +161,8 @@ function App() {
         setCurrentPage('strategy')
       } else if (path === '/strategy-market' || hash === 'strategy-market') {
         setCurrentPage('strategy-market')
+      } else if (path === '/time-machine' || hash === 'time-machine') {
+        setCurrentPage('time-machine')
       } else if (path === '/debate' || hash === 'debate') {
         setCurrentPage('debate')
       } else if (
@@ -415,6 +421,8 @@ function App() {
               <CompetitionPage />
             ) : currentPage === 'strategy-market' ? (
               <StrategyMarketPage />
+            ) : currentPage === 'time-machine' ? (
+              <TimeMachinePage />
             ) : currentPage === 'traders' ? (
               <AITradersPage
                 onTraderSelect={(traderId) => {

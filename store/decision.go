@@ -205,6 +205,15 @@ func (s *DecisionStore) GetLatestRecords(traderID string, n int) ([]*DecisionRec
 	return records, nil
 }
 
+// GetByID gets a single decision record by ID
+func (s *DecisionStore) GetByID(id int64) (*DecisionRecord, error) {
+	var dbRecord DecisionRecordDB
+	if err := s.db.First(&dbRecord, id).Error; err != nil {
+		return nil, fmt.Errorf("failed to get decision record by id %d: %w", id, err)
+	}
+	return dbRecord.toRecord(), nil
+}
+
 // GetAllLatestRecords gets the latest N records for all traders
 func (s *DecisionStore) GetAllLatestRecords(n int) ([]*DecisionRecord, error) {
 	var dbRecords []*DecisionRecordDB
