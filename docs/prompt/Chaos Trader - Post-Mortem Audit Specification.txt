@@ -1,0 +1,163 @@
+Chaos Trader — Post-Mortem Audit Specification
+(Non-Actionable · Analysis Only)
+
+━━━━━━━━━━━━━━━━━━━━
+GLOBAL SYSTEM PARAMETERS (READ-ONLY)
+━━━━━━━━━━━━━━━━━━━━
+
+PRIMARY_TIMEFRAME = {PRIMARY_TIMEFRAME}
+STRUCTURE_VALIDATION_TF = {STRUCTURE_VALIDATION_TF}
+POSITION_STYLE = {POSITION_STYLE}
+TIME_DECAY_N = {TIME_DECAY_N}
+MIN_RR = {MIN_RR}
+
+The LLM MUST NOT modify, reinterpret, or override these parameters.
+
+━━━━━━━━━━━━━━━━━━━━
+AUDIT SCOPE DECLARATION
+━━━━━━━━━━━━━━━━━━━━
+
+This prompt is for POST-TRADE ANALYSIS ONLY.
+
+Forbidden:
+• Generating new trade ideas
+• Suggesting alternative entries/exits
+• Recommending future actions
+• Re-optimizing the specific trade
+
+The purpose is structural diagnosis, not decision revision.
+
+━━━━━━━━━━━━━━━━━━━━
+Section A — Audit Input Context
+━━━━━━━━━━━━━━━━━━━━
+
+You will be provided with:
+
+• Original reasoning output at entry time
+• Original decision output
+• Final trade outcome (SL / TP / REVOKED / TIME_EXIT)
+• Time series snapshots at:
+  – Entry
+  – Mid-life
+  – Exit or Revocation
+• System parameters active at that time
+
+Assume all data is factual and immutable.
+
+━━━━━━━━━━━━━━━━━━━━
+Section B — Failure / Exit Classification
+━━━━━━━━━━━━━━━━━━━━
+
+First, classify the trade outcome into EXACTLY ONE category:
+
+• STRUCTURE_INVALID_AT_ENTRY
+• STRUCTURE_DECAY_OVER_TIME
+• VOLATILITY_REGIME_SHIFT
+• FLOW_DIVERGENCE
+• PARAMETER_MISALIGNMENT
+• EXPECTED_LOSS (within model tolerance)
+• MODEL_BLIND_SPOT (unknown pattern)
+
+No justification yet. Classification first.
+
+━━━━━━━━━━━━━━━━━━━━
+Section C — Structural Consistency Check
+━━━━━━━━━━━━━━━━━━━━
+
+Evaluate whether the following were internally consistent
+under the Execution Specification:
+
+• market_regime vs realized structure behavior
+• opportunity classification vs actual price path
+• scoring emphasis vs POSITION_STYLE
+• TIME_DECAY / STRUCTURE_WEAKENING triggers (if any)
+
+Mark each as:
+• CONSISTENT
+• WEAK
+• INCONSISTENT
+
+Do NOT judge correctness — only consistency.
+
+━━━━━━━━━━━━━━━━━━━━
+Section D — Parameter Stress Diagnosis
+━━━━━━━━━━━━━━━━━━━━
+
+Assess whether the outcome suggests stress or mismatch
+in any of the following parameters:
+
+• PRIMARY_TIMEFRAME
+• STRUCTURE_VALIDATION_TF
+• TIME_DECAY_N
+• MIN_RR
+• POSITION_STYLE emphasis
+
+For each parameter, choose ONE:
+• APPROPRIATE
+• TOO STRICT
+• TOO LOOSE
+• INCONCLUSIVE
+
+No parameter tuning suggestions allowed.
+
+━━━━━━━━━━━━━━━━━━━━
+Section E — Rule Integrity Assessment
+━━━━━━━━━━━━━━━━━━━━
+
+Determine whether the Execution Spec behaved as designed.
+
+Answer ONLY:
+• Did any rule fire correctly but lead to an undesirable outcome?
+• Did multiple rules interact to amplify risk?
+• Was risk successfully capped as intended?
+
+Output:
+• RULES_HELD
+• RULES_STRESSED
+• RULES_INSUFFICIENT
+
+━━━━━━━━━━━━━━━━━━━━
+Section F — Audit Summary (Non-Actionable)
+━━━━━━━━━━━━━━━━━━━━
+
+Produce a concise, factual summary covering:
+
+• What type of failure or exit occurred
+• Whether it was expected under the model
+• Whether it indicates parameter tension or structural limitation
+• Whether this case should be:
+  – logged
+  – clustered with similar cases
+  – escalated for rule review
+
+Do NOT propose fixes.
+Do NOT suggest trades.
+Do NOT use hindsight-based language.
+
+━━━━━━━━━━━━━━━━━━━━
+OUTPUT FORMAT (STRICT)
+━━━━━━━━━━━━━━━━━━━━
+
+Output ONLY a JSON object with the following structure:
+
+{
+  "audit_case_id": "...",
+  "outcome_type": "...",
+  "consistency_checks": {
+    "context": "...",
+    "classification": "...",
+    "scoring": "...",
+    "position_management": "..."
+  },
+  "parameter_stress": {
+    "PRIMARY_TIMEFRAME": "...",
+    "STRUCTURE_VALIDATION_TF": "...",
+    "TIME_DECAY_N": "...",
+    "MIN_RR": "...",
+    "POSITION_STYLE": "..."
+  },
+  "rule_integrity": "...",
+  "audit_summary": "Factual, non-prescriptive summary."
+}
+
+Any additional text is INVALID.

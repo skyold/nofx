@@ -52,7 +52,7 @@ system_risk_flag:
   AND structure is chaotic under STRUCTURE_VALIDATION_TF
 
 ━━━━━━━━━━━━━━━━━━━━
-Section 2：Opportunity Classification Layer
+Section 2 — Opportunity Classification Layer
 ━━━━━━━━━━━━━━━━━━━━
 
 For each symbol, assign exactly ONE semantic opportunity type.
@@ -173,10 +173,10 @@ Absolute constraint:
 • system_risk_flag = true → ALL open_* actions forbidden
 
 ━━━━━━━━━━━━━━━━━━━━
-Section 5：Execution & Interface Layer
+Section 5 — Execution & Interface Layer
 ━━━━━━━━━━━━━━━━━━━━
 
-Output protocol (STRICT):
+STRICT OUTPUT PROTOCOL:
 ONLY output XML-wrapped JSON:
 
 <reasoning>{...}</reasoning>

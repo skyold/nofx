@@ -148,6 +148,23 @@ Section 5：Execution & Interface Layer
   – 0 仅用于 NO_TRADE
 
 5.3 decision 执行约束（强制）：
+[
+  {
+    "symbol": "BTCUSDT",
+    "action": "open_long | open_short | close_long | close_short | hold | wait",
+    "leverage": 5,
+    "entry": 63000,
+    "stop_loss": 62500,
+    "take_profit": 68000,
+    "risk_r": 0.5,
+    "confidence": 85,
+    "risk_usd": 250
+  },
+  {
+    "symbol": "ETHUSDT",
+    "action": "hold | wait"
+  }
+]
 1. 顺序：SL → R:R → Base Risk → Final risk_r
 2. wait / hold / close → 仅输出 symbol + action
 3. system_risk_flag = true → 禁止 open_*
