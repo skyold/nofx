@@ -9,7 +9,9 @@ import {
   FileText,
   Sparkles,
   Layout,
-  Code
+  Code,
+  Filter,
+  ArrowDownUp
 } from 'lucide-react'
 import { DeepVoidBackground } from '../components/DeepVoidBackground'
 import { notify } from '../lib/notify'
@@ -51,6 +53,14 @@ export function TimeMachinePage() {
   const [aiModels, setAiModels] = useState<AIModel[]>([])
   const [selectedModelId, setSelectedModelId] = useState<string>('')
   
+  const [strategies, setStrategies] = useState<any[]>([])
+  const [selectedStrategyId, setSelectedStrategyId] = useState<string>('')
+  const [selectedVariant, setSelectedVariant] = useState<string>('balanced')
+
+  // Filter & Sort State
+  const [filterType, setFilterType] = useState<'all' | 'failed' | 'has_trades'>('all')
+  const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc')
+
   const [newSystemPrompt, setNewSystemPrompt] = useState<string>('')
   const [isRunning, setIsRunning] = useState(false)
   
@@ -118,11 +128,28 @@ export function TimeMachinePage() {
     fetchRecords()
   }, [token, selectedTraderId])
 
+  // Fetch Strategies
+  const fetchStrategies = useCallback(async () => {
+    if (!token) return
+    try {
+      const response = await fetch(`${API_BASE}/api/strategies`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (response.ok) {
+        const data = await response.json()
+        setStrategies(data.strategies || [])
+      }
+    } catch (err) {
+      console.error('Failed to fetch strategies:', err)
+    }
+  }, [token])
+
   // Initial load
   useEffect(() => {
     fetchAiModels()
     fetchTraders()
-  }, [fetchAiModels, fetchTraders])
+    fetchStrategies()
+  }, [fetchAiModels, fetchTraders, fetchStrategies])
 
   // When record selected, set prompt and model
   useEffect(() => {
@@ -139,6 +166,52 @@ export function TimeMachinePage() {
       }
     }
   }, [selectedRecord, traders, selectedTraderId, aiModels])
+
+  // Computed displayed records
+  const displayedRecords = records
+    .filter(r => {
+      if (filterType === 'failed') return !r.success
+      if (filterType === 'has_trades') return r.success && r.decisions && r.decisions.length > 0
+      return true
+    })
+    .sort((a, b) => {
+      const timeA = new Date(a.timestamp).getTime()
+      const timeB = new Date(b.timestamp).getTime()
+      return sortOrder === 'desc' ? timeB - timeA : timeA - timeB
+    })
+
+  const handleGeneratePrompt = async () => {
+    if (!token || !selectedStrategyId) return
+
+    const strategy = strategies.find(s => s.id === selectedStrategyId)
+    if (!strategy) return
+
+    try {
+      const response = await fetch(`${API_BASE}/api/strategies/preview-prompt`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          config: strategy.config,
+          prompt_variant: selectedVariant,
+          account_equity: 1000 // Default or mocked equity
+        }),
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        setNewSystemPrompt(data.system_prompt)
+        notify.success(language === 'zh' ? 'Prompt 已生成' : 'Prompt generated')
+      } else {
+        throw new Error('Failed to generate prompt')
+      }
+    } catch (err) {
+      console.error(err)
+      notify.error(language === 'zh' ? '生成 Prompt 失败' : 'Failed to generate prompt')
+    }
+  }
 
   const handleRunTimeMachine = async () => {
     if (!token || !selectedRecord || !selectedModelId) return
@@ -188,6 +261,11 @@ export function TimeMachinePage() {
       reasoning: { zh: '推理过程', en: 'Reasoning' },
       model: { zh: 'AI 模型', en: 'AI Model' },
       presets: { zh: '预设', en: 'Presets' },
+      selectStrategy: { zh: '选择策略模板', en: 'Select Strategy' },
+      generate: { zh: '生成 Prompt', en: 'Generate' },
+      filterAll: { zh: '全部', en: 'All' },
+      filterFailed: { zh: '失败', en: 'Failed' },
+      filterHasTrades: { zh: '有交易', en: 'Has Trades' },
     }
     return dict[key]?.[language] || key
   }
@@ -215,7 +293,8 @@ export function TimeMachinePage() {
             <select 
               value={selectedTraderId}
               onChange={(e) => setSelectedTraderId(e.target.value)}
-              className="w-full px-2 py-1.5 rounded text-sm bg-nofx-bg border border-nofx-gold/20 text-nofx-text"
+              disabled={isRunning}
+              className="w-full px-2 py-1.5 rounded text-sm bg-nofx-bg border border-nofx-gold/20 text-nofx-text disabled:opacity-50"
             >
               {traders.map(trader => (
                 <option key={trader.trader_id} value={trader.trader_id}>{trader.trader_name}</option>
@@ -223,16 +302,41 @@ export function TimeMachinePage() {
             </select>
           </div>
           
+          {/* Filter & Sort Toolbar */}
+          <div className="px-3 py-2 border-b border-nofx-gold/10 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1 flex-1">
+              <Filter className="w-3 h-3 text-nofx-text-muted" />
+              <select
+                value={filterType}
+                onChange={(e) => setFilterType(e.target.value as any)}
+                disabled={isRunning}
+                className="w-full px-1 py-1 rounded text-[10px] bg-nofx-bg border border-nofx-gold/20 text-nofx-text disabled:opacity-50"
+              >
+                <option value="all">{t('filterAll')}</option>
+                <option value="failed">{t('filterFailed')}</option>
+                <option value="has_trades">{t('filterHasTrades')}</option>
+              </select>
+            </div>
+            <button
+              onClick={() => !isRunning && setSortOrder(sortOrder === 'desc' ? 'asc' : 'desc')}
+              disabled={isRunning}
+              className={`p-1 rounded hover:bg-white/10 transition-colors ${isRunning ? 'opacity-50 cursor-not-allowed' : ''}`}
+              title={sortOrder === 'desc' ? 'Newest First' : 'Oldest First'}
+            >
+              <ArrowDownUp className={`w-3 h-3 ${sortOrder === 'desc' ? 'text-nofx-gold' : 'text-nofx-text-muted'}`} />
+            </button>
+          </div>
+          
           <div className="flex-1 overflow-y-auto p-2 space-y-1">
-            {records.map(record => (
+            {displayedRecords.map(record => (
               <div
                 key={record.id}
-                onClick={() => setSelectedRecord(record)}
+                onClick={() => !isRunning && setSelectedRecord(record)}
                 className={`p-2 rounded cursor-pointer transition-colors text-xs ${
                   selectedRecord?.id === record.id 
                     ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' 
                     : 'hover:bg-white/5 text-nofx-text-muted'
-                }`}
+                } ${isRunning ? 'opacity-50 cursor-not-allowed pointer-events-none' : ''}`}
               >
                 <div className="flex justify-between mb-1">
                   <span>{new Date(record.timestamp).toLocaleTimeString()}</span>
@@ -265,7 +369,8 @@ export function TimeMachinePage() {
                    <select 
                     value={selectedModelId}
                     onChange={(e) => setSelectedModelId(e.target.value)}
-                    className="px-2 py-1.5 rounded text-xs bg-nofx-bg border border-nofx-gold/20 text-nofx-text w-32"
+                    disabled={isRunning}
+                    className="px-2 py-1.5 rounded text-xs bg-nofx-bg border border-nofx-gold/20 text-nofx-text w-32 disabled:opacity-50"
                   >
                     {aiModels.map(m => (
                       <option key={m.id} value={m.id}>{m.name}</option>
@@ -307,12 +412,46 @@ export function TimeMachinePage() {
                       <Code className="w-3 h-3 text-blue-400" />
                       <span className="text-xs font-medium text-blue-400">{t('systemPrompt')}</span>
                     </div>
-                    {/* Quick Presets could go here */}
+                    
+                    {/* Strategy Selector */}
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={selectedStrategyId}
+                        onChange={(e) => setSelectedStrategyId(e.target.value)}
+                        disabled={isRunning}
+                        className="px-2 py-1 rounded text-[10px] bg-nofx-bg border border-nofx-gold/20 text-nofx-text w-32 disabled:opacity-50"
+                      >
+                        <option value="">{t('selectStrategy')}</option>
+                        {strategies.map(s => (
+                          <option key={s.id} value={s.id}>{s.name}</option>
+                        ))}
+                      </select>
+                      
+                      <select
+                        value={selectedVariant}
+                        onChange={(e) => setSelectedVariant(e.target.value)}
+                        disabled={isRunning}
+                        className="px-2 py-1 rounded text-[10px] bg-nofx-bg border border-nofx-gold/20 text-nofx-text w-24 disabled:opacity-50"
+                      >
+                        <option value="balanced">Balanced</option>
+                        <option value="aggressive">Aggressive</option>
+                        <option value="conservative">Conservative</option>
+                      </select>
+                      
+                      <button
+                        onClick={handleGeneratePrompt}
+                        disabled={!selectedStrategyId || isRunning}
+                        className="px-2 py-1 rounded bg-white/10 hover:bg-white/20 text-[10px] text-nofx-text disabled:opacity-50"
+                      >
+                        {t('generate')}
+                      </button>
+                    </div>
                   </div>
                   <textarea 
                     value={newSystemPrompt}
                     onChange={(e) => setNewSystemPrompt(e.target.value)}
-                    className="flex-1 p-3 rounded-lg bg-black/40 border border-blue-500/30 text-xs text-nofx-text font-mono resize-none focus:outline-none focus:border-blue-500"
+                    disabled={isRunning}
+                    className="flex-1 p-3 rounded-lg bg-black/40 border border-blue-500/30 text-xs text-nofx-text font-mono resize-none focus:outline-none focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
                     spellCheck={false}
                   />
                 </div>

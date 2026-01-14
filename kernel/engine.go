@@ -2115,6 +2115,17 @@ func auditChaosDecision(
 		return fmt.Errorf("%s: calculated position size invalid: %.2f", decisionInfo(), d.PositionSizeUSD)
 	}
 
+	const minPositionSize = 100.0
+	if d.PositionSizeUSD < minPositionSize {
+		logger.Infof("⚠️  [Position Size Adjustment] %s calculated size %.2f < min %.2f, adjusting to %.2f",
+			decisionInfo(), d.PositionSizeUSD, minPositionSize, minPositionSize)
+		d.PositionSizeUSD = minPositionSize
+
+		if d.PositionSizeUSD > accountEquity {
+			return fmt.Errorf("%s: adjusted position size %.2f exceeds account equity %.2f", decisionInfo(), d.PositionSizeUSD, accountEquity)
+		}
+	}
+
 	// =========================
 	// 5. Symbol-based caps
 	// =========================

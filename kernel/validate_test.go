@@ -172,6 +172,60 @@ func TestChaosPositionSizeClamping(t *testing.T) {
 	}
 }
 
+// TestChaosPositionSizeMinimumAdjustment tests min position size adjustment and equity check
+func TestChaosPositionSizeMinimumAdjustment(t *testing.T) {
+	// Case 1: Adjustment success
+	// Equity 200, Calculated 20 (<100), Adjusted to 100, 100 < 200 OK.
+	t.Run("Adjustment_Success", func(t *testing.T) {
+		accountEquity := 200.0
+		decision := Decision{
+			Symbol:     "ETHUSDT",
+			Action:     "open_long",
+			Leverage:   5,
+			EntryPrice: 100,
+			StopLoss:   99,
+			TakeProfit: 105,
+			RiskR:      0.1, // Very low risk -> small size
+			Confidence: 75,
+		}
+
+		err := validateDecision(&decision, accountEquity, 5, 5, 1.0, 1.0)
+		if err != nil {
+			t.Fatalf("Should not error: %v", err)
+		}
+
+		if math.Abs(decision.PositionSizeUSD-100.0) > 0.01 {
+			t.Errorf("PositionSizeUSD not adjusted to min: got %.2f, want 100.00", decision.PositionSizeUSD)
+		}
+	})
+
+	// Case 2: Equity too low
+	// Equity 50, Calculated 20 (<100), Adjusted to 100, 100 > 50 Error.
+	t.Run("Equity_Too_Low", func(t *testing.T) {
+		accountEquity := 50.0
+		decision := Decision{
+			Symbol:     "ETHUSDT",
+			Action:     "open_long",
+			Leverage:   5,
+			EntryPrice: 100,
+			StopLoss:   99,
+			TakeProfit: 105,
+			RiskR:      0.1,
+			Confidence: 75,
+		}
+
+		err := validateDecision(&decision, accountEquity, 5, 5, 1.0, 1.0)
+		if err == nil {
+			t.Fatalf("Should error due to low equity")
+		}
+		
+		expectedError := "exceeds account equity"
+		if !contains(err.Error(), expectedError) {
+			t.Errorf("Error message mismatch: got '%v', want to contain '%s'", err, expectedError)
+		}
+	})
+}
+
 // contains checks if string contains substring (helper function)
 func contains(s, substr string) bool {
 	return len(s) >= len(substr) && (s == substr || len(substr) == 0 ||
