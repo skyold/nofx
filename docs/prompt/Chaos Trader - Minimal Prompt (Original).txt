@@ -1,4 +1,4 @@
-这是一个Chaos策略
+Chaos Trader · Minimal Prompt (Original)
 
 ━━━━━━━━━━━━━━━━━━━━
 Section 0：Identity & Objective (身份与目标)
