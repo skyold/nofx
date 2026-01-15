@@ -11,7 +11,9 @@ import {
   Layout,
   Code,
   Filter,
-  ArrowDownUp
+  ArrowDownUp,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react'
 import { DeepVoidBackground } from '../components/DeepVoidBackground'
 import { notify } from '../lib/notify'
@@ -60,6 +62,11 @@ export function TimeMachinePage() {
   // Filter & Sort State
   const [filterType, setFilterType] = useState<'all' | 'failed' | 'has_trades'>('all')
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc')
+  
+  // Pagination State
+  const [page, setPage] = useState(1)
+  const [pageSize] = useState(20)
+  const [total, setTotal] = useState(0)
 
   const [newSystemPrompt, setNewSystemPrompt] = useState<string>('')
   const [isRunning, setIsRunning] = useState(false)
@@ -107,18 +114,26 @@ export function TimeMachinePage() {
     }
   }, [token])
 
-  // Fetch Records when trader selected
+  // Fetch Records when trader selected (with pagination)
   useEffect(() => {
     if (!token || !selectedTraderId) return
     
     const fetchRecords = async () => {
       try {
-        const response = await fetch(`${API_BASE}/api/decisions?trader_id=${selectedTraderId}`, {
+        const query = new URLSearchParams({
+            trader_id: selectedTraderId,
+            page: page.toString(),
+            page_size: pageSize.toString(),
+            filter: filterType,
+            sort: sortOrder
+        })
+        const response = await fetch(`${API_BASE}/api/decisions?${query}`, {
           headers: { Authorization: `Bearer ${token}` },
         })
         if (response.ok) {
           const data = await response.json()
-          setRecords(data || [])
+          setRecords(data.items || [])
+          setTotal(data.total || 0)
         }
       } catch (err) {
         console.error('Failed to fetch records:', err)
@@ -126,7 +141,12 @@ export function TimeMachinePage() {
     }
     
     fetchRecords()
-  }, [token, selectedTraderId])
+  }, [token, selectedTraderId, page, pageSize, filterType, sortOrder])
+
+  // Reset page when filter/trader changes
+  useEffect(() => {
+      setPage(1)
+  }, [filterType, selectedTraderId, sortOrder])
 
   // Fetch Strategies
   const fetchStrategies = useCallback(async () => {
@@ -180,18 +200,7 @@ export function TimeMachinePage() {
     }
   }, [aiModels, selectedRecord, selectedTraderId, selectedModelId, traders])
 
-  // Computed displayed records
-  const displayedRecords = records
-    .filter(r => {
-      if (filterType === 'failed') return !r.success
-      if (filterType === 'has_trades') return r.success && r.decisions && r.decisions.length > 0
-      return true
-    })
-    .sort((a, b) => {
-      const timeA = new Date(a.timestamp).getTime()
-      const timeB = new Date(b.timestamp).getTime()
-      return sortOrder === 'desc' ? timeB - timeA : timeA - timeB
-    })
+  // Computed displayed records (removed, using server-side pagination)
 
   const handleGeneratePrompt = async () => {
     if (!token || !selectedStrategyId) return
@@ -300,7 +309,7 @@ export function TimeMachinePage() {
 
       <div className="flex-1 flex overflow-hidden">
         {/* Left Column: Traders & Records */}
-        <div className="w-64 flex-shrink-0 border-r border-nofx-gold/20 flex flex-col bg-nofx-bg/30 backdrop-blur-sm z-10">
+        <div className="w-96 flex-shrink-0 border-r border-nofx-gold/20 flex flex-col bg-nofx-bg/30 backdrop-blur-sm z-10">
           <div className="p-3 border-b border-nofx-gold/10">
             <label className="text-xs font-medium text-nofx-text-muted mb-2 block">{t('selectTrader')}</label>
             <select 
@@ -340,28 +349,66 @@ export function TimeMachinePage() {
             </button>
           </div>
           
-          <div className="flex-1 overflow-y-auto p-2 space-y-1">
-            {displayedRecords.map(record => (
+          <div className="flex-1 overflow-y-auto p-2 space-y-2">
+            {records.map(record => (
               <div
                 key={record.id}
                 onClick={() => !isRunning && setSelectedRecord(record)}
-                className={`p-2 rounded cursor-pointer transition-colors text-xs ${
+                className={`p-3 rounded cursor-pointer transition-colors text-xs border ${
                   selectedRecord?.id === record.id 
-                    ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' 
-                    : 'hover:bg-white/5 text-nofx-text-muted'
+                    ? 'bg-blue-500/20 text-blue-400 border-blue-500/30' 
+                    : 'bg-white/5 border-white/5 hover:bg-white/10 text-nofx-text-muted'
                 } ${isRunning ? 'opacity-50 cursor-not-allowed pointer-events-none' : ''}`}
               >
-                <div className="flex justify-between mb-1">
-                  <span>{new Date(record.timestamp).toLocaleTimeString()}</span>
-                  <span className={record.success ? 'text-green-500' : 'text-red-500'}>
-                    {record.success ? 'Success' : 'Failed'}
-                  </span>
+                <div className="flex justify-between items-center mb-1">
+                   <span className="font-mono opacity-70">{new Date(record.timestamp).toLocaleString()}</span>
+                   <span className={`px-1.5 py-0.5 rounded text-[10px] ${record.success ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
+                      {record.success ? 'Success' : 'Fail'}
+                   </span>
                 </div>
-                <div className="text-[10px] opacity-70 truncate">
-                  ID: {record.id} • Cycle: {record.cycle_number}
+                
+                <div className="flex justify-between items-center mb-1">
+                    <span className="font-bold text-nofx-text">Cycle #{record.cycle_number}</span>
+                    <span className="text-[10px] opacity-50">ID: {record.id}</span>
                 </div>
+
+                {/* Decisions Summary */}
+                {record.decisions && record.decisions.length > 0 ? (
+                    <div className="flex flex-wrap gap-1 mt-2">
+                        {record.decisions.map((d, i) => (
+                            <span key={i} className={`px-1.5 py-0.5 rounded text-[10px] border ${
+                                d.action.includes('open') ? 'bg-green-500/10 border-green-500/20 text-green-300' :
+                                d.action.includes('close') ? 'bg-orange-500/10 border-orange-500/20 text-orange-300' :
+                                'bg-white/5 border-white/10 text-nofx-text-muted'
+                            }`}>
+                                {d.action} {d.symbol}
+                            </span>
+                        ))}
+                    </div>
+                ) : (
+                    <div className="mt-1 text-[10px] opacity-40 italic">No actions recorded</div>
+                )}
               </div>
             ))}
+          </div>
+
+          {/* Pagination */}
+          <div className="p-2 border-t border-nofx-gold/10 flex items-center justify-between text-xs text-nofx-text-muted bg-nofx-bg">
+              <button 
+                  onClick={() => !isRunning && setPage(p => Math.max(1, p - 1))}
+                  disabled={page === 1 || isRunning}
+                  className="p-1 hover:text-white disabled:opacity-30 transition-colors"
+              >
+                  <ChevronLeft className="w-4 h-4" />
+              </button>
+              <span>Page {page} of {Math.ceil(total / pageSize) || 1} ({total} items)</span>
+              <button 
+                  onClick={() => !isRunning && setPage(p => p + 1)}
+                  disabled={page >= Math.ceil(total / pageSize) || isRunning}
+                  className="p-1 hover:text-white disabled:opacity-30 transition-colors"
+              >
+                  <ChevronRight className="w-4 h-4" />
+              </button>
           </div>
         </div>
 

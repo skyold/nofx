@@ -25,10 +25,11 @@ GLOBAL OUTPUT CONTRACT (MANDATORY):
    MUST be in English and strictly match the specification.
 4. Human-readable explanations are allowed ONLY in fields named:
    "explanation_cn"
-5. Each JSON object may contain AT MOST ONE explanation_cn field.
+5. In <reasoning> block each JSON object may contain AT MOST ONE explanation_cn field, 
+6. <decision> block no need any explanation_cn.
 6. Duplicate keys inside the same JSON object are strictly forbidden.
 7. explanation_cn MUST be written in simplified Chinese.
-8. If explanation_cn is missing, decision logic MUST still be complete.
+
 
 Violation of any rule invalidates the entire response.
 

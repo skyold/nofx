@@ -205,6 +205,49 @@ func (s *DecisionStore) GetLatestRecords(traderID string, n int) ([]*DecisionRec
 	return records, nil
 }
 
+// GetRecordsPaged gets paged records with filtering and sorting
+func (s *DecisionStore) GetRecordsPaged(traderID string, page, pageSize int, filterType, sortOrder string) ([]*DecisionRecord, int64, error) {
+	var dbRecords []*DecisionRecordDB
+	var total int64
+
+	query := s.db.Model(&DecisionRecordDB{}).Where("trader_id = ?", traderID)
+
+	// Filtering
+	if filterType == "failed" {
+		query = query.Where("success = ?", false)
+	} else if filterType == "has_trades" {
+		// Check for open/close actions in JSON string
+		query = query.Where("decisions LIKE ? OR decisions LIKE ? OR decisions LIKE ? OR decisions LIKE ?",
+			"%open_long%", "%open_short%", "%close_long%", "%close_short%")
+	}
+
+	// Count total before pagination
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, fmt.Errorf("failed to count records: %w", err)
+	}
+
+	// Sorting
+	if sortOrder == "asc" {
+		query = query.Order("timestamp ASC")
+	} else {
+		query = query.Order("timestamp DESC") // Default
+	}
+
+	// Pagination
+	offset := (page - 1) * pageSize
+	err := query.Limit(pageSize).Offset(offset).Find(&dbRecords).Error
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to query paged records: %w", err)
+	}
+
+	records := make([]*DecisionRecord, len(dbRecords))
+	for i, db := range dbRecords {
+		records[i] = db.toRecord()
+	}
+
+	return records, total, nil
+}
+
 // GetByID gets a single decision record by ID
 func (s *DecisionStore) GetByID(id int64) (*DecisionRecord, error) {
 	var dbRecord DecisionRecordDB

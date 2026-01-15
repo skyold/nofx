@@ -2758,6 +2758,41 @@ func (s *Server) handleDecisions(c *gin.Context) {
 		return
 	}
 
+	// Check if pagination is requested
+	if c.Query("page") != "" {
+		page, _ := strconv.Atoi(c.Query("page"))
+		if page < 1 {
+			page = 1
+		}
+
+		pageSize := 20
+		if sizeStr := c.Query("page_size"); sizeStr != "" {
+			if s, err := strconv.Atoi(sizeStr); err == nil && s > 0 {
+				pageSize = s
+			}
+		}
+		if pageSize > 100 {
+			pageSize = 100
+		}
+
+		filter := c.Query("filter")
+		sortOrder := c.Query("sort")
+
+		records, total, err := trader.GetStore().Decision().GetRecordsPaged(trader.GetID(), page, pageSize, filter, sortOrder)
+		if err != nil {
+			SafeInternalError(c, "Get decision log", err)
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"items":     records,
+			"total":     total,
+			"page":      page,
+			"page_size": pageSize,
+		})
+		return
+	}
+
 	// Get all historical decision records (unlimited)
 	records, err := trader.GetStore().Decision().GetLatestRecords(trader.GetID(), 10000)
 	if err != nil {
