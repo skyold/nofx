@@ -60,7 +60,6 @@ Section 2.5：Position Management（持仓管理层）
 
 本章节 Section 2.5 的主决策周期固定为 1h。
 
-
 2.5.1 适用前提（硬规则）
 
 仅当同时满足以下条件时，本层才允许评估：
@@ -68,8 +67,7 @@ Section 2.5：Position Management（持仓管理层）
 • symbol 当前已存在仓位
 • reasoning.position_authorization.status = AUTHORIZED
 
-若不满足上述条件，本层不得产生任何判断或输出。
-
+否则 → 本节无输出。
 
 2.5.2 核心原则（不可违反）
 
@@ -89,7 +87,6 @@ Section 2.5：Position Management（持仓管理层）
 
 → 内部判定为 TIME_DECAY
 
-
 2.5.4 结构弱化（STRUCTURE_WEAKENING｜内部判定）
 
 若出现以下任一情况：
@@ -104,10 +101,8 @@ Section 2.5：Position Management（持仓管理层）
 
 若触发 TIME_DECAY 或 STRUCTURE_WEAKENING：
 
-• 必须在 reasoning.position_authorization 中标记：
-  status = REVOKED
-• Section 2.5 的内部判定原因
-  不得直接作为 revocation_reason 输出
+• position_authorization.status = REVOKED（撤销授权）
+• Section 2.5 的内部判定原因不得直接作为 revocation_reason 输出
 
 
 2.5.6 撤销原因协议映射（强制）
