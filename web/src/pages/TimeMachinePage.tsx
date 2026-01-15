@@ -156,6 +156,7 @@ export function TimeMachinePage() {
     if (selectedRecord) {
       setNewSystemPrompt(selectedRecord.system_prompt)
       setTimeMachineResult(null)
+       
       // Try to match trader's model
       const trader = traders.find(t => t.trader_id === selectedTraderId)
       if (trader) {
@@ -165,7 +166,19 @@ export function TimeMachinePage() {
         else if (aiModels.length > 0) setSelectedModelId(aiModels[0].id)
       }
     }
-  }, [selectedRecord, traders, selectedTraderId, aiModels])
+  }, [selectedRecord?.id]) // Only trigger when the ID changes
+
+  // Update model if models load later
+  useEffect(() => {
+    if (selectedRecord && !selectedModelId && aiModels.length > 0) {
+       const trader = traders.find(t => t.trader_id === selectedTraderId)
+       if (trader) {
+         const model = aiModels.find(m => m.id === trader.ai_model || trader.ai_model.includes(m.id))
+         if (model) setSelectedModelId(model.id)
+         else setSelectedModelId(aiModels[0].id)
+       }
+    }
+  }, [aiModels, selectedRecord, selectedTraderId, selectedModelId, traders])
 
   // Computed displayed records
   const displayedRecords = records
