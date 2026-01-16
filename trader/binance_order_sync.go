@@ -183,16 +183,15 @@ func (t *FuturesTrader) SyncOrdersFromBinance(traderID string, exchangeID string
 	syncedCount := 0
 
 	for _, trade := range allTrades {
-		// Check if trade already exists
-		existing, err := orderStore.GetOrderByExchangeID(exchangeID, trade.TradeID)
-		if err == nil && existing != nil {
-			continue // Trade already exists, skip
+		// 1. Check if this FILL (Trade) already exists
+		existingFill, err := orderStore.GetFillByExchangeTradeID(exchangeID, trade.TradeID)
+		if err == nil && existingFill != nil {
+			continue // Fill already processed, skip
 		}
 
 		// Normalize symbol
 		symbol := market.Normalize(trade.Symbol)
-
-		// Determine order action based on side and position side
+		side := strings.ToUpper(trade.Side)
 		orderAction := t.determineOrderAction(trade.Side, trade.PositionSide, trade.RealizedPnL)
 
 		// Determine position side for position builder
@@ -206,16 +205,20 @@ func (t *FuturesTrader) SyncOrdersFromBinance(traderID string, exchangeID string
 			}
 		}
 
-		// Normalize side
-		side := strings.ToUpper(trade.Side)
-
 		// Create order record - use Unix milliseconds UTC
 		tradeTimeMs := trade.Time.UTC().UnixMilli()
+
+		// Use OrderID from trade if available, otherwise fallback to TradeID
+		exchangeOrderID := trade.OrderID
+		if exchangeOrderID == "" || exchangeOrderID == "0" {
+			exchangeOrderID = trade.TradeID
+		}
+
 		orderRecord := &store.TraderOrder{
 			TraderID:        traderID,
 			ExchangeID:      exchangeID,
 			ExchangeType:    exchangeType,
-			ExchangeOrderID: trade.TradeID,
+			ExchangeOrderID: exchangeOrderID,
 			Symbol:          symbol,
 			Side:            side,
 			PositionSide:    positionSide,
@@ -232,10 +235,15 @@ func (t *FuturesTrader) SyncOrdersFromBinance(traderID string, exchangeID string
 			UpdatedAt:       tradeTimeMs,
 		}
 
-		// Insert order record
+		// Insert order record (or find existing)
 		if err := orderStore.CreateOrder(orderRecord); err != nil {
-			logger.Infof("  ⚠️ Failed to sync trade %s: %v", trade.TradeID, err)
+			logger.Infof("  ⚠️ Failed to sync order %s: %v", exchangeOrderID, err)
 			continue
+		}
+
+		// Ensure status is updated to FILLED (if it was created as NEW by AutoTrader)
+		if orderRecord.ID > 0 {
+			orderStore.UpdateOrderStatus(orderRecord.ID, "FILLED", trade.Quantity, trade.Price, trade.Fee)
 		}
 
 		// Create fill record - use Unix milliseconds UTC
@@ -244,7 +252,7 @@ func (t *FuturesTrader) SyncOrdersFromBinance(traderID string, exchangeID string
 			ExchangeID:      exchangeID,
 			ExchangeType:    exchangeType,
 			OrderID:         orderRecord.ID,
-			ExchangeOrderID: trade.TradeID,
+			ExchangeOrderID: exchangeOrderID,
 			ExchangeTradeID: trade.TradeID,
 			Symbol:          symbol,
 			Side:            side,
@@ -267,7 +275,7 @@ func (t *FuturesTrader) SyncOrdersFromBinance(traderID string, exchangeID string
 			traderID, exchangeID, exchangeType,
 			symbol, positionSide, orderAction,
 			trade.Quantity, trade.Price, trade.Fee, trade.RealizedPnL,
-			tradeTimeMs, trade.TradeID,
+			tradeTimeMs, exchangeOrderID,
 		); err != nil {
 			logger.Infof("  ⚠️ Failed to sync position for trade %s: %v", trade.TradeID, err)
 		} else {
