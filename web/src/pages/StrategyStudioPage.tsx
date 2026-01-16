@@ -555,6 +555,11 @@ export function StrategyStudioPage() {
       balanced: { zh: '平衡', en: 'Balanced' },
       aggressive: { zh: '激进', en: 'Aggressive' },
       conservative: { zh: '保守', en: 'Conservative' },
+      s1: { zh: 'S1 (主力/基线)', en: 'S1 (SWING_CORE)' },
+      t1: { zh: 'T1 (慢趋势)', en: 'T1 (TREND_FOLLOW_SLOW)' },
+      d1: { zh: 'D1 (日内波段)', en: 'D1 (INTRADAY_SWING)' },
+      r1: { zh: 'R1 (震荡防御)', en: 'R1 (RANGE_DEFENSIVE)' },
+      x1: { zh: 'X1 (实验/微结构)', en: 'X1 (SCALP_EXPERIMENT)' },
       selectModel: { zh: '选择 AI 模型', en: 'Select AI Model' },
       runTest: { zh: '运行 AI 测试', en: 'Run AI Test' },
       running: { zh: '运行中...', en: 'Running...' },
@@ -1015,6 +1020,12 @@ export function StrategyStudioPage() {
                     <option value="balanced">{t('balanced')}</option>
                     <option value="aggressive">{t('aggressive')}</option>
                     <option value="conservative">{t('conservative')}</option>
+                    <option disabled>--- Chaos Modes ---</option>
+                    <option value="s1">{t('s1')}</option>
+                    <option value="t1">{t('t1')}</option>
+                    <option value="d1">{t('d1')}</option>
+                    <option value="r1">{t('r1')}</option>
+                    <option value="x1">{t('x1')}</option>
                   </select>
                   <button
                     onClick={fetchPromptPreview}
@@ -1127,6 +1138,12 @@ export function StrategyStudioPage() {
                       <option value="balanced">{t('balanced')}</option>
                       <option value="aggressive">{t('aggressive')}</option>
                       <option value="conservative">{t('conservative')}</option>
+                      <option disabled>--- Chaos Modes ---</option>
+                      <option value="s1">{t('s1')}</option>
+                      <option value="t1">{t('t1')}</option>
+                      <option value="d1">{t('d1')}</option>
+                      <option value="r1">{t('r1')}</option>
+                      <option value="x1">{t('x1')}</option>
                     </select>
                     <button
                       onClick={runAiTest}

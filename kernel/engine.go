@@ -879,6 +879,51 @@ func (e *StrategyEngine) BuildSystemPrompt(accountEquity float64, variant string
 
 			sb.WriteString("\n\n你拥有以下市场数据和指标:\n")
 			e.writeAvailableIndicators(&sb)
+
+			// 2. Trading mode variant
+			v := strings.ToLower(strings.TrimSpace(variant))
+			switch v {
+			case "s1", "swing_core":
+				sb.WriteString("## Profile S1 — SWING_CORE 主力基线系统\n\n")
+				sb.WriteString("### 使用信息\n\n")
+				sb.WriteString("**用途**\n- 主力实盘账户\n- 系统健康度评估基线\n- 最适合长期跑、做统计、做 Post-Mortem 聚类\n\n")
+				sb.WriteString("**特点**\n- 稳定性最高\n- NO_TRADE 比例高\n- LLM 不确定性最低\n\n")
+				sb.WriteString("━━━━━━━━━━━━━━━━━━━━\nGLOBAL SYSTEM PARAMETERS (READ-ONLY)\n━━━━━━━━━━━━━━━━━━━━\n\n")
+				sb.WriteString("PRIMARY_TIMEFRAME = 1h\nSTRUCTURE_VALIDATION_TF = 4h\nPOSITION_STYLE = SWING      # TREND | SWING | SCALP\nTIME_DECAY_N = 5\nMIN_RR = 1.5\n\nThe LLM MUST NOT modify or reinterpret these parameters.\n\n")
+
+			case "t1", "trend_follow_slow":
+				sb.WriteString("## Profile T1 — TREND_FOLLOW_SLOW 慢趋势/牛市系统\n\n")
+				sb.WriteString("### 使用信息\n\n")
+				sb.WriteString("**用途**\n- 中长期趋势账户\n- 牛市 / 单边行情\n- 低频、低干预、低 token 消耗\n\n")
+				sb.WriteString("**特点**\n- 极少交易\n- 持仓时间长\n- 对震荡市容忍度极低\n\n")
+				sb.WriteString("━━━━━━━━━━━━━━━━━━━━\nGLOBAL SYSTEM PARAMETERS (READ-ONLY)\n━━━━━━━━━━━━━━━━━━━━\n\n")
+				sb.WriteString("PRIMARY_TIMEFRAME = 4h\nSTRUCTURE_VALIDATION_TF = 1d\nPOSITION_STYLE = TREND      # TREND | SWING | SCALP\nTIME_DECAY_N = 3\nMIN_RR = 2.0\n\nThe LLM MUST NOT modify or reinterpret these parameters.\n\n")
+
+			case "d1", "intraday_swing":
+				sb.WriteString("## Profile D1 — INTRADAY_SWING 日内波段/鲁棒性验证\n\n")
+				sb.WriteString("### 使用信息\n\n")
+				sb.WriteString("**用途**\n- 日内波段\n- 半自动 / 盯盘系统\n- 用于验证提示词鲁棒性\n\n")
+				sb.WriteString("**特点**\n- 撤销率较高\n- 对 Timing 敏感\n- 比 S1 更“活跃”\n\n")
+				sb.WriteString("━━━━━━━━━━━━━━━━━━━━\nGLOBAL SYSTEM PARAMETERS (READ-ONLY)\n━━━━━━━━━━━━━━━━━━━━\n\n")
+				sb.WriteString("PRIMARY_TIMEFRAME = 15m\nSTRUCTURE_VALIDATION_TF = 1h\nPOSITION_STYLE = SWING      # TREND | SWING | SCALP\nTIME_DECAY_N = 4\nMIN_RR = 1.5\n\nThe LLM MUST NOT modify or reinterpret these parameters.\n\n")
+
+			case "r1", "range_defensive":
+				sb.WriteString("## Profile R1 — RANGE_DEFENSIVE 震荡防御系统\n\n")
+				sb.WriteString("### 使用信息\n\n")
+				sb.WriteString("**用途**\n- 明确箱体 / 横盘阶段\n- 防止趋势模型在震荡中持续失血\n- 需要搭配 regime filter\n\n")
+				sb.WriteString("**特点**\n- TIME_DECAY 高频触发\n- 盈利周期短\n- 对 regime 判断极其敏感\n\n")
+				sb.WriteString("━━━━━━━━━━━━━━━━━━━━\nGLOBAL SYSTEM PARAMETERS (READ-ONLY)\n━━━━━━━━━━━━━━━━━━━━\n\n")
+				sb.WriteString("PRIMARY_TIMEFRAME = 30m\nSTRUCTURE_VALIDATION_TF = 2h\nPOSITION_STYLE = SWING      # TREND | SWING | SCALP\nTIME_DECAY_N = 3\nMIN_RR = 1.2\n\nThe LLM MUST NOT modify or reinterpret these parameters.\n\n")
+
+			case "x1", "scalp_experiment":
+				sb.WriteString("## Profile X1 — SCALP_EXPERIMENT\n\n")
+				sb.WriteString("### 使用信息\n\n")
+				sb.WriteString("**用途**\n- 市场微结构研究\n- 行为分析 / 数据采样\n- ❌ 不建议接入主 Execution 系统\n\n")
+				sb.WriteString("**特点**\n- 不稳定\n- token 消耗高\n- Post-Mortem 中 MODEL_BLIND_SPOT 占比高\n\n")
+				sb.WriteString("━━━━━━━━━━━━━━━━━━━━\nGLOBAL SYSTEM PARAMETERS (READ-ONLY)\n━━━━━━━━━━━━━━━━━━━━\n\n")
+				sb.WriteString("PRIMARY_TIMEFRAME = 5m\nSTRUCTURE_VALIDATION_TF = 15m\nPOSITION_STYLE = SCALP      # TREND | SWING | SCALP\nTIME_DECAY_N = 2\nMIN_RR = 1.2\n\nThe LLM MUST NOT modify or reinterpret these parameters.\n\n")
+			}
+
 			sb.WriteString("\n\n")
 			sb.WriteString(e.config.CustomPrompt)
 
