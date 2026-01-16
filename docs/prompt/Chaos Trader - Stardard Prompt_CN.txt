@@ -1,4 +1,4 @@
-Chaos Trader · Minimal Prompt (Original)
+Chaos Trader · Stardard Prompt CN
 
 ━━━━━━━━━━━━━━━━━━━━
 Section 0：Identity & Objective (身份与目标)
@@ -176,6 +176,10 @@ Section 5：Execution & Interface Layer (执行与接口层)
 5.2 <reasoning> (决策审计记录): 
 
 {
+  "prompt_meta": {
+    "prompt_name": "Chaos Trader — Standard Prompt_CN"
+  },
+
   "market_context": {
     "market_regime": "...",
     "volatility_profile": "...",
