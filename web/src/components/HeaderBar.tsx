@@ -11,6 +11,7 @@ type Page =
   | 'traders'
   | 'trader'
   | 'chaos'
+  | 'chaos-studio'
   | 'backtest'
   | 'strategy'
   | 'strategy-market'
@@ -104,6 +105,7 @@ export default function HeaderBar({
                 { page: 'time-machine', path: '/time-machine', label: language === 'zh' ? '时光机' : 'Time Machine', requiresAuth: true },
                 { page: 'traders', path: '/traders', label: t('configNav', language), requiresAuth: true },
                 { page: 'trader', path: '/dashboard', label: t('dashboardNav', language), requiresAuth: true },
+                { page: 'chaos-studio', path: '/chaos-studio', label: 'Chaos Studio', requiresAuth: true },
                 { page: 'chaos', path: '/chaos', label: 'Chaos', requiresAuth: true },
                 { page: 'strategy', path: '/strategy', label: t('strategyNav', language), requiresAuth: true },
                 { page: 'competition', path: '/competition', label: t('realtimeNav', language), requiresAuth: true },
@@ -335,6 +337,7 @@ export default function HeaderBar({
                     { page: 'time-machine', path: '/time-machine', label: language === 'zh' ? '时光机' : 'Time Machine', requiresAuth: true },
                     { page: 'traders', path: '/traders', label: t('configNav', language), requiresAuth: true },
                     { page: 'trader', path: '/dashboard', label: t('dashboardNav', language), requiresAuth: true },
+                    { page: 'chaos-studio', path: '/chaos-studio', label: 'Chaos Studio', requiresAuth: true },
                     { page: 'chaos', path: '/chaos', label: 'Chaos', requiresAuth: true },
                     { page: 'strategy', path: '/strategy', label: t('strategyNav', language), requiresAuth: true },
                     { page: 'competition', path: '/competition', label: t('realtimeNav', language), requiresAuth: true },

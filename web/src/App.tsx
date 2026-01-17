@@ -12,6 +12,7 @@ import { CompetitionPage } from './components/CompetitionPage'
 import { LandingPage } from './pages/LandingPage'
 import { FAQPage } from './pages/FAQPage'
 import { StrategyStudioPage } from './pages/StrategyStudioPage'
+import { ChaosStudioPage } from './pages/ChaosStudioPage'
 import { DebateArenaPage } from './pages/DebateArenaPage'
 import { StrategyMarketPage } from './pages/StrategyMarketPage'
 import { TimeMachinePage } from './pages/TimeMachinePage'
@@ -40,6 +41,7 @@ type Page =
   | 'traders'
   | 'trader'
   | 'chaos'
+  | 'chaos-studio'
   | 'backtest'
   | 'strategy'
   | 'strategy-market'
@@ -69,6 +71,7 @@ function App() {
 
     if (path === '/traders' || hash === 'traders') return 'traders'
     if (path === '/chaos' || hash === 'chaos') return 'chaos'
+    if (path === '/chaos-studio' || hash === 'chaos-studio') return 'chaos-studio'
     if (path === '/backtest' || hash === 'backtest') return 'backtest'
     if (path === '/strategy' || hash === 'strategy') return 'strategy'
     if (path === '/strategy-market' || hash === 'strategy-market') return 'strategy-market'
@@ -97,6 +100,7 @@ function App() {
       'traders': '/traders',
       'trader': '/dashboard',
       'chaos': '/chaos',
+      'chaos-studio': '/chaos-studio',
       'backtest': '/backtest',
       'strategy': '/strategy',
       'debate': '/debate',
@@ -438,6 +442,8 @@ function App() {
               <StrategyStudioPage />
             ) : currentPage === 'debate' ? (
               <DebateArenaPage />
+            ) : currentPage === 'chaos-studio' ? (
+              <ChaosStudioPage />
             ) : currentPage === 'chaos' ? (
               <ChaosDashboardPage
                 selectedTrader={selectedTrader}

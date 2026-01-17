@@ -41,6 +41,8 @@ type StrategyConfig struct {
 	Indicators IndicatorConfig `json:"indicators"`
 	// custom prompt (appended at the end)
 	CustomPrompt string `json:"custom_prompt,omitempty"`
+	// prompt variant (e.g. "s1", "t1") for Chaos Mode
+	PromptVariant string `json:"prompt_variant,omitempty"`
 	// risk control configuration
 	RiskControl RiskControlConfig `json:"risk_control"`
 	// editable sections of System Prompt

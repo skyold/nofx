@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"nofx/kernel/chaos"
 	"nofx/logger"
 	"nofx/market"
 	"nofx/mcp"
@@ -125,6 +126,7 @@ type Context struct {
 	BTCETHLeverage     int                                `json:"-"`
 	AltcoinLeverage    int                                `json:"-"`
 	Timeframes         []string                           `json:"-"`
+	IsChaosMode        bool                               `json:"is_chaos_mode,omitempty"`
 }
 
 // Decision AI trading decision
@@ -197,6 +199,7 @@ type OIDeltaData struct {
 type StrategyEngine struct {
 	config       *store.StrategyConfig
 	nofxosClient *nofxos.Client
+	chaosManager *chaos.Manager
 }
 
 // NewStrategyEngine creates strategy execution engine
@@ -211,6 +214,7 @@ func NewStrategyEngine(config *store.StrategyConfig) *StrategyEngine {
 	return &StrategyEngine{
 		config:       config,
 		nofxosClient: client,
+		chaosManager: chaos.NewManager(),
 	}
 }
 
@@ -298,7 +302,7 @@ func GetFullDecisionWithStrategy(ctx *Context, mcpClient mcp.AIClient, engine *S
 	}
 
 	// 5. Parse AI response
-	decision, err := parseFullDecisionResponse(
+	decision, err := engine.parseFullDecisionResponse(
 		aiResponse,
 		ctx.Account.TotalEquity,
 		riskConfig.BTCETHMaxLeverage,
@@ -321,10 +325,6 @@ func GetFullDecisionWithStrategy(ctx *Context, mcpClient mcp.AIClient, engine *S
 
 	return decision, nil
 }
-
-// ============================================================================
-// Market Data Fetching
-// ============================================================================
 
 // fetchMarketDataWithStrategy fetches market data using strategy config (multiple timeframes)
 func fetchMarketDataWithStrategy(ctx *Context, engine *StrategyEngine) error {
@@ -865,70 +865,10 @@ func (e *StrategyEngine) BuildSystemPrompt(accountEquity float64, variant string
 	promptSections := e.config.PromptSections
 
 	// 生成 Chaos 策略的 System Prompt 不影响原有策略
-	if e.config.CustomPrompt != "" {
-		cp := strings.TrimSpace(e.config.CustomPrompt)
-		chaosTags := []string{"这是一个Chaos策略", "Chaos Trader"}
-		isChaos := false
-		for _, tag := range chaosTags {
-			if strings.HasPrefix(cp, tag) || strings.Contains(cp, tag) {
-				isChaos = true
-				break
-			}
-		}
-		if isChaos {
-
-			sb.WriteString("\n\n你拥有以下市场数据和指标:\n")
-			e.writeAvailableIndicators(&sb)
-
-			// 2. Trading mode variant
-			v := strings.ToLower(strings.TrimSpace(variant))
-			switch v {
-			case "s1", "swing_core":
-				sb.WriteString("## Profile S1 — SWING_CORE 主力基线系统\n\n")
-				sb.WriteString("### 使用信息\n\n")
-				sb.WriteString("**用途**\n- 主力实盘账户\n- 系统健康度评估基线\n- 最适合长期跑、做统计、做 Post-Mortem 聚类\n\n")
-				sb.WriteString("**特点**\n- 稳定性最高\n- NO_TRADE 比例高\n- LLM 不确定性最低\n\n")
-				sb.WriteString("━━━━━━━━━━━━━━━━━━━━\nGLOBAL SYSTEM PARAMETERS (READ-ONLY)\n━━━━━━━━━━━━━━━━━━━━\n\n")
-				sb.WriteString("PRIMARY_TIMEFRAME = 1h\nSTRUCTURE_VALIDATION_TF = 4h\nPOSITION_STYLE = SWING      # TREND | SWING | SCALP\nTIME_DECAY_N = 5\nMIN_RR = 1.5\n\nThe LLM MUST NOT modify or reinterpret these parameters.\n\n")
-
-			case "t1", "trend_follow_slow":
-				sb.WriteString("## Profile T1 — TREND_FOLLOW_SLOW 慢趋势/牛市系统\n\n")
-				sb.WriteString("### 使用信息\n\n")
-				sb.WriteString("**用途**\n- 中长期趋势账户\n- 牛市 / 单边行情\n- 低频、低干预、低 token 消耗\n\n")
-				sb.WriteString("**特点**\n- 极少交易\n- 持仓时间长\n- 对震荡市容忍度极低\n\n")
-				sb.WriteString("━━━━━━━━━━━━━━━━━━━━\nGLOBAL SYSTEM PARAMETERS (READ-ONLY)\n━━━━━━━━━━━━━━━━━━━━\n\n")
-				sb.WriteString("PRIMARY_TIMEFRAME = 4h\nSTRUCTURE_VALIDATION_TF = 1d\nPOSITION_STYLE = TREND      # TREND | SWING | SCALP\nTIME_DECAY_N = 3\nMIN_RR = 2.0\n\nThe LLM MUST NOT modify or reinterpret these parameters.\n\n")
-
-			case "d1", "intraday_swing":
-				sb.WriteString("## Profile D1 — INTRADAY_SWING 日内波段/鲁棒性验证\n\n")
-				sb.WriteString("### 使用信息\n\n")
-				sb.WriteString("**用途**\n- 日内波段\n- 半自动 / 盯盘系统\n- 用于验证提示词鲁棒性\n\n")
-				sb.WriteString("**特点**\n- 撤销率较高\n- 对 Timing 敏感\n- 比 S1 更“活跃”\n\n")
-				sb.WriteString("━━━━━━━━━━━━━━━━━━━━\nGLOBAL SYSTEM PARAMETERS (READ-ONLY)\n━━━━━━━━━━━━━━━━━━━━\n\n")
-				sb.WriteString("PRIMARY_TIMEFRAME = 15m\nSTRUCTURE_VALIDATION_TF = 1h\nPOSITION_STYLE = SWING      # TREND | SWING | SCALP\nTIME_DECAY_N = 4\nMIN_RR = 1.5\n\nThe LLM MUST NOT modify or reinterpret these parameters.\n\n")
-
-			case "r1", "range_defensive":
-				sb.WriteString("## Profile R1 — RANGE_DEFENSIVE 震荡防御系统\n\n")
-				sb.WriteString("### 使用信息\n\n")
-				sb.WriteString("**用途**\n- 明确箱体 / 横盘阶段\n- 防止趋势模型在震荡中持续失血\n- 需要搭配 regime filter\n\n")
-				sb.WriteString("**特点**\n- TIME_DECAY 高频触发\n- 盈利周期短\n- 对 regime 判断极其敏感\n\n")
-				sb.WriteString("━━━━━━━━━━━━━━━━━━━━\nGLOBAL SYSTEM PARAMETERS (READ-ONLY)\n━━━━━━━━━━━━━━━━━━━━\n\n")
-				sb.WriteString("PRIMARY_TIMEFRAME = 30m\nSTRUCTURE_VALIDATION_TF = 2h\nPOSITION_STYLE = SWING      # TREND | SWING | SCALP\nTIME_DECAY_N = 3\nMIN_RR = 1.2\n\nThe LLM MUST NOT modify or reinterpret these parameters.\n\n")
-
-			case "x1", "scalp_experiment":
-				sb.WriteString("## Profile X1 — SCALP_EXPERIMENT\n\n")
-				sb.WriteString("### 使用信息\n\n")
-				sb.WriteString("**用途**\n- 市场微结构研究\n- 行为分析 / 数据采样\n- ❌ 不建议接入主 Execution 系统\n\n")
-				sb.WriteString("**特点**\n- 不稳定\n- token 消耗高\n- Post-Mortem 中 MODEL_BLIND_SPOT 占比高\n\n")
-				sb.WriteString("━━━━━━━━━━━━━━━━━━━━\nGLOBAL SYSTEM PARAMETERS (READ-ONLY)\n━━━━━━━━━━━━━━━━━━━━\n\n")
-				sb.WriteString("PRIMARY_TIMEFRAME = 5m\nSTRUCTURE_VALIDATION_TF = 15m\nPOSITION_STYLE = SCALP      # TREND | SWING | SCALP\nTIME_DECAY_N = 2\nMIN_RR = 1.2\n\nThe LLM MUST NOT modify or reinterpret these parameters.\n\n")
-			}
-
-			sb.WriteString("\n\n")
-			sb.WriteString(e.config.CustomPrompt)
-
-			return sb.String()
-		}
+	if e.chaosManager.IsChaosMode(e.config.CustomPrompt) {
+		return e.chaosManager.BuildPrompt(variant, e.config.CustomPrompt, func(sb *strings.Builder) {
+			e.writeAvailableIndicators(sb)
+		})
 	}
 
 	// 0. Data Dictionary & Schema (ensure AI understands all fields)
@@ -1055,8 +995,34 @@ func (e *StrategyEngine) BuildSystemPrompt(accountEquity float64, variant string
 
 	// 8. Custom Prompt
 	if e.config.CustomPrompt != "" {
-		sb.WriteString("# 📌 Personalized Trading Strategy\n\n")
-		sb.WriteString(e.config.CustomPrompt)
+		if e.chaosManager.IsChaosMode(e.config.CustomPrompt) {
+			// In Chaos mode, we delegate the prompt building to ChaosManager
+			// However, we still want to keep the base structure if needed, or replace it entirely.
+			// Currently, ChaosManager.BuildPrompt appends to the existing prompt or replaces parts of it.
+			// But here we are at the end of the prompt.
+			// Let's modify how we integrate Chaos Prompt.
+
+			// Ideally, Chaos Mode should take over the whole prompt generation or significant parts of it.
+			// For now, to be minimally invasive, we append the Chaos specific instructions here.
+			// The Variant logic is inside BuildPrompt.
+			chaosPrompt := e.chaosManager.BuildPrompt(
+				e.config.PromptVariant,
+				e.config.CustomPrompt,
+				func(sb *strings.Builder) {
+					e.writeAvailableIndicators(sb)
+				},
+			)
+			// Since ChaosManager.BuildPrompt returns a full section or significant part,
+			// and here we are just appending to 'sb'.
+			// The current implementation of ChaosManager.BuildPrompt seems to return a string that
+			// includes "## Profile ..." and the custom prompt content.
+			// We should just append it.
+			sb.WriteString("\n\n")
+			sb.WriteString(chaosPrompt)
+		} else {
+			sb.WriteString("# 📌 Personalized Trading Strategy\n\n")
+			sb.WriteString(e.config.CustomPrompt)
+		}
 		sb.WriteString("\n\n")
 		sb.WriteString("Note: The above personalized strategy is a supplement to the basic rules and cannot violate the basic risk control principles.\n")
 	}
@@ -1772,9 +1738,14 @@ func formatFloatSlice(values []float64) string {
 // AI Response Parsing
 // ============================================================================
 
-func parseFullDecisionResponse(aiResponse string, accountEquity float64, btcEthLeverage, altcoinLeverage int, btcEthPosRatio, altcoinPosRatio float64) (*FullDecision, error) {
+func (e *StrategyEngine) parseFullDecisionResponse(aiResponse string, accountEquity float64, btcEthLeverage, altcoinLeverage int, btcEthPosRatio, altcoinPosRatio float64) (*FullDecision, error) {
 
-	cotTrace := extractCoTTrace(aiResponse)
+	var cotTrace string
+	if e.chaosManager.IsChaosMode(e.config.CustomPrompt) {
+		cotTrace = e.chaosManager.ExtractReasoning(aiResponse)
+	} else {
+		cotTrace = extractCoTTrace(aiResponse)
+	}
 
 	decisions, err := extractDecisions(aiResponse)
 	if err != nil {
@@ -1784,7 +1755,7 @@ func parseFullDecisionResponse(aiResponse string, accountEquity float64, btcEthL
 		}, fmt.Errorf("failed to extract decisions: %w", err)
 	}
 
-	if err := validateDecisions(decisions, accountEquity, btcEthLeverage, altcoinLeverage, btcEthPosRatio, altcoinPosRatio); err != nil {
+	if err := e.validateDecisions(decisions, accountEquity, btcEthLeverage, altcoinLeverage, btcEthPosRatio, altcoinPosRatio); err != nil {
 		return &FullDecision{
 			CoTTrace:  cotTrace,
 			Decisions: decisions,
@@ -1950,16 +1921,16 @@ func compactArrayOpen(s string) string {
 // Decision Validation
 // ============================================================================
 
-func validateDecisions(decisions []Decision, accountEquity float64, btcEthLeverage, altcoinLeverage int, btcEthPosRatio, altcoinPosRatio float64) error {
+func (e *StrategyEngine) validateDecisions(decisions []Decision, accountEquity float64, btcEthLeverage, altcoinLeverage int, btcEthPosRatio, altcoinPosRatio float64) error {
 	for i := range decisions {
-		if err := validateDecision(&decisions[i], accountEquity, btcEthLeverage, altcoinLeverage, btcEthPosRatio, altcoinPosRatio); err != nil {
+		if err := e.validateDecision(&decisions[i], accountEquity, btcEthLeverage, altcoinLeverage, btcEthPosRatio, altcoinPosRatio); err != nil {
 			return fmt.Errorf("decision #%d validation failed: %w", i+1, err)
 		}
 	}
 	return nil
 }
 
-func validateDecision(d *Decision, accountEquity float64, btcEthLeverage, altcoinLeverage int, btcEthPosRatio, altcoinPosRatio float64) error {
+func (e *StrategyEngine) validateDecision(d *Decision, accountEquity float64, btcEthLeverage, altcoinLeverage int, btcEthPosRatio, altcoinPosRatio float64) error {
 	validActions := map[string]bool{
 		"open_long":   true,
 		"open_short":  true,
@@ -1974,7 +1945,18 @@ func validateDecision(d *Decision, accountEquity float64, btcEthLeverage, altcoi
 		// Decision
 		// ├─ RiskR > 0  → auditChaosDecision (新体系)
 		// └─ RiskR = 0  → validateDecision (旧体系)
-		return auditChaosDecision(d, accountEquity, btcEthLeverage, altcoinLeverage, btcEthPosRatio, altcoinPosRatio)
+		chaosD := &chaos.Decision{
+			Symbol:          d.Symbol,
+			Action:          d.Action,
+			Leverage:        d.Leverage,
+			PositionSizeUSD: d.PositionSizeUSD,
+			StopLoss:        d.StopLoss,
+			TakeProfit:      d.TakeProfit,
+			EntryPrice:      d.EntryPrice,
+			RiskR:           d.RiskR,
+			Confidence:      d.Confidence,
+		}
+		return e.chaosManager.ValidateDecision(chaosD, accountEquity, btcEthLeverage, altcoinLeverage, btcEthPosRatio, altcoinPosRatio)
 	}
 
 	if !validActions[d.Action] {
@@ -2065,143 +2047,6 @@ func validateDecision(d *Decision, accountEquity float64, btcEthLeverage, altcoi
 				riskRewardRatio, riskPercent, rewardPercent, d.StopLoss, d.TakeProfit)
 		}
 	}
-
-	return nil
-}
-
-func auditChaosDecision(
-	d *Decision,
-	accountEquity float64,
-	btcEthLeverage, altcoinLeverage int,
-	btcEthPosRatio, altcoinPosRatio float64,
-) error {
-
-	decisionInfo := func() string {
-		return fmt.Sprintf(
-			"decision[symbol=%s action=%s lev=%d entry=%.8f sl=%.8f tp=%.8f risk_r=%.2f pos_usd=%.2f conf=%d]",
-			d.Symbol, d.Action, d.Leverage, d.EntryPrice, d.StopLoss, d.TakeProfit, d.RiskR, d.PositionSizeUSD, d.Confidence,
-		)
-	}
-
-	// =========================
-	// 0. Action sanity check
-	// =========================
-	if d.Action != "open_long" && d.Action != "open_short" {
-		return fmt.Errorf("%s: RiskR decision only supports open_long/open_short, got: %s", decisionInfo(), d.Action)
-	}
-
-	// =========================
-	// 1. RiskR hard constraints
-	// =========================
-	const MaxRiskR = 1.5
-	const baseRiskPercent = 0.01 // 1R = 1% equity
-
-	if d.RiskR <= 0 {
-		return fmt.Errorf("%s: RiskR must be greater than 0 in Chaos decision", decisionInfo())
-	}
-	if d.RiskR > MaxRiskR {
-		return fmt.Errorf("%s: RiskR %.2f exceeds hard limit %.2f", decisionInfo(), d.RiskR, MaxRiskR)
-	}
-
-	// =========================
-	// 2. Mandatory price anchors
-	// =========================
-	if d.EntryPrice <= 0 {
-		return fmt.Errorf("%s: entry price required for RiskR decision", decisionInfo())
-	}
-	if d.StopLoss <= 0 {
-		return fmt.Errorf("%s: stop loss required for RiskR decision", decisionInfo())
-	}
-	if d.TakeProfit <= 0 {
-		return fmt.Errorf("%s: take profit required for RiskR decision", decisionInfo())
-	}
-
-	// Directional price logic
-	if d.Action == "open_long" {
-		if !(d.StopLoss < d.EntryPrice && d.EntryPrice < d.TakeProfit) {
-			return fmt.Errorf("%s: invalid price structure for open_long (SL < Entry < TP)", decisionInfo())
-		}
-	} else {
-		if !(d.TakeProfit < d.EntryPrice && d.EntryPrice < d.StopLoss) {
-			return fmt.Errorf("%s: invalid price structure for open_short (TP < Entry < SL)", decisionInfo())
-		}
-	}
-
-	// =========================
-	// 3. R:R validation (Chaos requires edge)
-	// =========================
-	var risk, reward float64
-	if d.Action == "open_long" {
-		risk = d.EntryPrice - d.StopLoss
-		reward = d.TakeProfit - d.EntryPrice
-	} else {
-		risk = d.StopLoss - d.EntryPrice
-		reward = d.EntryPrice - d.TakeProfit
-	}
-
-	if risk <= 0 || reward <= 0 {
-		return fmt.Errorf("%s: invalid risk/reward distances (risk=%.4f reward=%.4f)", decisionInfo(), risk, reward)
-	}
-
-	riskRewardRatio := reward / risk
-	if riskRewardRatio < 2 {
-		return fmt.Errorf("%s: Chaos decision requires R:R ≥ 2 (got %.2f). Params: Entry=%.2f, SL=%.2f, TP=%.2f, Risk=%.2f, Reward=%.2f",
-			decisionInfo(), riskRewardRatio, d.EntryPrice, d.StopLoss, d.TakeProfit, risk, reward)
-	}
-
-	// =========================
-	// 4. Position sizing via RiskR
-	// =========================
-	riskAmount := accountEquity * baseRiskPercent * d.RiskR
-	quantity := riskAmount / risk
-	d.PositionSizeUSD = quantity * d.EntryPrice
-
-	if d.PositionSizeUSD <= 0 {
-		return fmt.Errorf("%s: calculated position size invalid: %.2f", decisionInfo(), d.PositionSizeUSD)
-	}
-
-	const minPositionSize = 100.0
-	if d.PositionSizeUSD < minPositionSize {
-		logger.Infof("⚠️  [Position Size Adjustment] %s calculated size %.2f < min %.2f, adjusting to %.2f",
-			decisionInfo(), d.PositionSizeUSD, minPositionSize, minPositionSize)
-		d.PositionSizeUSD = minPositionSize
-
-		if d.PositionSizeUSD > accountEquity {
-			return fmt.Errorf("%s: adjusted position size %.2f exceeds account equity %.2f", decisionInfo(), d.PositionSizeUSD, accountEquity)
-		}
-	}
-
-	// =========================
-	// 5. Symbol-based caps
-	// =========================
-	maxLeverage := altcoinLeverage
-	maxPosValue := accountEquity * altcoinPosRatio
-
-	if d.Symbol == "BTCUSDT" || d.Symbol == "ETHUSDT" {
-		maxLeverage = btcEthLeverage
-		maxPosValue = accountEquity * btcEthPosRatio
-	}
-
-	if d.Leverage <= 0 {
-		return fmt.Errorf("%s: leverage must be provided for Chaos decision", decisionInfo())
-	}
-	if d.Leverage > maxLeverage {
-		return fmt.Errorf("%s: leverage %dx exceeds limit %dx for %s", decisionInfo(), d.Leverage, maxLeverage, d.Symbol)
-	}
-
-	if d.PositionSizeUSD > maxPosValue {
-		logger.Infof("⚠️  [Position Size Clamped] %s position size %.2f exceeds max allowed %.2f, clamping to max",
-			decisionInfo(), d.PositionSizeUSD, maxPosValue)
-		d.PositionSizeUSD = maxPosValue
-	}
-
-	// =========================
-	// 6. Logging (audit trail)
-	// =========================
-	logger.Infof(
-		"✓ Chaos decision validated | %s %s | RiskR=%.2f | Size=%.2f USDT | R:R=%.2f",
-		d.Action, d.Symbol, d.RiskR, d.PositionSizeUSD, riskRewardRatio,
-	)
 
 	return nil
 }

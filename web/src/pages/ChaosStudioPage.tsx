@@ -8,7 +8,6 @@ import {
   Check,
   ChevronDown,
   ChevronRight,
-  Settings,
   BarChart3,
   Target,
   Shield,
@@ -29,6 +28,7 @@ import {
   Download,
   Upload,
   Globe,
+  Dna,
 } from 'lucide-react'
 import type { Strategy, StrategyConfig, AIModel } from '../types'
 import { confirmToast, notify } from '../lib/notify'
@@ -41,7 +41,7 @@ import { DeepVoidBackground } from '../components/DeepVoidBackground'
 
 const API_BASE = import.meta.env.VITE_API_BASE || ''
 
-export function StrategyStudioPage() {
+export function ChaosStudioPage() {
   const { token } = useAuth()
   const { language } = useLanguage()
 
@@ -88,11 +88,11 @@ export function StrategyStudioPage() {
 
   // Accordion states for left panel
   const [expandedSections, setExpandedSections] = useState({
-    coinSource: true,
+    coinSource: false,
     indicators: false,
     riskControl: false,
     promptSections: false,
-    customPrompt: false,
+    customPrompt: true, // Default open for Chaos
     publishSettings: false,
   })
 
@@ -107,7 +107,7 @@ export function StrategyStudioPage() {
     config_summary: Record<string, unknown>
   } | null>(null)
   const [isLoadingPrompt, setIsLoadingPrompt] = useState(false)
-  const [selectedVariant, setSelectedVariant] = useState('balanced')
+  const [selectedVariant, setSelectedVariant] = useState('s1') // Default Chaos variant
 
   // AI Test Run states
   const [aiTestResult, setAiTestResult] = useState<{
@@ -137,7 +137,6 @@ export function StrategyStudioPage() {
       })
       if (response.ok) {
         const data = await response.json()
-        // 后端返回的是数组，不是 { models: [] }
         const allModels = Array.isArray(data) ? data : data.models || []
         const enabledModels = allModels.filter((m: AIModel) => m.enabled)
         setAiModels(enabledModels)
@@ -170,7 +169,7 @@ export function StrategyStudioPage() {
     }
   }
 
-  // Fetch strategies
+  // Fetch strategies - FILTERED for Chaos
   const fetchStrategies = useCallback(async () => {
     if (!token) return
     try {
@@ -180,18 +179,30 @@ export function StrategyStudioPage() {
       if (!response.ok) throw new Error('Failed to fetch strategies')
       const data = await response.json()
       
-      // Filter out Chaos strategies (they belong in Chaos Studio)
-      const standardStrategies = (data.strategies || []).filter((s: Strategy) => !isChaosStrategy(s))
-      setStrategies(standardStrategies)
+      // Filter only Chaos strategies
+      const chaosStrategies = (data.strategies || []).filter(isChaosStrategy)
+      setStrategies(chaosStrategies)
 
       // Select active or first strategy
-      const active = standardStrategies.find((s: Strategy) => s.is_active)
+      const active = chaosStrategies.find((s: Strategy) => s.is_active)
       if (active) {
         setSelectedStrategy(active)
         setEditingConfig(active.config)
-      } else if (standardStrategies.length > 0) {
-        setSelectedStrategy(standardStrategies[0])
-        setEditingConfig(standardStrategies[0].config)
+        // Set variant from config if available, otherwise default to s1
+        if (active.config?.prompt_variant) {
+            setSelectedVariant(active.config.prompt_variant)
+        } else {
+            setSelectedVariant('s1')
+        }
+      } else if (chaosStrategies.length > 0) {
+        setSelectedStrategy(chaosStrategies[0])
+        setEditingConfig(chaosStrategies[0].config)
+        // Set variant from config if available, otherwise default to s1
+        if (chaosStrategies[0].config?.prompt_variant) {
+            setSelectedVariant(chaosStrategies[0].config.prompt_variant)
+        } else {
+            setSelectedVariant('s1')
+        }
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error')
@@ -244,7 +255,7 @@ export function StrategyStudioPage() {
     updatePromptSectionsForLanguage()
   }, [language, token]) // Only trigger when language changes
 
-  // Create new strategy
+  // Create new Chaos strategy
   const handleCreateStrategy = async () => {
     if (!token) return
     try {
@@ -253,6 +264,25 @@ export function StrategyStudioPage() {
         { headers: { Authorization: `Bearer ${token}` } }
       )
       const defaultConfig = await configResponse.json()
+      
+      // Inject Chaos template into custom_prompt
+      const chaosTemplate = JSON.stringify({
+        prompt_meta: {
+            type: "chaos",
+            prompt_name: language === 'zh' ? '新 Chaos 策略' : 'New Chaos Strategy',
+            author: "User",
+            version: "1.0"
+        },
+        risk_r_config: {
+            mode: "standard",
+            min_risk_r: 1.5
+        }
+      }, null, 2);
+
+      const chaosConfig = {
+          ...defaultConfig,
+          custom_prompt: chaosTemplate
+      };
 
       const response = await fetch(`${API_BASE}/api/strategies`, {
         method: 'POST',
@@ -261,31 +291,32 @@ export function StrategyStudioPage() {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          name: language === 'zh' ? '新策略' : 'New Strategy',
-          description: '',
-          config: defaultConfig,
+          name: language === 'zh' ? '新 Chaos 策略' : 'New Chaos Strategy',
+          description: 'Created in Chaos Studio',
+          config: chaosConfig,
         }),
       })
       if (!response.ok) throw new Error('Failed to create strategy')
       const result = await response.json()
       await fetchStrategies()
+      
       // Auto-select the newly created strategy
       if (result.id) {
         const now = new Date().toISOString()
         const newStrategy = {
           id: result.id,
-          name: language === 'zh' ? '新策略' : 'New Strategy',
-          description: '',
+          name: language === 'zh' ? '新 Chaos 策略' : 'New Chaos Strategy',
+          description: 'Created in Chaos Studio',
           is_active: false,
           is_default: false,
           is_public: false,
           config_visible: true,
-          config: defaultConfig,
+          config: chaosConfig,
           created_at: now,
           updated_at: now,
         }
         setSelectedStrategy(newStrategy)
-        setEditingConfig(defaultConfig)
+        setEditingConfig(chaosConfig)
         setHasChanges(false)
       }
     } catch (err) {
@@ -385,7 +416,7 @@ export function StrategyStudioPage() {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `strategy_${strategy.name.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.json`
+    a.download = `chaos_strategy_${strategy.name.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.json`
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)
@@ -410,6 +441,10 @@ export function StrategyStudioPage() {
           language === 'zh' ? '无效的策略文件' : 'Invalid strategy file'
         )
       }
+
+      // Check if it's a Chaos strategy (optional, but good for UX)
+      // We allow importing any strategy here, but maybe warn if not chaos?
+      // For now, just import.
 
       // Create new strategy with imported config
       const response = await fetch(`${API_BASE}/api/strategies`, {
@@ -446,6 +481,7 @@ export function StrategyStudioPage() {
       const configWithLanguage = {
         ...editingConfig,
         language: language as 'zh' | 'en',
+        prompt_variant: selectedVariant, // Also save the variant preference if backend supports
       }
       const response = await fetch(
         `${API_BASE}/api/strategies/${selectedStrategy.id}`,
@@ -551,40 +587,41 @@ export function StrategyStudioPage() {
 
   const t = (key: string) => {
     const translations: Record<string, Record<string, string>> = {
-      strategyStudio: { zh: '策略工作室', en: 'Strategy Studio' },
+      chaosStudio: { zh: 'Chaos 实验室', en: 'Chaos Studio' },
       subtitle: {
-        zh: '可视化配置和测试交易策略',
-        en: 'Configure and test trading strategies',
+        zh: '高级策略与对抗性测试环境',
+        en: 'Advanced strategies & adversarial testing',
       },
-      strategies: { zh: '策略', en: 'Strategies' },
-      newStrategy: { zh: '新建', en: 'New' },
+      strategies: { zh: 'Chaos 策略', en: 'Chaos Strategies' },
+      newStrategy: { zh: '新建 Chaos', en: 'New Chaos' },
       coinSource: { zh: '币种来源', en: 'Coin Source' },
       indicators: { zh: '技术指标', en: 'Indicators' },
       riskControl: { zh: '风控参数', en: 'Risk Control' },
       promptSections: { zh: 'Prompt 编辑', en: 'Prompt Editor' },
-      customPrompt: { zh: '附加提示', en: 'Extra Prompt' },
+      customPrompt: { zh: 'Chaos 核心配置 (JSON)', en: 'Chaos Core Config (JSON)' },
       save: { zh: '保存', en: 'Save' },
       saving: { zh: '保存中...', en: 'Saving...' },
       activate: { zh: '激活', en: 'Activate' },
       active: { zh: '激活中', en: 'Active' },
       default: { zh: '默认', en: 'Default' },
       promptPreview: { zh: 'Prompt 预览', en: 'Prompt Preview' },
-      aiTestRun: { zh: 'AI 测试', en: 'AI Test' },
+      aiTestRun: { zh: 'Chaos 对抗测试', en: 'Chaos Test Run' },
       systemPrompt: { zh: 'System Prompt', en: 'System Prompt' },
       userPrompt: { zh: 'User Prompt', en: 'User Prompt' },
       loadPrompt: { zh: '生成 Prompt', en: 'Generate Prompt' },
       refreshPrompt: { zh: '刷新', en: 'Refresh' },
-      promptVariant: { zh: '风格', en: 'Style' },
+      promptVariant: { zh: 'Chaos 变体', en: 'Chaos Variant' },
       balanced: { zh: '平衡', en: 'Balanced' },
       aggressive: { zh: '激进', en: 'Aggressive' },
       conservative: { zh: '保守', en: 'Conservative' },
+      none: { zh: '无 (自定义)', en: 'None (Custom)' },
       s1: { zh: 'S1 (主力/基线)', en: 'S1 (SWING_CORE)' },
       t1: { zh: 'T1 (慢趋势)', en: 'T1 (TREND_FOLLOW_SLOW)' },
       d1: { zh: 'D1 (日内波段)', en: 'D1 (INTRADAY_SWING)' },
       r1: { zh: 'R1 (震荡防御)', en: 'R1 (RANGE_DEFENSIVE)' },
       x1: { zh: 'X1 (实验/微结构)', en: 'X1 (SCALP_EXPERIMENT)' },
       selectModel: { zh: '选择 AI 模型', en: 'Select AI Model' },
-      runTest: { zh: '运行 AI 测试', en: 'Run AI Test' },
+      runTest: { zh: '运行测试', en: 'Run Test' },
       running: { zh: '运行中...', en: 'Running...' },
       aiOutput: { zh: 'AI 输出', en: 'AI Output' },
       reasoning: { zh: '思维链', en: 'Reasoning' },
@@ -617,6 +654,57 @@ export function StrategyStudioPage() {
   }
 
   const configSections = [
+    // Highlighted Chaos Config Section
+    {
+      key: 'customPrompt' as const,
+      icon: Dna,
+      color: '#a855f7',
+      title: t('customPrompt'),
+      content: editingConfig && (
+        <div>
+          <p className="text-xs mb-2" style={{ color: '#848E9C' }}>
+            {language === 'zh'
+              ? 'Chaos 策略的核心配置文件，必须包含 prompt_meta: { type: "chaos" }'
+              : 'Core configuration for Chaos strategy. Must include prompt_meta: { type: "chaos" }'}
+          </p>
+          <div className="mb-2 flex items-center gap-2">
+            <select
+                value={selectedVariant}
+                onChange={(e) => {
+                  setSelectedVariant(e.target.value)
+                  setHasChanges(true)
+                }}
+                className="px-2 py-1.5 rounded text-xs bg-nofx-bg border border-nofx-gold/20 text-nofx-text"
+            >
+                <option value="none">{t('none')}</option>
+                <option value="s1">{t('s1')}</option>
+                <option value="t1">{t('t1')}</option>
+                <option value="d1">{t('d1')}</option>
+                <option value="r1">{t('r1')}</option>
+                <option value="x1">{t('x1')}</option>
+            </select>
+            <span className="text-xs text-nofx-text-muted">← {t('promptVariant')}</span>
+          </div>
+          <textarea
+            value={editingConfig.custom_prompt || ''}
+            onChange={(e) => updateConfig('custom_prompt', e.target.value)}
+            disabled={selectedStrategy?.is_default}
+            placeholder={
+              language === 'zh'
+                ? '输入 Chaos JSON 配置...'
+                : 'Enter Chaos JSON config...'
+            }
+            className="w-full h-64 px-3 py-2 rounded-lg resize-none font-mono text-xs"
+            style={{
+              background: '#0B0E11',
+              border: '1px solid #a855f7',
+              color: '#EAECEF',
+            }}
+          />
+        </div>
+      ),
+    },
+    // Standard sections collapsed by default
     {
       key: 'coinSource' as const,
       icon: Target,
@@ -662,7 +750,7 @@ export function StrategyStudioPage() {
     {
       key: 'promptSections' as const,
       icon: FileText,
-      color: '#a855f7',
+      color: '#60a5fa',
       title: t('promptSections'),
       content: editingConfig && (
         <PromptSectionsEditor
@@ -673,37 +761,6 @@ export function StrategyStudioPage() {
           disabled={selectedStrategy?.is_default}
           language={language}
         />
-      ),
-    },
-    {
-      key: 'customPrompt' as const,
-      icon: Settings,
-      color: '#60a5fa',
-      title: t('customPrompt'),
-      content: editingConfig && (
-        <div>
-          <p className="text-xs mb-2" style={{ color: '#848E9C' }}>
-            {language === 'zh'
-              ? '附加在 System Prompt 末尾的额外提示，用于补充个性化交易风格'
-              : 'Extra prompt appended to System Prompt for personalized trading style'}
-          </p>
-          <textarea
-            value={editingConfig.custom_prompt || ''}
-            onChange={(e) => updateConfig('custom_prompt', e.target.value)}
-            disabled={selectedStrategy?.is_default}
-            placeholder={
-              language === 'zh'
-                ? '输入自定义提示词...'
-                : 'Enter custom prompt...'
-            }
-            className="w-full h-32 px-3 py-2 rounded-lg resize-none font-mono text-xs"
-            style={{
-              background: '#0B0E11',
-              border: '1px solid #2B3139',
-              color: '#EAECEF',
-            }}
-          />
-        </div>
       ),
     },
     {
@@ -733,16 +790,15 @@ export function StrategyStudioPage() {
   return (
     <DeepVoidBackground className="h-[calc(100vh-64px)] flex flex-col bg-nofx-bg relative overflow-hidden">
       {/* Header */}
-      {/* Header */}
       <div className="flex-shrink-0 px-4 py-3 border-b border-nofx-gold/20 bg-nofx-bg/60 backdrop-blur-md z-10">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-gradient-to-br from-nofx-gold to-yellow-500">
-              <Sparkles className="w-5 h-5 text-black" />
+            <div className="p-2 rounded-lg bg-gradient-to-br from-purple-600 to-indigo-600">
+              <Dna className="w-5 h-5 text-white" />
             </div>
             <div>
               <h1 className="text-lg font-bold text-nofx-text">
-                {t('strategyStudio')}
+                {t('chaosStudio')}
               </h1>
               <p className="text-xs text-nofx-text-muted">{t('subtitle')}</p>
             </div>
@@ -789,8 +845,8 @@ export function StrategyStudioPage() {
                 </label>
                 <button
                   onClick={handleCreateStrategy}
-                  className="p-1 rounded hover:bg-white/10 transition-colors text-nofx-gold"
-                  title={language === 'zh' ? '新建策略' : 'New Strategy'}
+                  className="p-1 rounded hover:bg-white/10 transition-colors text-purple-400"
+                  title={language === 'zh' ? '新建 Chaos 策略' : 'New Chaos Strategy'}
                 >
                   <Plus className="w-4 h-4" />
                 </button>
@@ -803,14 +859,20 @@ export function StrategyStudioPage() {
                   onClick={() => {
                     setSelectedStrategy(strategy)
                     setEditingConfig(strategy.config)
+                    // Update variant state when switching strategy
+                    if (strategy.config?.prompt_variant) {
+                        setSelectedVariant(strategy.config.prompt_variant)
+                    } else {
+                        setSelectedVariant('s1')
+                    }
                     setHasChanges(false)
                     setPromptPreview(null)
                     setAiTestResult(null)
                   }}
                   className={`group px-2 py-2 rounded-lg cursor-pointer transition-all ${
                     selectedStrategy?.id === strategy.id
-                      ? 'ring-1 ring-nofx-gold/50 bg-nofx-gold/10 shadow-[0_0_15px_rgba(240,185,11,0.1)]'
-                      : 'hover:bg-nofx-bg-lighter/60 hover:ring-1 hover:ring-nofx-gold/20 bg-transparent'
+                      ? 'ring-1 ring-purple-500/50 bg-purple-500/10 shadow-[0_0_15px_rgba(168,85,247,0.1)]'
+                      : 'hover:bg-nofx-bg-lighter/60 hover:ring-1 hover:ring-purple-500/20 bg-transparent'
                   }`}
                 >
                   <div className="flex items-center justify-between">
@@ -880,7 +942,7 @@ export function StrategyStudioPage() {
 
         {/* Resizer */}
         <div
-          className="w-1 cursor-col-resize hover:bg-nofx-gold/50 transition-colors active:bg-nofx-gold z-20 flex-shrink-0"
+          className="w-1 cursor-col-resize hover:bg-purple-500/50 transition-colors active:bg-purple-500 z-20 flex-shrink-0"
           onMouseDown={startResizing}
         />
 
@@ -960,7 +1022,7 @@ export function StrategyStudioPage() {
                   ({ key, icon: Icon, color, title, content }) => (
                     <div
                       key={key}
-                      className="rounded-lg overflow-hidden bg-nofx-bg-lighter border border-nofx-gold/20"
+                      className={`rounded-lg overflow-hidden bg-nofx-bg-lighter border ${key === 'customPrompt' ? 'border-purple-500/40' : 'border-nofx-gold/20'}`}
                     >
                       <button
                         onClick={() => toggleSection(key)}
@@ -989,11 +1051,11 @@ export function StrategyStudioPage() {
           ) : (
             <div className="flex items-center justify-center h-full">
               <div className="text-center">
-                <Activity className="w-12 h-12 mx-auto mb-2 opacity-30 text-nofx-text-muted" />
+                <Dna className="w-12 h-12 mx-auto mb-2 opacity-30 text-purple-500" />
                 <p className="text-sm text-nofx-text-muted">
                   {language === 'zh'
-                    ? '选择或创建策略'
-                    : 'Select or create a strategy'}
+                    ? '选择或创建 Chaos 策略'
+                    : 'Select or create a Chaos strategy'}
                 </p>
               </div>
             </div>
@@ -1035,25 +1097,10 @@ export function StrategyStudioPage() {
               <div className="p-3 space-y-3">
                 {/* Controls */}
                 <div className="flex items-center gap-2 flex-wrap">
-                  <select
-                    value={selectedVariant}
-                    onChange={(e) => setSelectedVariant(e.target.value)}
-                    className="px-2 py-1.5 rounded text-xs bg-nofx-bg border border-nofx-gold/20 text-nofx-text outline-none focus:border-nofx-gold"
-                  >
-                    <option value="balanced">{t('balanced')}</option>
-                    <option value="aggressive">{t('aggressive')}</option>
-                    <option value="conservative">{t('conservative')}</option>
-                    <option disabled>--- Chaos Modes ---</option>
-                    <option value="s1">{t('s1')}</option>
-                    <option value="t1">{t('t1')}</option>
-                    <option value="d1">{t('d1')}</option>
-                    <option value="r1">{t('r1')}</option>
-                    <option value="x1">{t('x1')}</option>
-                  </select>
                   <button
                     onClick={fetchPromptPreview}
                     disabled={isLoadingPrompt || !editingConfig}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-colors disabled:opacity-50 bg-purple-600 hover:bg-purple-700 text-white"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-colors disabled:opacity-50 bg-purple-600 hover:bg-purple-700 text-white w-full justify-center"
                   >
                     {isLoadingPrompt ? (
                       <Loader2 className="w-3 h-3 animate-spin" />
@@ -1153,21 +1200,6 @@ export function StrategyStudioPage() {
                   )}
 
                   <div className="flex items-center gap-2">
-                    <select
-                      value={selectedVariant}
-                      onChange={(e) => setSelectedVariant(e.target.value)}
-                      className="px-2 py-1.5 rounded text-xs bg-nofx-bg border border-nofx-gold/20 text-nofx-text"
-                    >
-                      <option value="balanced">{t('balanced')}</option>
-                      <option value="aggressive">{t('aggressive')}</option>
-                      <option value="conservative">{t('conservative')}</option>
-                      <option disabled>--- Chaos Modes ---</option>
-                      <option value="s1">{t('s1')}</option>
-                      <option value="t1">{t('t1')}</option>
-                      <option value="d1">{t('d1')}</option>
-                      <option value="r1">{t('r1')}</option>
-                      <option value="x1">{t('x1')}</option>
-                    </select>
                     <button
                       onClick={runAiTest}
                       disabled={
@@ -1312,4 +1344,4 @@ export function StrategyStudioPage() {
   )
 }
 
-export default StrategyStudioPage
+export default ChaosStudioPage

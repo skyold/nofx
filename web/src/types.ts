@@ -470,6 +470,7 @@ export interface StrategyConfig {
   custom_prompt?: string;
   risk_control: RiskControlConfig;
   prompt_sections?: PromptSectionsConfig;
+  prompt_variant?: string;
 }
 
 export interface CoinSourceConfig {
