@@ -49,7 +49,8 @@ func (pb *PositionBuilder) handleOpen(
 	orderID string,
 ) error {
 	// Get existing OPEN position for (symbol, side)
-	existing, err := pb.positionStore.GetOpenPositionBySymbol(traderID, symbol, side)
+	// Normalize side to ensure consistency
+	existing, err := pb.positionStore.GetOpenPositionBySymbol(traderID, symbol, strings.ToUpper(side))
 	if err != nil {
 		return fmt.Errorf("failed to get open position: %w", err)
 	}
@@ -101,7 +102,8 @@ func (pb *PositionBuilder) handleClose(
 	orderID string,
 ) error {
 	// Get OPEN position
-	position, err := pb.positionStore.GetOpenPositionBySymbol(traderID, symbol, side)
+	// Normalize side to ensure consistency
+	position, err := pb.positionStore.GetOpenPositionBySymbol(traderID, symbol, strings.ToUpper(side))
 	if err != nil {
 		return fmt.Errorf("failed to get open position: %w", err)
 	}

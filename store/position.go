@@ -256,6 +256,9 @@ func (s *PositionStore) GetOpenPositions(traderID string) ([]*TraderPosition, er
 // GetOpenPositionBySymbol gets open position for specified symbol and direction
 func (s *PositionStore) GetOpenPositionBySymbol(traderID, symbol, side string) (*TraderPosition, error) {
 	var pos TraderPosition
+	// Normalize side to uppercase for consistent querying
+	side = strings.ToUpper(side)
+	
 	err := s.db.Where("trader_id = ? AND symbol = ? AND side = ? AND status = ?", traderID, symbol, side, "OPEN").
 		Order("entry_time DESC").
 		First(&pos).Error
