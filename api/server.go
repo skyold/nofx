@@ -1373,6 +1373,30 @@ func (s *Server) handleClosePosition(c *gin.Context) {
 	}
 
 	if closeErr != nil {
+		// Detect ghost position (position exists locally but not on exchange)
+		// This happens when position was closed by stop-loss/take-profit or liquidation
+		errStr := closeErr.Error()
+		if strings.Contains(errStr, "no long position found") || strings.Contains(errStr, "no short position found") {
+			logger.Infof("👻 Detected ghost position (exists locally but not on exchange): %s %s", req.Symbol, req.Side)
+
+			// Delete from DB
+			if err := s.store.GormDB().Where("trader_id = ? AND symbol = ? AND side = ? AND status = ?", traderID, req.Symbol, req.Side, "OPEN").Delete(&store.TraderPosition{}).Error; err != nil {
+				logger.Errorf("❌ Failed to delete ghost position: %v", err)
+				SafeInternalError(c, "Failed to delete ghost position", err)
+				return
+			}
+
+			logger.Infof("✅ Ghost position deleted from database")
+
+			c.JSON(http.StatusOK, gin.H{
+				"message": "Position synced (was already closed on exchange)",
+				"symbol":  req.Symbol,
+				"side":    req.Side,
+				"result":  map[string]interface{}{"status": "CLOSED_EXTERNALLY"},
+			})
+			return
+		}
+
 		logger.Infof("❌ Close position failed: symbol=%s, side=%s, error=%v", req.Symbol, req.Side, closeErr)
 		SafeInternalError(c, "Failed to close position", closeErr)
 		return

@@ -93,7 +93,21 @@ func (t *FuturesTrader) SyncOrdersFromBinance(traderID string, exchangeID string
 		symbolMap[s] = true
 	}
 
-	// Method 3: Include symbols from recent fills in DB (in case some were partially synced)
+	// Method 3: Include symbols from local DB open positions (to detect if they were closed externally)
+	// This fixes the issue where a position closed on exchange (but open in DB) is missed by sync because it has no active position/commission
+	localPositions, err := st.Position().GetOpenPositions(traderID)
+	if err != nil {
+		logger.Infof("  ⚠️ Failed to get local open positions: %v", err)
+	} else {
+		localSymbols := make([]string, 0)
+		for _, p := range localPositions {
+			symbolMap[p.Symbol] = true
+			localSymbols = append(localSymbols, p.Symbol)
+		}
+		logger.Infof("  📋 Local open position symbols found: %d - %v", len(localPositions), localSymbols)
+	}
+
+	// Method 4: Include symbols from recent fills in DB (in case some were partially synced)
 	recentSymbols, _ := orderStore.GetRecentFillSymbolsByExchange(exchangeID, lastSyncTimeMs)
 	logger.Infof("  📋 Recent fill symbols found: %d - %v", len(recentSymbols), recentSymbols)
 	for _, s := range recentSymbols {
