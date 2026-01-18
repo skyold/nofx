@@ -1055,6 +1055,17 @@ func (at *AutoTrader) executeOpenLongWithRecord(decision *kernel.Decision, actio
 	marginFactor := 1.01/float64(decision.Leverage) + 0.001
 	maxAffordablePositionSize := availableBalance / marginFactor
 
+	// [RISK CONTROL] Check if funds are sufficient for minimum position size
+	minSize := 12.0
+	if at.config.StrategyConfig != nil && at.config.StrategyConfig.RiskControl.MinPositionSize > 0 {
+		minSize = at.config.StrategyConfig.RiskControl.MinPositionSize
+	}
+
+	if maxAffordablePositionSize < minSize {
+		return fmt.Errorf("❌ [INSUFFICIENT FUNDS] Max affordable position %.2f USDT < min %.2f USDT. Calculation: AvailableBalance=%.4f / MarginFactor=%.4f (Leverage=%d)",
+			maxAffordablePositionSize, minSize, availableBalance, marginFactor, decision.Leverage)
+	}
+
 	actualPositionSize := decision.PositionSizeUSD
 	if actualPositionSize > maxAffordablePositionSize {
 		// Use 98% of max to leave buffer for price fluctuation
@@ -1171,6 +1182,17 @@ func (at *AutoTrader) executeOpenShortWithRecord(decision *kernel.Decision, acti
 	//        = positionSize * (1.01/leverage + 0.001)
 	marginFactor := 1.01/float64(decision.Leverage) + 0.001
 	maxAffordablePositionSize := availableBalance / marginFactor
+
+	// [RISK CONTROL] Check if funds are sufficient for minimum position size
+	minSize := 12.0
+	if at.config.StrategyConfig != nil && at.config.StrategyConfig.RiskControl.MinPositionSize > 0 {
+		minSize = at.config.StrategyConfig.RiskControl.MinPositionSize
+	}
+
+	if maxAffordablePositionSize < minSize {
+		return fmt.Errorf("❌ [INSUFFICIENT FUNDS] Max affordable position %.2f USDT < min %.2f USDT. Calculation: AvailableBalance=%.4f / MarginFactor=%.4f (Leverage=%d)",
+			maxAffordablePositionSize, minSize, availableBalance, marginFactor, decision.Leverage)
+	}
 
 	actualPositionSize := decision.PositionSizeUSD
 	if actualPositionSize > maxAffordablePositionSize {
