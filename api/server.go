@@ -195,6 +195,10 @@ func (s *Server) setupRoutes() {
 			protected.GET("/debates/:id/votes", s.debateHandler.HandleGetVotes)
 			protected.GET("/debates/:id/stream", s.debateHandler.HandleDebateStream)
 
+			// Transaction management
+			protected.GET("/transactions", s.handleGetTransactions)
+			protected.PUT("/transactions/:id/trader", s.handleAssignTransaction)
+
 			// Data for specified trader (using query parameter ?trader_id=xxx)
 			protected.GET("/status", s.handleStatus)
 			protected.GET("/account", s.handleAccount)
@@ -2341,6 +2345,63 @@ func (s *Server) handleOrderFills(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, fills)
+}
+
+// handleGetTransactions Get transaction list
+func (s *Server) handleGetTransactions(c *gin.Context) {
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	if page < 1 {
+		page = 1
+	}
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+	if pageSize < 1 {
+		pageSize = 20
+	}
+	if pageSize > 100 {
+		pageSize = 100
+	}
+
+	exchangeID := c.Query("exchange_id")
+	traderID := c.Query("trader_id")
+
+	transactions, total, err := s.store.Order().GetTransactions(page, pageSize, exchangeID, traderID)
+	if err != nil {
+		SafeInternalError(c, "Get transactions", err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"items":     transactions,
+		"total":     total,
+		"page":      page,
+		"page_size": pageSize,
+	})
+}
+
+// handleAssignTransaction Assign transaction to trader
+func (s *Server) handleAssignTransaction(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		SafeBadRequest(c, "Invalid transaction ID")
+		return
+	}
+
+	var req struct {
+		TraderID string `json:"trader_id" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		SafeBadRequest(c, "Invalid request parameters")
+		return
+	}
+
+	err = s.store.Order().UpdateTransactionTrader(id, req.TraderID)
+	if err != nil {
+		SafeInternalError(c, "Assign transaction", err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Transaction assigned successfully"})
 }
 
 // handleOpenOrders Get open orders (pending SL/TP) from exchange

@@ -421,3 +421,45 @@ func (s *OrderStore) GetRecentFillSymbolsByExchange(exchangeID string, sinceMs i
 	}
 	return symbols, nil
 }
+
+// GetTransactions gets paginated transaction list with filters
+func (s *OrderStore) GetTransactions(page, pageSize int, exchangeID, traderID string) ([]*TraderFill, int64, error) {
+	var fills []*TraderFill
+	var total int64
+
+	query := s.db.Model(&TraderFill{})
+
+	if exchangeID != "" {
+		query = query.Where("exchange_id = ?", exchangeID)
+	}
+	if traderID != "" {
+		if traderID == "unassigned" {
+			// For empty trader ID
+			query = query.Where("trader_id = ''")
+		} else {
+			query = query.Where("trader_id = ?", traderID)
+		}
+	}
+
+	// Count total records
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, fmt.Errorf("failed to count transactions: %w", err)
+	}
+
+	// Get paginated records
+	offset := (page - 1) * pageSize
+	err := query.Order("created_at DESC").
+		Limit(pageSize).
+		Offset(offset).
+		Find(&fills).Error
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to query transactions: %w", err)
+	}
+
+	return fills, total, nil
+}
+
+// UpdateTransactionTrader updates the trader_id for a specific transaction
+func (s *OrderStore) UpdateTransactionTrader(id int64, traderID string) error {
+	return s.db.Model(&TraderFill{}).Where("id = ?", id).Update("trader_id", traderID).Error
+}

@@ -30,6 +30,7 @@ import type {
   DebateVote,
   DebatePersonalityInfo,
   PositionHistoryResponse,
+  TransactionListResponse,
 } from '../types'
 import { CryptoService } from './crypto'
 import { httpClient } from './httpClient'
@@ -784,5 +785,32 @@ export const api = {
     )
     if (!result.success) throw new Error('获取历史仓位失败')
     return result.data!
+  },
+
+  // Transaction Management
+  async getTransactions(
+    page = 1,
+    pageSize = 20,
+    exchangeId?: string,
+    traderId?: string
+  ): Promise<TransactionListResponse> {
+    const params = new URLSearchParams()
+    params.append('page', page.toString())
+    params.append('page_size', pageSize.toString())
+    if (exchangeId && exchangeId !== 'all') params.append('exchange_id', exchangeId)
+    if (traderId && traderId !== 'all') params.append('trader_id', traderId)
+
+    const result = await httpClient.get<TransactionListResponse>(
+      `${API_BASE}/transactions?${params}`
+    )
+    if (!result.success) throw new Error('Failed to get transactions')
+    return result.data!
+  },
+
+  async assignTransaction(id: number, traderId: string): Promise<void> {
+    const result = await httpClient.put(`${API_BASE}/transactions/${id}/trader`, {
+      trader_id: traderId,
+    })
+    if (!result.success) throw new Error('Failed to assign transaction')
   },
 }

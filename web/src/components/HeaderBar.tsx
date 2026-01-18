@@ -18,6 +18,7 @@ type Page =
   | 'time-machine'
   | 'data'
   | 'debate'
+  | 'transactions'
   | 'faq'
   | 'login'
   | 'register'
@@ -105,6 +106,7 @@ export default function HeaderBar({
                 { page: 'data', path: '/data', label: language === 'zh' ? '数据' : 'Data', requiresAuth: false },
                 { page: 'strategy-market', path: '/strategy-market', label: language === 'zh' ? '策略市场' : 'Market', requiresAuth: true },
                 { page: 'time-machine', path: '/time-machine', label: language === 'zh' ? '时光机' : 'Time Machine', requiresAuth: true },
+                { page: 'transactions', path: '/transactions', label: language === 'zh' ? '交易列表' : 'Transactions', requiresAuth: true },
                 { page: 'traders', path: '/traders', label: t('configNav', language), requiresAuth: true },
                 { page: 'trader', path: '/dashboard', label: t('dashboardNav', language), requiresAuth: true },
                 { page: 'chaos-studio', path: '/chaos-studio', label: 'Chaos Studio', requiresAuth: true },
@@ -338,6 +340,7 @@ export default function HeaderBar({
                     { page: 'data', path: '/data', label: language === 'zh' ? '数据' : 'Data', requiresAuth: false },
                     { page: 'strategy-market', path: '/strategy-market', label: language === 'zh' ? '策略市场' : 'Market', requiresAuth: true },
                     { page: 'time-machine', path: '/time-machine', label: language === 'zh' ? '时光机' : 'Time Machine', requiresAuth: true },
+                    { page: 'transactions', path: '/transactions', label: language === 'zh' ? '交易列表' : 'Transactions', requiresAuth: true },
                     { page: 'traders', path: '/traders', label: t('configNav', language), requiresAuth: true },
                     { page: 'trader', path: '/dashboard', label: t('dashboardNav', language), requiresAuth: true },
                     { page: 'chaos-studio', path: '/chaos-studio', label: 'Chaos Studio', requiresAuth: true },

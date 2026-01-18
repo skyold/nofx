@@ -17,6 +17,7 @@ import { DebateArenaPage } from './pages/DebateArenaPage'
 import { StrategyMarketPage } from './pages/StrategyMarketPage'
 import { TimeMachinePage } from './pages/TimeMachinePage'
 import { DataPage } from './pages/DataPage'
+import { TransactionListPage } from './pages/TransactionListPage'
 import { LoginRequiredOverlay } from './components/LoginRequiredOverlay'
 import HeaderBar from './components/HeaderBar'
 import { LanguageProvider, useLanguage } from './contexts/LanguageContext'
@@ -49,6 +50,7 @@ type Page =
   | 'time-machine'
   | 'data'
   | 'debate'
+  | 'transactions'
   | 'faq'
   | 'login'
   | 'register'
@@ -79,6 +81,7 @@ function App() {
     if (path === '/strategy-market' || hash === 'strategy-market') return 'strategy-market'
     if (path === '/time-machine' || hash === 'time-machine') return 'time-machine'
     if (path === '/data' || hash === 'data') return 'data'
+    if (path === '/transactions' || hash === 'transactions') return 'transactions'
     if (path === '/debate' || hash === 'debate') return 'debate'
     if (path === '/dashboard' || hash === 'trader' || hash === 'details')
       return 'trader'
@@ -108,6 +111,7 @@ function App() {
       'backtest': '/backtest',
       'strategy': '/strategy',
       'debate': '/debate',
+      'transactions': '/transactions',
       'faq': '/faq',
       'login': '/login',
       'register': '/register',
@@ -175,6 +179,8 @@ function App() {
         setCurrentPage('data')
       } else if (path === '/debate' || hash === 'debate') {
         setCurrentPage('debate')
+      } else if (path === '/transactions' || hash === 'transactions') {
+        setCurrentPage('transactions')
       } else if (
         path === '/dashboard' ||
         hash === 'trader' ||
@@ -495,6 +501,8 @@ function App() {
               <StrategyStudioPage />
             ) : currentPage === 'debate' ? (
               <DebateArenaPage />
+            ) : currentPage === 'transactions' ? (
+              <TransactionListPage />
             ) : currentPage === 'chaos-studio' ? (
               <ChaosStudioPage />
             ) : currentPage === 'chaos' ? (

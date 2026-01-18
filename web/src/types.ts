@@ -751,3 +751,31 @@ export interface PositionHistoryResponse {
   symbol_stats: SymbolStats[];
   direction_stats: DirectionStats[];
 }
+
+// Transaction Types
+export interface Transaction {
+  id: number
+  trader_id: string
+  exchange_id: string
+  exchange_type: string
+  order_id: number
+  exchange_order_id: string
+  exchange_trade_id: string
+  symbol: string
+  side: string
+  price: number
+  quantity: number
+  quote_quantity: number
+  commission: number
+  commission_asset: string
+  realized_pnl: number
+  is_maker: boolean
+  created_at: number
+}
+
+export interface TransactionListResponse {
+  items: Transaction[]
+  total: number
+  page: number
+  page_size: number
+}
