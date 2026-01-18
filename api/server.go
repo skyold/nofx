@@ -1458,9 +1458,9 @@ func (s *Server) recordClosePositionOrder(traderID, exchangeID, exchangeType, sy
 		FilledQuantity:  quantity,
 		AvgFillPrice:    exitPrice,
 		Commission:      fee,
-		FilledAt:        time.Now().UTC().UnixMilli(),
-		CreatedAt:       time.Now().UTC().UnixMilli(),
-		UpdatedAt:       time.Now().UTC().UnixMilli(),
+		FilledAt:        store.UnixTime(time.Now().UTC().UnixMilli()),
+		CreatedAt:       store.UnixTime(time.Now().UTC().UnixMilli()),
+		UpdatedAt:       store.UnixTime(time.Now().UTC().UnixMilli()),
 	}
 
 	if err := s.store.Order().CreateOrder(orderRecord); err != nil {
@@ -1488,7 +1488,7 @@ func (s *Server) recordClosePositionOrder(traderID, exchangeID, exchangeType, sy
 		CommissionAsset: "USDT",
 		RealizedPnL:     0,
 		IsMaker:         false,
-		CreatedAt:       time.Now().UTC().UnixMilli(),
+		CreatedAt:       store.UnixTime(time.Now().UTC().UnixMilli()),
 	}
 
 	if err := s.store.Order().CreateFill(fillRecord); err != nil {
@@ -1563,7 +1563,7 @@ func (s *Server) pollAndUpdateOrderStatus(orderRecordID int64, traderID, exchang
 					CommissionAsset: "USDT",
 					RealizedPnL:     0,
 					IsMaker:         false,
-					CreatedAt:       time.Now().UTC().UnixMilli(),
+					CreatedAt:       store.UnixTime(time.Now().UTC().UnixMilli()),
 				}
 
 				if err := s.store.Order().CreateFill(fillRecord); err != nil {

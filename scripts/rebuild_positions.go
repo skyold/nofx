@@ -27,7 +27,7 @@ func main() {
 	if len(os.Args) > 1 {
 		dbPath = os.Args[1]
 	}
-	
+
 	fmt.Printf("Opening database: %s\n", dbPath)
 	db, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Info),
@@ -58,7 +58,7 @@ func main() {
 		Leverage        int
 		CreatedAt       interface{} // Handle both int64 and string
 	}
-	
+
 	var rawOrders []RawOrder
 	if err := db.Table("trader_orders").Where("status = ?", "FILLED").Order("created_at ASC").Find(&rawOrders).Error; err != nil {
 		log.Fatalf("Failed to fetch orders: %v", err)
@@ -108,7 +108,7 @@ func main() {
 			AvgFillPrice:    raw.AvgFillPrice,
 			Commission:      raw.Commission,
 			Leverage:        raw.Leverage,
-			CreatedAt:       createdAt,
+			CreatedAt:       store.UnixTime(createdAt),
 		}
 
 		// Normalize
@@ -135,7 +135,7 @@ func main() {
 	}
 
 	rebuiltCount := 0
-	
+
 	// Process each group
 	for key, groupOrders := range orderGroups {
 		parts := strings.Split(key, "_")
@@ -154,31 +154,31 @@ func main() {
 		// Track open positions in memory
 		// We use a simple FIFO queue for matching open/close
 		type OpenPos struct {
-			Order store.TraderOrder
+			Order        store.TraderOrder
 			RemainingQty float64
 		}
 		var openPositions []OpenPos
 
 		for _, order := range groupOrders {
 			action := strings.ToLower(order.OrderAction)
-			isOpen := strings.Contains(action, "open") || 
-					 (side == "LONG" && order.Side == "BUY") || 
-					 (side == "SHORT" && order.Side == "SELL")
+			isOpen := strings.Contains(action, "open") ||
+				(side == "LONG" && order.Side == "BUY") ||
+				(side == "SHORT" && order.Side == "SELL")
 
 			if isOpen {
 				// Add to open queue
 				openPositions = append(openPositions, OpenPos{
-					Order: order,
+					Order:        order,
 					RemainingQty: order.FilledQuantity,
 				})
 			} else {
 				// Close order: match with open positions
 				closeQty := order.FilledQuantity
-				
+
 				for closeQty > 0 && len(openPositions) > 0 {
 					openPos := &openPositions[0]
 					matchQty := math.Min(closeQty, openPos.RemainingQty)
-					
+
 					// Calculate PnL
 					var pnl float64
 					if side == "LONG" {
@@ -197,9 +197,9 @@ func main() {
 
 					if existingCount == 0 {
 						// Not found! Create it.
-						fmt.Printf("  [REBUILD] Missing position found: %s %s (Open: %d, Close: %d)\n", 
+						fmt.Printf("  [REBUILD] Missing position found: %s %s (Open: %d, Close: %d)\n",
 							symbol, side, openPos.Order.ID, order.ID)
-						
+
 						newPos := &store.TraderPosition{
 							TraderID:           traderID,
 							ExchangeID:         order.ExchangeID,
@@ -222,9 +222,9 @@ func main() {
 							CloseReason:        "rebuild_script",
 							Source:             "rebuild",
 							CreatedAt:          order.CreatedAt, // Use close time as creation time
-							UpdatedAt:          time.Now().UnixMilli(),
+							UpdatedAt:          store.UnixTime(time.Now().UnixMilli()),
 						}
-						
+
 						if err := db.Create(newPos).Error; err != nil {
 							fmt.Printf("    Error creating position: %v\n", err)
 						} else {
@@ -235,7 +235,7 @@ func main() {
 					// Update remaining quantities
 					closeQty -= matchQty
 					openPos.RemainingQty -= matchQty
-					
+
 					if openPos.RemainingQty <= 0.00000001 {
 						// Remove fully closed position from queue
 						openPositions = openPositions[1:]

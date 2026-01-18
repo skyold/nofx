@@ -215,9 +215,9 @@ func (t *OKXTrader) SyncOrdersFromOKX(traderID string, exchangeID string, exchan
 			FilledQuantity:  trade.FillQtyBase,
 			AvgFillPrice:    trade.FillPrice,
 			Commission:      trade.Fee,
-			FilledAt:        execTimeMs,
-			CreatedAt:       execTimeMs,
-			UpdatedAt:       execTimeMs,
+			FilledAt:        store.UnixTime(execTimeMs),
+			CreatedAt:       store.UnixTime(execTimeMs),
+			UpdatedAt:       store.UnixTime(execTimeMs),
 		}
 
 		// Insert order record
@@ -243,7 +243,7 @@ func (t *OKXTrader) SyncOrdersFromOKX(traderID string, exchangeID string, exchan
 			CommissionAsset: trade.FeeAsset,
 			RealizedPnL:     0, // OKX fills don't include PnL per trade
 			IsMaker:         trade.IsMaker,
-			CreatedAt:       execTimeMs,
+			CreatedAt:       store.UnixTime(execTimeMs),
 		}
 
 		if err := orderStore.CreateFill(fillRecord); err != nil {

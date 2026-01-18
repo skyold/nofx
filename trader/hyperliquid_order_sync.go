@@ -79,15 +79,20 @@ func (t *HyperliquidTrader) SyncOrdersFromHyperliquid(traderID string, exchangeI
 				FilledQuantity:  trade.Quantity,
 				AvgFillPrice:    trade.Price,
 				Commission:      trade.Fee,
-				FilledAt:        tradeTimeMs,
-				CreatedAt:       tradeTimeMs,
-				UpdatedAt:       tradeTimeMs,
+				FilledAt:        store.UnixTime(tradeTimeMs),
+				CreatedAt:       store.UnixTime(tradeTimeMs),
+				UpdatedAt:       store.UnixTime(tradeTimeMs),
 			}
 
 			// Insert order record
 			if err := orderStore.CreateOrder(orderRecord); err != nil {
 				logger.Infof("  ⚠️ Failed to sync trade %s: %v", trade.TradeID, err)
 				continue
+			}
+
+			// Ensure status is updated to FILLED
+			if orderRecord.ID > 0 {
+				orderStore.UpdateOrderStatus(orderRecord.ID, "FILLED", trade.Quantity, trade.Price, trade.Fee)
 			}
 
 			// Create fill record - use Unix milliseconds UTC
@@ -104,10 +109,10 @@ func (t *HyperliquidTrader) SyncOrdersFromHyperliquid(traderID string, exchangeI
 				Quantity:        trade.Quantity,
 				QuoteQuantity:   trade.Price * trade.Quantity,
 				Commission:      trade.Fee,
-				CommissionAsset: "USDT",
+				CommissionAsset: "USDC", // Hyperliquid uses USDC
 				RealizedPnL:     trade.RealizedPnL,
 				IsMaker:         false, // Hyperliquid GetTrades doesn't provide maker/taker info
-				CreatedAt:       tradeTimeMs,
+				CreatedAt:       store.UnixTime(tradeTimeMs),
 			}
 
 			if err := orderStore.CreateFill(fillRecord); err != nil {

@@ -742,7 +742,7 @@ func (at *AutoTrader) buildTradingContext() (*kernel.Context, error) {
 		if at.store != nil {
 			if dbPos, err := at.store.Position().GetOpenPositionBySymbol(at.id, symbol, side); err == nil && dbPos != nil {
 				if dbPos.EntryTime > 0 {
-					updateTime = dbPos.EntryTime
+					updateTime = int64(dbPos.EntryTime)
 				}
 			}
 		}
@@ -2051,11 +2051,11 @@ func (at *AutoTrader) recordPositionChange(orderID, symbol, side, action string,
 			Quantity:     quantity,
 			EntryPrice:   price,
 			EntryOrderID: orderID,
-			EntryTime:    nowMs,
+			EntryTime:    store.UnixTime(nowMs),
 			Leverage:     leverage,
 			Status:       "OPEN",
-			CreatedAt:    nowMs,
-			UpdatedAt:    nowMs,
+			CreatedAt:    store.UnixTime(nowMs),
+			UpdatedAt:    store.UnixTime(nowMs),
 		}
 		if err := at.store.Position().Create(pos); err != nil {
 			logger.Infof("  ⚠️ Failed to record position: %v", err)
@@ -2126,8 +2126,8 @@ func (at *AutoTrader) createOrderRecord(orderID, symbol, action, positionSide st
 		ReduceOnly:      reduceOnly,
 		ClosePosition:   reduceOnly,
 		OrderAction:     orderAction,
-		CreatedAt:       time.Now().UTC().UnixMilli(),
-		UpdatedAt:       time.Now().UTC().UnixMilli(),
+		CreatedAt:       store.UnixTime(time.Now().UTC().UnixMilli()),
+		UpdatedAt:       store.UnixTime(time.Now().UTC().UnixMilli()),
 	}
 }
 
@@ -2168,7 +2168,7 @@ func (at *AutoTrader) recordOrderFill(orderRecordID int64, exchangeOrderID, symb
 		CommissionAsset: "USDT",
 		RealizedPnL:     0,     // Will be calculated for close orders
 		IsMaker:         false, // Market orders are usually taker
-		CreatedAt:       time.Now().UTC().UnixMilli(),
+		CreatedAt:       store.UnixTime(time.Now().UTC().UnixMilli()),
 	}
 
 	// Calculate realized PnL for close orders
