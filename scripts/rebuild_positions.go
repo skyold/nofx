@@ -8,6 +8,7 @@ import (
 	"nofx/store"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -56,7 +57,7 @@ func main() {
 		AvgFillPrice    float64
 		Commission      float64
 		Leverage        int
-		CreatedAt       interface{} // Handle both int64 and string
+		CreatedAt       interface{} `gorm:"column:created_at"`
 	}
 
 	var rawOrders []RawOrder
@@ -73,18 +74,52 @@ func main() {
 		// Convert RawOrder to store.TraderOrder
 		var createdAt int64
 		switch v := raw.CreatedAt.(type) {
+		case time.Time:
+			createdAt = v.UnixMilli()
 		case int64:
 			createdAt = v
 		case float64:
 			createdAt = int64(v)
-		case string:
-			// Try parsing RFC3339
-			t, err := time.Parse(time.RFC3339, v)
-			if err == nil {
+		case []uint8:
+			// Bytes, usually string
+			s := string(v)
+			if t, err := time.Parse(time.RFC3339, s); err == nil {
 				createdAt = t.UnixMilli()
+			} else if i, err := strconv.ParseInt(s, 10, 64); err == nil {
+				createdAt = i
 			} else {
-				// Try other formats or default to now
-				createdAt = time.Now().UnixMilli()
+				// Try other formats
+				if t, err := time.Parse("2006-01-02 15:04:05.999-07:00", s); err == nil {
+					createdAt = t.UnixMilli()
+				} else {
+					createdAt = time.Now().UnixMilli()
+				}
+			}
+		case string:
+			// Try numeric string first
+			if i, err := strconv.ParseInt(v, 10, 64); err == nil {
+				createdAt = i
+			} else {
+				// Try parsing various time formats
+				formats := []string{
+					time.RFC3339,
+					"2006-01-02 15:04:05.999-07:00",
+					"2006-01-02 15:04:05-07:00",
+					"2006-01-02 15:04:05",
+				}
+				parsed := false
+				for _, f := range formats {
+					if t, err := time.Parse(f, v); err == nil {
+						createdAt = t.UnixMilli()
+						parsed = true
+						break
+					}
+				}
+				if !parsed {
+					// Fallback to now if all fail
+					fmt.Printf("Warning: Failed to parse time '%v', using Now\n", v)
+					createdAt = time.Now().UnixMilli()
+				}
 			}
 		default:
 			createdAt = time.Now().UnixMilli()
@@ -138,13 +173,74 @@ func main() {
 
 	// Process each group
 	for key, groupOrders := range orderGroups {
-		parts := strings.Split(key, "_")
-		if len(parts) < 3 {
+		if len(groupOrders) == 0 {
 			continue
 		}
-		traderID := parts[0]
-		symbol := parts[1]
-		side := parts[2]
+
+		// Get traderID directly from the first order (safer than parsing key)
+		traderID := groupOrders[0].TraderID
+
+		// Parse symbol and side from key parts (these don't contain underscores usually, but better to use order data too)
+		// Actually, let's just use order data for everything to be safe
+		symbol := groupOrders[0].Symbol
+
+		// Determine side from the group logic (since we grouped by it)
+		parts := strings.Split(key, "_")
+		// The last part is the PositionSide
+		side := parts[len(parts)-1]
+
+		// Override symbol from parts if needed, but order.Symbol is better.
+		// However, we grouped by Uppercase Symbol.
+		// Let's rely on the order data, but we need the SIDE that was used for grouping.
+		// The key format is: fmt.Sprintf("%s_%s_%s", order.TraderID, symbol, posSide)
+		// Since TraderID can contain underscores, we can't easily split from the front.
+		// But we know the LAST part is the Side.
+		// And we know the TraderID.
+		// The symbol is everything in between?
+		// Actually, we have the orders! We can just use `groupOrders[0].Symbol` and `groupOrders[0].PositionSide` (or inferred side).
+
+		// Re-infer side logic to be consistent with grouping
+		// We can just use the 'side' variable extracted from the last part of the key
+		// Or better, since we have the orders, just re-evaluate the common side?
+		// No, the group might contain mixed BUY/SELL orders, so we need the grouping key's side context.
+		// The key was constructed as: key := fmt.Sprintf("%s_%s_%s", order.TraderID, symbol, posSide)
+
+		// Let's just trust the orders in the group. They are all for the same TraderID, Symbol, and PositionSide.
+		// So we can take them from the first order.
+		// Exception: PositionSide might be inferred in the loop above.
+		// Let's grab it from the order if possible, or re-infer it.
+		// But wait, in the grouping loop:
+		/*
+			posSide := strings.ToUpper(order.PositionSide)
+			if posSide == "" { ... inferred ... }
+			key := fmt.Sprintf("%s_%s_%s", order.TraderID, symbol, posSide)
+		*/
+		// So all orders in this group share the same (inferred) posSide.
+		// We can't easily get the *inferred* posSide from the order struct again without repeating logic.
+		// But we can extract it from the key safely if we know TraderID and Symbol?
+		// TraderID might have underscores. Symbol might have underscores (unlikely for pairs like BNBUSDT).
+
+		// Safer approach: Extract side from the *last* component of the key.
+		// Then Symbol is everything between TraderID and Side?
+		// No, that's messy.
+
+		// Simplest Fix:
+		// We already have the list of orders `groupOrders`.
+		// We can just use `groupOrders[0]` to get TraderID and Symbol.
+		// For `side`, we can take `parts[len(parts)-1]`.
+
+		// Wait, `parts` was `strings.Split(key, "_")`.
+		// If key is `ID_SYMBOL_SIDE`, and ID has `_`, then parts is `[ID, part2, ..., SYMBOL, SIDE]`.
+		// So `side` is indeed `parts[len(parts)-1]`.
+		// `symbol` is `groupOrders[0].Symbol` (normalized to upper case in loop, but order struct has original).
+		// Let's use `strings.ToUpper(groupOrders[0].Symbol)`.
+
+		// Fix the variable assignment:
+		// traderID := parts[0]  <-- DELETE THIS
+		// symbol := parts[1]    <-- DELETE THIS
+		// side := parts[2]      <-- DELETE THIS
+
+		// New logic:
 
 		// Sort orders by time
 		sort.Slice(groupOrders, func(i, j int) bool {
