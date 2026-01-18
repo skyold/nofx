@@ -423,7 +423,7 @@ func (s *OrderStore) GetRecentFillSymbolsByExchange(exchangeID string, sinceMs i
 }
 
 // GetTransactions gets paginated transaction list with filters
-func (s *OrderStore) GetTransactions(page, pageSize int, exchangeID, traderID string) ([]*TraderFill, int64, error) {
+func (s *OrderStore) GetTransactions(page, pageSize int, exchangeID, traderID, sortOrder string) ([]*TraderFill, int64, error) {
 	var fills []*TraderFill
 	var total int64
 
@@ -448,7 +448,14 @@ func (s *OrderStore) GetTransactions(page, pageSize int, exchangeID, traderID st
 
 	// Get paginated records
 	offset := (page - 1) * pageSize
-	err := query.Order("created_at DESC").
+
+	// Apply sorting
+	order := "created_at DESC"
+	if sortOrder == "asc" || sortOrder == "ASC" {
+		order = "created_at ASC"
+	}
+
+	err := query.Order(order).
 		Limit(pageSize).
 		Offset(offset).
 		Find(&fills).Error

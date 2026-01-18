@@ -2363,8 +2363,9 @@ func (s *Server) handleGetTransactions(c *gin.Context) {
 
 	exchangeID := c.Query("exchange_id")
 	traderID := c.Query("trader_id")
+	sortOrder := c.DefaultQuery("sort", "desc")
 
-	transactions, total, err := s.store.Order().GetTransactions(page, pageSize, exchangeID, traderID)
+	transactions, total, err := s.store.Order().GetTransactions(page, pageSize, exchangeID, traderID, sortOrder)
 	if err != nil {
 		SafeInternalError(c, "Get transactions", err)
 		return

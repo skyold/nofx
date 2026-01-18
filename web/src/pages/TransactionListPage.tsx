@@ -4,7 +4,7 @@ import { api } from '../lib/api'
 import { DeepVoidBackground } from '../components/DeepVoidBackground'
 import { notify } from '../lib/notify'
 import { useLanguage } from '../contexts/LanguageContext'
-import { Loader2 } from 'lucide-react'
+import { Loader2, ArrowUpDown } from 'lucide-react'
 import type { TraderInfo, Exchange } from '../types'
 
 export function TransactionListPage() {
@@ -13,6 +13,7 @@ export function TransactionListPage() {
   const [pageSize, setPageSize] = useState(20)
   const [exchangeId, setExchangeId] = useState<string>('all')
   const [traderId, setTraderId] = useState<string>('all')
+  const [sort, setSort] = useState<'desc' | 'asc'>('desc')
   const [assigningId, setAssigningId] = useState<number | null>(null)
 
   // Fetch lists for filters
@@ -21,8 +22,8 @@ export function TransactionListPage() {
 
   // Fetch transactions
   const { data: transactionData, error, isLoading } = useSWR(
-    [`transactions`, page, pageSize, exchangeId, traderId],
-    () => api.getTransactions(page, pageSize, exchangeId, traderId)
+    [`transactions`, page, pageSize, exchangeId, traderId, sort],
+    () => api.getTransactions(page, pageSize, exchangeId, traderId, sort)
   )
 
   const handleAssignTrader = async (transactionId: number, newTraderId: string) => {
@@ -31,12 +32,16 @@ export function TransactionListPage() {
     try {
       await api.assignTransaction(transactionId, newTraderId)
       notify.success(language === 'zh' ? '分配成功' : 'Assigned successfully')
-      mutate([`transactions`, page, pageSize, exchangeId, traderId])
+      mutate([`transactions`, page, pageSize, exchangeId, traderId, sort])
     } catch (err) {
       notify.error(language === 'zh' ? '分配失败' : 'Failed to assign')
     } finally {
       setAssigningId(null)
     }
+  }
+
+  const toggleSort = () => {
+    setSort(prev => prev === 'desc' ? 'asc' : 'desc')
   }
 
   const totalPages = transactionData ? Math.ceil(transactionData.total / pageSize) : 0
@@ -92,10 +97,18 @@ export function TransactionListPage() {
                   <thead className="text-xs text-nofx-text-muted uppercase bg-white/5 border-b border-white/10">
                     <tr>
                       <th className="px-4 py-3">ID</th>
-                      <th className="px-4 py-3">{language === 'zh' ? '时间' : 'Time'}</th>
+                      <th 
+                        className="px-4 py-3 cursor-pointer hover:text-white flex items-center gap-1"
+                        onClick={toggleSort}
+                      >
+                        {language === 'zh' ? '时间' : 'Time'}
+                        <ArrowUpDown className="w-3 h-3" />
+                      </th>
+                      <th className="px-4 py-3">{language === 'zh' ? '订单号' : 'Order ID'}</th>
                       <th className="px-4 py-3">{language === 'zh' ? '交易所' : 'Exchange'}</th>
                       <th className="px-4 py-3">{language === 'zh' ? '交易对' : 'Symbol'}</th>
                       <th className="px-4 py-3">{language === 'zh' ? '方向' : 'Side'}</th>
+                      <th className="px-4 py-3">{language === 'zh' ? '类型' : 'Type'}</th>
                       <th className="px-4 py-3 text-right">{language === 'zh' ? '价格' : 'Price'}</th>
                       <th className="px-4 py-3 text-right">{language === 'zh' ? '数量' : 'Quantity'}</th>
                       <th className="px-4 py-3 text-right">{language === 'zh' ? '成交额' : 'Value'}</th>
@@ -111,6 +124,9 @@ export function TransactionListPage() {
                         <td className="px-4 py-3 text-nofx-text-muted whitespace-nowrap">
                           {new Date(tx.created_at).toLocaleString()}
                         </td>
+                        <td className="px-4 py-3 font-mono text-xs text-nofx-text-muted" title={tx.exchange_order_id}>
+                          {tx.exchange_order_id.length > 12 ? tx.exchange_order_id.slice(0, 8) + '...' : tx.exchange_order_id}
+                        </td>
                         <td className="px-4 py-3">
                           <span className="px-2 py-0.5 rounded bg-white/5 text-xs border border-white/10">
                              {exchanges?.find(e => e.id === tx.exchange_id)?.account_name || tx.exchange_type}
@@ -123,6 +139,11 @@ export function TransactionListPage() {
                            }`}>
                              {tx.side}
                            </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="px-1.5 py-0.5 rounded text-xs bg-white/5 text-nofx-text-muted">
+                            {tx.is_maker ? 'MAKER' : 'TAKER'}
+                          </span>
                         </td>
                         <td className="px-4 py-3 text-right font-mono">{tx.price.toFixed(4)}</td>
                         <td className="px-4 py-3 text-right font-mono">{tx.quantity.toFixed(4)}</td>

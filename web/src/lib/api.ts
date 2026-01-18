@@ -792,13 +792,15 @@ export const api = {
     page = 1,
     pageSize = 20,
     exchangeId?: string,
-    traderId?: string
+    traderId?: string,
+    sort?: string
   ): Promise<TransactionListResponse> {
     const params = new URLSearchParams()
     params.append('page', page.toString())
     params.append('page_size', pageSize.toString())
     if (exchangeId && exchangeId !== 'all') params.append('exchange_id', exchangeId)
     if (traderId && traderId !== 'all') params.append('trader_id', traderId)
+    if (sort) params.append('sort', sort)
 
     const result = await httpClient.get<TransactionListResponse>(
       `${API_BASE}/transactions?${params}`
