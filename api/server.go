@@ -156,6 +156,7 @@ func (s *Server) setupRoutes() {
 			protected.PUT("/traders/:id/prompt", s.handleUpdateTraderPrompt)
 			protected.POST("/traders/:id/sync-balance", s.handleSyncBalance)
 			protected.POST("/traders/:id/close-position", s.handleClosePosition)
+			protected.POST("/traders/:id/rebuild-positions", s.handleRebuildPositions)
 			protected.PUT("/traders/:id/competition", s.handleToggleCompetition)
 
 			// AI model configuration
@@ -1412,6 +1413,30 @@ func (s *Server) handleClosePosition(c *gin.Context) {
 		"symbol":  req.Symbol,
 		"side":    req.Side,
 		"result":  result,
+	})
+}
+
+// handleRebuildPositions Rebuild positions from orders
+func (s *Server) handleRebuildPositions(c *gin.Context) {
+	userID := c.GetString("user_id")
+	traderID := c.Param("id")
+
+	// Verify ownership
+	if _, err := s.store.Trader().GetFullConfig(userID, traderID); err != nil {
+		SafeNotFound(c, "Trader")
+		return
+	}
+
+	pb := store.NewPositionBuilder(s.store.Position())
+	count, err := pb.RebuildFromOrders(traderID, s.store.Order())
+	if err != nil {
+		SafeInternalError(c, "Rebuild positions", err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": fmt.Sprintf("Successfully rebuilt %d missing positions", count),
+		"count":   count,
 	})
 }
 

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"nofx/logger"
+	"sort"
 	"strings"
 	"time"
 )
@@ -179,4 +180,154 @@ func (pb *PositionBuilder) handleClose(
 func quantitiesMatch(a, b float64) bool {
 	const QUANTITY_TOLERANCE = 0.0001
 	return math.Abs(a-b) < QUANTITY_TOLERANCE
+}
+
+// RebuildFromOrders rebuilds positions from orders for a specific trader
+func (pb *PositionBuilder) RebuildFromOrders(traderID string, orderStore *OrderStore) (int, error) {
+	// 1. Get all filled orders
+	var orders []TraderOrder
+	if err := pb.positionStore.db.Where("trader_id = ? AND status = ?", traderID, "FILLED").Order("created_at ASC").Find(&orders).Error; err != nil {
+		return 0, fmt.Errorf("failed to fetch orders: %w", err)
+	}
+
+	logger.Infof("Found %d filled orders for trader %s. Processing...", len(orders), traderID)
+
+	// Group orders by Symbol + PositionSide
+	// Key: symbol_positionSide
+	orderGroups := make(map[string][]TraderOrder)
+	for _, order := range orders {
+		// Normalize
+		symbol := strings.ToUpper(order.Symbol)
+		// Try to determine PositionSide if missing
+		posSide := strings.ToUpper(order.PositionSide)
+		if posSide == "" {
+			if strings.Contains(order.OrderAction, "long") {
+				posSide = "LONG"
+			} else if strings.Contains(order.OrderAction, "short") {
+				posSide = "SHORT"
+			} else {
+				// Fallback based on side
+				if order.Side == "BUY" {
+					posSide = "LONG" // Assume long for buy
+				} else {
+					posSide = "SHORT" // Assume short for sell
+				}
+			}
+		}
+
+		key := fmt.Sprintf("%s_%s", symbol, posSide)
+		orderGroups[key] = append(orderGroups[key], order)
+	}
+
+	rebuiltCount := 0
+
+	// Process each group
+	for key, groupOrders := range orderGroups {
+		parts := strings.Split(key, "_")
+		if len(parts) < 2 {
+			continue
+		}
+		symbol := parts[0]
+		side := parts[1]
+
+		// Sort orders by time
+		sort.Slice(groupOrders, func(i, j int) bool {
+			return groupOrders[i].CreatedAt < groupOrders[j].CreatedAt
+		})
+
+		// Track open positions in memory
+		// We use a simple FIFO queue for matching open/close
+		type OpenPos struct {
+			Order        TraderOrder
+			RemainingQty float64
+		}
+		var openPositions []OpenPos
+
+		for _, order := range groupOrders {
+			action := strings.ToLower(order.OrderAction)
+			isOpen := strings.Contains(action, "open") ||
+				(side == "LONG" && order.Side == "BUY") ||
+				(side == "SHORT" && order.Side == "SELL")
+
+			if isOpen {
+				// Add to open queue
+				openPositions = append(openPositions, OpenPos{
+					Order:        order,
+					RemainingQty: order.FilledQuantity,
+				})
+			} else {
+				// Close order: match with open positions
+				closeQty := order.FilledQuantity
+
+				for closeQty > 0 && len(openPositions) > 0 {
+					openPos := &openPositions[0]
+					matchQty := math.Min(closeQty, openPos.RemainingQty)
+
+					// Calculate PnL
+					var pnl float64
+					if side == "LONG" {
+						pnl = (order.AvgFillPrice - openPos.Order.AvgFillPrice) * matchQty
+					} else {
+						pnl = (openPos.Order.AvgFillPrice - order.AvgFillPrice) * matchQty
+					}
+
+					// Check if this position record exists in DB
+					// We check by rough timestamp match (since we don't have exact link)
+					var existingCount int64
+					pb.positionStore.db.Model(&TraderPosition{}).Where(
+						"trader_id = ? AND symbol = ? AND side = ? AND status = ? AND ABS(entry_time - ?) < 5000 AND ABS(exit_time - ?) < 5000",
+						traderID, symbol, side, "CLOSED", int64(openPos.Order.CreatedAt), int64(order.CreatedAt),
+					).Count(&existingCount)
+
+					if existingCount == 0 {
+						// Not found! Create it.
+						logger.Infof("  [REBUILD] Missing position found: %s %s (Open: %d, Close: %d)",
+							symbol, side, openPos.Order.ID, order.ID)
+
+						newPos := &TraderPosition{
+							TraderID:           traderID,
+							ExchangeID:         order.ExchangeID,
+							ExchangeType:       order.ExchangeType,
+							ExchangePositionID: fmt.Sprintf("rebuild_%d_%d", openPos.Order.ID, order.ID),
+							Symbol:             symbol,
+							Side:               side,
+							Quantity:           matchQty,
+							EntryPrice:         openPos.Order.AvgFillPrice,
+							EntryQuantity:      matchQty,
+							EntryOrderID:       openPos.Order.ExchangeOrderID,
+							EntryTime:          openPos.Order.CreatedAt,
+							ExitPrice:          order.AvgFillPrice,
+							ExitOrderID:        order.ExchangeOrderID,
+							ExitTime:           order.CreatedAt,
+							RealizedPnL:        pnl,
+							Fee:                order.Commission + openPos.Order.Commission*(matchQty/openPos.Order.FilledQuantity), // Pro-rate fee
+							Leverage:           order.Leverage,
+							Status:             "CLOSED",
+							CloseReason:        "rebuild_manual",
+							Source:             "rebuild",
+							CreatedAt:          order.CreatedAt, // Use close time as creation time
+							UpdatedAt:          UnixTime(time.Now().UnixMilli()),
+						}
+
+						if err := pb.positionStore.db.Create(newPos).Error; err != nil {
+							logger.Errorf("    Error creating position: %v", err)
+						} else {
+							rebuiltCount++
+						}
+					}
+
+					// Update remaining quantities
+					closeQty -= matchQty
+					openPos.RemainingQty -= matchQty
+
+					if openPos.RemainingQty <= 0.00000001 {
+						// Remove fully closed position from queue
+						openPositions = openPositions[1:]
+					}
+				}
+			}
+		}
+	}
+
+	return rebuiltCount, nil
 }
