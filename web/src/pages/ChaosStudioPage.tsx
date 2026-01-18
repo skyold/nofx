@@ -1322,6 +1322,29 @@ export function ChaosStudioPage() {
                             </pre>
                           </div>
                         )}
+
+                        {/* Full Result JSON */}
+                        <div className="pt-4 mt-4 border-t border-nofx-gold/10">
+                          <div className="flex items-center gap-1.5 mb-1.5">
+                            <Code className="w-3 h-3 text-nofx-text-muted" />
+                            <span className="text-xs font-medium text-nofx-text">
+                              Full Result JSON
+                            </span>
+                          </div>
+                          <pre
+                            className="p-2 rounded-lg text-[10px] font-mono overflow-auto bg-nofx-bg border border-nofx-gold/20 text-nofx-text-muted"
+                            style={{ maxHeight: '300px' }}
+                          >
+                            {JSON.stringify(
+                              (() => {
+                                const { system_prompt, user_prompt, ...rest } = aiTestResult
+                                return rest
+                              })(),
+                              null,
+                              2
+                            )}
+                          </pre>
+                        </div>
                       </>
                     )}
                   </div>
