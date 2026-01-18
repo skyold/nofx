@@ -258,10 +258,39 @@ restart() {
 # Monitoring: Logs
 # ------------------------------------------------------------------------
 logs() {
-    if [ -z "$2" ]; then
-        $COMPOSE_CMD logs -f
+    local service=""
+    local show_errors=false
+
+    # Skip $1 which is "logs"
+    shift
+
+    # Parse arguments
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            --errors|-e)
+                show_errors=true
+                shift
+                ;;
+            *)
+                service="$1"
+                shift
+                ;;
+        esac
+    done
+
+    if [ "$show_errors" = true ]; then
+        print_info "正在查看日志 (仅显示错误和警告)..."
+        if [ -n "$service" ]; then
+            $COMPOSE_CMD logs -f "$service" | grep --line-buffered -E '\[ERRO\]|\[WARN\]'
+        else
+            $COMPOSE_CMD logs -f | grep --line-buffered -E '\[ERRO\]|\[WARN\]'
+        fi
     else
-        $COMPOSE_CMD logs -f "$2"
+        if [ -n "$service" ]; then
+            $COMPOSE_CMD logs -f "$service"
+        else
+            $COMPOSE_CMD logs -f
+        fi
     fi
 }
 
@@ -354,7 +383,7 @@ show_help() {
     echo "  start [--build]    启动服务（可选：重新构建）"
     echo "  stop               停止服务"
     echo "  restart            重启服务"
-    echo "  logs [service]     查看日志（可选：指定服务名 backend/frontend）"
+    echo "  logs [service] [--errors] 查看日志（可选：指定服务名 backend/frontend，--errors 仅看错误）"
     echo "  status             查看服务状态"
     echo "  clean              清理所有容器和数据"
     echo "  update             更新代码并重启"

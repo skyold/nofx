@@ -1033,7 +1033,6 @@ func (at *AutoTrader) executeOpenLongWithRecord(decision *kernel.Decision, actio
 		availableBalance = avail
 	}
 
-	// Get equity for position value ratio check
 	equity := 0.0
 	if eq, ok := balance["totalEquity"].(float64); ok && eq > 0 {
 		equity = eq
@@ -1042,6 +1041,7 @@ func (at *AutoTrader) executeOpenLongWithRecord(decision *kernel.Decision, actio
 	} else {
 		equity = availableBalance // Fallback to available balance
 	}
+	logger.Infof("  💰 Balance Check: Available=%.2f, Equity=%.2f, DecisionSize=%.2f", availableBalance, equity, decision.PositionSizeUSD)
 
 	// [CODE ENFORCED] Position Value Ratio Check: position_value <= equity × ratio
 	adjustedPositionSize, wasCapped := at.enforcePositionValueRatio(decision.PositionSizeUSD, equity, decision.Symbol)
@@ -1582,14 +1582,75 @@ func (at *AutoTrader) GetAccountInfo() (map[string]interface{}, error) {
 	}, nil
 }
 
-// GetPositions gets position list (for API)
+// GetPositions gets position list (prioritizing local database for trader isolation)
 func (at *AutoTrader) GetPositions() ([]map[string]interface{}, error) {
+	var result []map[string]interface{}
+
+	// 1. First, try to fetch OPEN positions from local database for this specific TraderID
+	// This ensures proper isolation when multiple traders share the same exchange account
+	if at.store != nil {
+		dbPositions, err := at.store.Position().GetOpenPositions(at.id)
+		if err == nil && len(dbPositions) > 0 {
+			for _, pos := range dbPositions {
+				// Fetch current mark price (needed for calculating unrealized PnL)
+				markPrice := pos.EntryPrice // Default fallback
+				marketData, err := market.Get(pos.Symbol)
+				if err == nil {
+					markPrice = marketData.CurrentPrice
+				}
+
+				// Calculate unrealized PnL
+				var unrealizedPnl float64
+				if pos.Side == "LONG" {
+					unrealizedPnl = (markPrice - pos.EntryPrice) * pos.Quantity
+				} else {
+					unrealizedPnl = (pos.EntryPrice - markPrice) * pos.Quantity
+				}
+
+				// Calculate margin used
+				marginUsed := (pos.Quantity * markPrice) / float64(pos.Leverage)
+
+				// Calculate P&L percentage
+				pnlPct := calculatePnLPercentage(unrealizedPnl, marginUsed)
+
+				// Estimate liquidation price (simplified)
+				// Long: EntryPrice * (1 - 1/Leverage + MaintenanceMarginRate)
+				// Short: EntryPrice * (1 + 1/Leverage - MaintenanceMarginRate)
+				mmr := 0.005 // Approx 0.5% maintenance margin
+				var liqPrice float64
+				if pos.Side == "LONG" {
+					liqPrice = pos.EntryPrice * (1 - 1/float64(pos.Leverage) + mmr)
+				} else {
+					liqPrice = pos.EntryPrice * (1 + 1/float64(pos.Leverage) - mmr)
+				}
+
+				result = append(result, map[string]interface{}{
+					"symbol":             pos.Symbol,
+					"side":               strings.ToLower(pos.Side), // Convert back to lowercase for compatibility
+					"entry_price":        pos.EntryPrice,
+					"mark_price":         markPrice,
+					"quantity":           pos.Quantity,
+					"leverage":           pos.Leverage,
+					"unrealized_pnl":     unrealizedPnl,
+					"unrealized_pnl_pct": pnlPct,
+					"liquidation_price":  liqPrice,
+					"margin_used":        marginUsed,
+					"positionAmt":        pos.Quantity, // Compatible field
+				})
+			}
+			logger.Infof("📊 [%s] Loaded %d positions from local database (Isolated view)", at.name, len(result))
+			return result, nil
+		}
+	}
+
+	// 2. Fallback: If no local positions found (or store nil), fetch from exchange
+	// WARNING: This returns ALL positions for the exchange account, potentially mixing traders
+	logger.Infof("⚠️ [%s] No local positions found, falling back to exchange API (Shared view)", at.name)
 	positions, err := at.trader.GetPositions()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get positions: %w", err)
 	}
 
-	var result []map[string]interface{}
 	for _, pos := range positions {
 		symbol := pos["symbol"].(string)
 		side := pos["side"].(string)
@@ -1599,6 +1660,12 @@ func (at *AutoTrader) GetPositions() ([]map[string]interface{}, error) {
 		if quantity < 0 {
 			quantity = -quantity
 		}
+
+		// Skip empty positions
+		if quantity == 0 {
+			continue
+		}
+
 		unrealizedPnl := pos["unRealizedProfit"].(float64)
 		liquidationPrice := pos["liquidationPrice"].(float64)
 
@@ -1624,6 +1691,7 @@ func (at *AutoTrader) GetPositions() ([]map[string]interface{}, error) {
 			"unrealized_pnl_pct": pnlPct,
 			"liquidation_price":  liquidationPrice,
 			"margin_used":        marginUsed,
+			"positionAmt":        quantity,
 		})
 	}
 
