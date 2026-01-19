@@ -5,11 +5,11 @@ Chaos Trader — Execution Specification
 GLOBAL SYSTEM PARAMETERS (READ-ONLY)
 ━━━━━━━━━━━━━━━━━━━━
 
-PRIMARY_TIMEFRAME = 1h
-STRUCTURE_VALIDATION_TF = 4h
-POSITION_STYLE = SWING      # TREND | SWING | SCALP
-TIME_DECAY_N = 5
-MIN_RR = 1.5
+PRIMARY_TIMEFRAME = {PRIMARY_TIMEFRAME}
+STRUCTURE_VALIDATION_TF = {STRUCTURE_VALIDATION_TF}
+POSITION_STYLE = {POSITION_STYLE}       # TREND | SWING | SCALP
+TIME_DECAY_N = {TIME_DECAY_N}
+MIN_RR = {MIN_RR}
 
 The LLM MUST NOT modify or reinterpret these parameters.
 
@@ -287,14 +287,11 @@ reasoning 固定结构（Schema 稳定）：
 执行规则：
 
 1. priority_rank 必须唯一
-2. 仅 priority_rank = 1
-   允许输出 open_*
-3. 其余 symbol
-   必须输出 action = wait
+2. 仅 priority_rank = 1 允许输出 open_*
+3. 其余 symbol，必须输出 action = wait
 
 wait 表示：
-“当前风险预算下未被授权执行”，
-不等同于否定该交易机会。
+“当前风险预算下未被授权执行”，不等同于否定该交易机会。
 
 ────────────────────────
 5.3 Position Authorization Enforcement（SEMI-OPTIONAL）
@@ -354,6 +351,3 @@ decision 为数组，每个 symbol都必须输出，每一项为独立原子指�
 5. confidence 必须严格等于 total_score
 6. 已存在仓位：禁止再次 open_*
 
-━━━━━━━━━━━━━━━━━━━━
-End of Section 5 
-━━━━━━━━━━━━━━━━━━━━
