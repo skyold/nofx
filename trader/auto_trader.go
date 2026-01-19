@@ -524,7 +524,14 @@ func (at *AutoTrader) runCycle() error {
 
 	// 5. Use strategy engine to call AI for decision
 	logger.Infof("🤖 Requesting AI analysis and decision... [Strategy Engine]")
-	aiDecision, err := kernel.GetFullDecisionWithStrategy(ctx, at.mcpClient, at.strategyEngine, "balanced")
+
+	// Use configured prompt variant (default to "balanced" if empty for backward compatibility)
+	variant := "balanced"
+	if at.config.StrategyConfig != nil && at.config.StrategyConfig.PromptVariant != "" {
+		variant = at.config.StrategyConfig.PromptVariant
+	}
+
+	aiDecision, err := kernel.GetFullDecisionWithStrategy(ctx, at.mcpClient, at.strategyEngine, variant)
 
 	if aiDecision != nil && aiDecision.AIRequestDurationMs > 0 {
 		record.AIRequestDurationMs = aiDecision.AIRequestDurationMs
