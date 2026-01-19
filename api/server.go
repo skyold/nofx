@@ -1428,7 +1428,8 @@ func (s *Server) handleRebuildPositions(c *gin.Context) {
 	}
 
 	pb := store.NewPositionBuilder(s.store.Position())
-	count, err := pb.RebuildFromOrders(traderID, s.store.Order())
+	// Use RebuildFromFills instead of RebuildFromOrders for better accuracy with trade history
+	count, err := pb.RebuildFromFills(traderID, s.store.Order())
 	if err != nil {
 		SafeInternalError(c, "Rebuild positions", err)
 		return

@@ -7,7 +7,7 @@ import { PositionHistory } from '../components/PositionHistory'
 import { PunkAvatar, getTraderAvatar } from '../components/PunkAvatar'
 import { confirmToast, notify } from '../lib/notify'
 import { t, type Language } from '../i18n/translations'
-import { LogOut, Loader2, Eye, EyeOff, Copy, Check, Download } from 'lucide-react'
+import { LogOut, Loader2, Eye, EyeOff, Copy, Check, Download, RotateCw } from 'lucide-react'
 import { DeepVoidBackground } from '../components/DeepVoidBackground'
 import type {
     SystemStatus,
@@ -229,6 +229,46 @@ export function ChaosDashboardPage({
             notify.error(errorMsg)
         } finally {
             setClosingPosition(null)
+        }
+    }
+
+    // Rebuild positions
+    const handleRebuildPositions = async () => {
+        if (!selectedTraderId) return
+
+        const confirmMsg = language === 'zh'
+            ? '确定要根据交易历史重建仓位吗？这将删除当前的平仓记录并重新计算。'
+            : 'Are you sure you want to rebuild positions from trade history? This will delete current closed positions and recalculate them.'
+
+        const confirmed = await confirmToast(confirmMsg, {
+            title: language === 'zh' ? '重建仓位' : 'Rebuild Positions',
+            okText: language === 'zh' ? '确认' : 'Confirm',
+            cancelText: language === 'zh' ? '取消' : 'Cancel',
+        })
+
+        if (!confirmed) return
+
+        try {
+            const result = await api.rebuildPositions(selectedTraderId)
+            notify.success(
+                language === 'zh'
+                    ? `重建成功，修复了 ${result.count} 个仓位`
+                    : `Rebuild successful, repaired ${result.count} positions`
+            )
+            // Refresh data
+            await Promise.all([
+                mutate(`positions-${selectedTraderId}`),
+                mutate(`account-${selectedTraderId}`),
+                // Invalidate all keys starting with positions/history for this trader
+                mutate(
+                    (key) => typeof key === 'string' && key.includes(`/api/positions/history?trader_id=${selectedTraderId}`),
+                    undefined,
+                    { revalidate: true }
+                )
+            ])
+        } catch (err: unknown) {
+            const errorMsg = err instanceof Error ? err.message : 'Failed'
+            notify.error(errorMsg)
         }
     }
 
@@ -895,6 +935,14 @@ export function ChaosDashboardPage({
                                 <span className="text-2xl">📜</span>
                                 {t('positionHistory.title', language)}
                             </h2>
+                            <button
+                                onClick={handleRebuildPositions}
+                                className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium bg-nofx-gold/10 text-nofx-gold hover:bg-nofx-gold/20 border border-nofx-gold/20 transition-all"
+                                title={language === 'zh' ? '根据交易记录重建仓位历史' : 'Rebuild position history from trades'}
+                            >
+                                <RotateCw className="w-3.5 h-3.5" />
+                                {language === 'zh' ? '修复历史' : 'Repair History'}
+                            </button>
                         </div>
                         <PositionHistory traderId={selectedTraderId} />
                     </div>

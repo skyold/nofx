@@ -331,3 +331,189 @@ func (pb *PositionBuilder) RebuildFromOrders(traderID string, orderStore *OrderS
 
 	return rebuiltCount, nil
 }
+
+// RebuildFromFills rebuilds positions from fills (trades) for a specific trader
+// This is more accurate than orders because it uses actual execution data
+func (pb *PositionBuilder) RebuildFromFills(traderID string, orderStore *OrderStore) (int, error) {
+	// 1. Get all fills
+	var fills []TraderFill
+	if err := pb.positionStore.db.Where("trader_id = ?", traderID).Order("created_at ASC").Find(&fills).Error; err != nil {
+		return 0, fmt.Errorf("failed to fetch fills: %w", err)
+	}
+
+	logger.Infof("Found %d fills for trader %s. Processing...", len(fills), traderID)
+
+	// 2. Delete existing CLOSED positions for this trader to avoid duplicates
+	// We only delete CLOSED positions because OPEN positions are managed by live trading
+	if err := pb.positionStore.db.Where("trader_id = ? AND status = ?", traderID, "CLOSED").Delete(&TraderPosition{}).Error; err != nil {
+		return 0, fmt.Errorf("failed to delete existing closed positions: %w", err)
+	}
+
+	// 3. Group fills by Symbol + PositionSide
+	// Since TraderFill doesn't always have PositionSide (it might be inferred), we need to be careful.
+	// However, for most exchanges we support, we can infer it or it's present in Order if we joined.
+	// For simplicity and robustness, we'll infer based on Side and "Open/Close" intent if available,
+	// or try to match purely FIFO per symbol if we assume one-way mode or can detect hedge mode.
+	// To strictly follow "transaction history", we should probably use the same logic as the unified algorithm.
+
+	// Group by Symbol
+	fillGroups := make(map[string][]TraderFill)
+	for _, fill := range fills {
+		fillGroups[fill.Symbol] = append(fillGroups[fill.Symbol], fill)
+	}
+
+	rebuiltCount := 0
+
+	// Process each symbol
+	for symbol, groupFills := range fillGroups {
+		// Sort by time
+		sort.Slice(groupFills, func(i, j int) bool {
+			return groupFills[i].CreatedAt < groupFills[j].CreatedAt
+		})
+
+		// Track open positions (long and short separately)
+		// Key: "LONG" or "SHORT"
+		type OpenPos struct {
+			Fill         TraderFill
+			RemainingQty float64
+		}
+		openPositions := make(map[string][]OpenPos)
+		openPositions["LONG"] = []OpenPos{}
+		openPositions["SHORT"] = []OpenPos{}
+
+		for _, fill := range groupFills {
+			// Determine side and action
+			// We need to know if this fill is OPENING or CLOSING.
+			// In many cases, realized_pnl != 0 implies closing.
+			// But for opening trades, realized_pnl is usually 0.
+			// Side: BUY or SELL.
+
+			isBuy := strings.EqualFold(fill.Side, "BUY")
+			// isSell := strings.EqualFold(fill.Side, "SELL")
+
+			// Try to determine Position Side (LONG/SHORT)
+			// If we have access to the Order, we could check PositionSide.
+			// But here we only have Fill.
+			// Heuristic:
+			// 1. If RealizedPnL != 0, it's a CLOSE.
+			//    If BUY & PnL!=0 -> Closing SHORT.
+			//    If SELL & PnL!=0 -> Closing LONG.
+			// 2. If RealizedPnL == 0, it's likely OPEN (or closing a losing trade with 0 PnL? Unlikely exactly 0).
+			//    Actually, PnL is computed by exchange. If it's 0, it's usually Open.
+			//    If BUY & PnL==0 -> Opening LONG.
+			//    If SELL & PnL==0 -> Opening SHORT.
+
+			// Note: This heuristic works for One-Way mode and Hedge Mode if strictly separated.
+			// But in Hedge Mode, you can Open Long (Buy) and Close Short (Buy).
+			// If PnL is reliable, we use it.
+
+			var positionSide string
+			var isOpen bool
+
+			// Check if we can rely on RealizedPnL
+			// Most exchanges (Binance, Bybit) provide PnL on close.
+			if fill.RealizedPnL != 0 {
+				// Definitely closing
+				isOpen = false
+				if isBuy {
+					positionSide = "SHORT" // Buy to close Short
+				} else {
+					positionSide = "LONG" // Sell to close Long
+				}
+			} else {
+				// PnL is 0. Likely Opening.
+				// Exception: Closing a trade at breakeven.
+				// To handle this, we can look at current open positions.
+				// If we have open SHORTs and we BUY, is it opening LONG or closing SHORT?
+				// Without explicit "ReduceOnly" or "PositionSide" flag, it's ambiguous.
+				// However, the unified algorithm (trader/position_rebuild.go) assumes PnL!=0 means close.
+				// Let's stick to that for now as it's the "standard" we want to sync with.
+				isOpen = true
+				if isBuy {
+					positionSide = "LONG"
+				} else {
+					positionSide = "SHORT"
+				}
+			}
+
+			if isOpen {
+				// Add to open queue
+				openPositions[positionSide] = append(openPositions[positionSide], OpenPos{
+					Fill:         fill,
+					RemainingQty: fill.Quantity,
+				})
+			} else {
+				// Close logic
+				closeQty := fill.Quantity
+				queue := openPositions[positionSide]
+
+				matchedQtyTotal := 0.0
+				var avgEntryPrice float64
+				var firstEntryTime UnixTime
+				var totalEntryFee float64
+
+				for closeQty > 0.00000001 && len(queue) > 0 {
+					openPos := &queue[0]
+					matchQty := math.Min(closeQty, openPos.RemainingQty)
+
+					// Accumulate weighted entry price
+					avgEntryPrice += openPos.Fill.Price * matchQty
+					totalEntryFee += openPos.Fill.Commission * (matchQty / openPos.Fill.Quantity)
+					if matchedQtyTotal == 0 {
+						firstEntryTime = openPos.Fill.CreatedAt
+					}
+
+					matchedQtyTotal += matchQty
+					closeQty -= matchQty
+					openPos.RemainingQty -= matchQty
+
+					if openPos.RemainingQty <= 0.00000001 {
+						queue = queue[1:]
+					}
+				}
+
+				// Update the queue in map
+				openPositions[positionSide] = queue
+
+				// If we matched something, create a closed position record
+				if matchedQtyTotal > 0.00000001 {
+					avgEntryPrice /= matchedQtyTotal
+
+					// Create Position Record
+					newPos := &TraderPosition{
+						TraderID:           traderID,
+						ExchangeID:         fill.ExchangeID,
+						ExchangeType:       fill.ExchangeType,
+						ExchangePositionID: fmt.Sprintf("rebuild_%s_%d", fill.ExchangeTradeID, time.Now().UnixNano()), // Unique ID
+						Symbol:             symbol,
+						Side:               positionSide,
+						Quantity:           matchedQtyTotal,
+						EntryPrice:         avgEntryPrice,
+						EntryQuantity:      matchedQtyTotal,
+						EntryOrderID:       "", // Unknown if multiple
+						EntryTime:          firstEntryTime,
+						ExitPrice:          fill.Price,
+						ExitOrderID:        fill.ExchangeOrderID,
+						ExitTime:           fill.CreatedAt,
+						RealizedPnL:        fill.RealizedPnL * (matchedQtyTotal / fill.Quantity), // Pro-rate PnL if partial match (though usually 1:1)
+						Fee:                fill.Commission*(matchedQtyTotal/fill.Quantity) + totalEntryFee,
+						Leverage:           1, // Unknown from fills usually
+						Status:             "CLOSED",
+						CloseReason:        "rebuild_manual",
+						Source:             "rebuild",
+						CreatedAt:          fill.CreatedAt,
+						UpdatedAt:          UnixTime(time.Now().UTC().UnixMilli()),
+					}
+
+					if err := pb.positionStore.db.Create(newPos).Error; err != nil {
+						logger.Errorf("    Error creating position: %v", err)
+					} else {
+						rebuiltCount++
+					}
+				}
+			}
+		}
+	}
+
+	return rebuiltCount, nil
+}

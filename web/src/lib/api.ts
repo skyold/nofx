@@ -129,6 +129,14 @@ export const api = {
     return result.data!
   },
 
+  async rebuildPositions(traderId: string): Promise<{ message: string; count: number }> {
+    const result = await httpClient.post<{ message: string; count: number }>(
+      `${API_BASE}/traders/${traderId}/rebuild-positions`
+    )
+    if (!result.success) throw new Error('重建仓位失败')
+    return result.data!
+  },
+
   async updateTraderPrompt(
     traderId: string,
     customPrompt: string
