@@ -185,6 +185,23 @@ func (t *OKXTrader) SyncOrdersFromOKX(traderID string, exchangeID string, exchan
 			continue // Order already exists, skip
 		}
 
+		// [CRITICAL] Determine the correct TraderID
+		// 1. Try to find existing parent order in local DB using OrderID
+		// 2. If found, use its TraderID (this handles cases where multiple traders share an account)
+		// 3. If not found, fallback to the current sync task's TraderID
+		finalTraderID := traderID
+		if trade.OrderID != "" {
+			parentOrder, err := orderStore.GetOrderByExchangeID(exchangeID, trade.OrderID)
+			if err == nil && parentOrder != nil && parentOrder.TraderID != "" {
+				finalTraderID = parentOrder.TraderID
+				// Log if we're syncing a trade that belongs to a different trader than the sync context
+				if finalTraderID != traderID {
+					logger.Infof("  ℹ️  Trade %s (Order %s) belongs to trader %s (not current sync context %s), respecting local DB record",
+						trade.TradeID, trade.OrderID, finalTraderID, traderID)
+				}
+			}
+		}
+
 		// Normalize symbol
 		symbol := market.Normalize(trade.Symbol)
 
@@ -200,7 +217,7 @@ func (t *OKXTrader) SyncOrdersFromOKX(traderID string, exchangeID string, exchan
 		// Create order record - use UTC time in milliseconds to avoid timezone issues
 		execTimeMs := trade.ExecTime.UTC().UnixMilli()
 		orderRecord := &store.TraderOrder{
-			TraderID:        traderID,
+			TraderID:        finalTraderID,
 			ExchangeID:      exchangeID,   // UUID
 			ExchangeType:    exchangeType, // Exchange type
 			ExchangeOrderID: trade.TradeID,
@@ -228,7 +245,7 @@ func (t *OKXTrader) SyncOrdersFromOKX(traderID string, exchangeID string, exchan
 
 		// Create fill record - use UTC time in milliseconds
 		fillRecord := &store.TraderFill{
-			TraderID:        traderID,
+			TraderID:        finalTraderID,
 			ExchangeID:      exchangeID,   // UUID
 			ExchangeType:    exchangeType, // Exchange type
 			OrderID:         orderRecord.ID,
@@ -252,7 +269,7 @@ func (t *OKXTrader) SyncOrdersFromOKX(traderID string, exchangeID string, exchan
 
 		// Create/update position record using PositionBuilder
 		if err := posBuilder.ProcessTrade(
-			traderID, exchangeID, exchangeType,
+			finalTraderID, exchangeID, exchangeType,
 			symbol, positionSide, trade.OrderAction,
 			trade.FillQtyBase, trade.FillPrice, trade.Fee, 0, // No per-trade PnL from OKX
 			execTimeMs, trade.TradeID,

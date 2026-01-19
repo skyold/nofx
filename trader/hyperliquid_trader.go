@@ -2056,6 +2056,7 @@ func (t *HyperliquidTrader) GetTrades(startTime time.Time, limit int) ([]TradeRe
 		// Hyperliquid uses one-way mode, so PositionSide is "BOTH"
 		trade := TradeRecord{
 			TradeID:      strconv.FormatInt(fill.Tid, 10),
+			OrderID:      strconv.FormatInt(fill.Oid, 10), // Add OrderID
 			Symbol:       fill.Coin,
 			Side:         side,
 			PositionSide: "BOTH", // Hyperliquid doesn't have hedge mode

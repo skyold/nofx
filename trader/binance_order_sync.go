@@ -228,8 +228,23 @@ func (t *FuturesTrader) SyncOrdersFromBinance(traderID string, exchangeID string
 			exchangeOrderID = trade.TradeID
 		}
 
+		// [CRITICAL] Determine the correct TraderID
+		// 1. Try to find existing order in local DB
+		// 2. If found, use its TraderID (this handles cases where multiple traders share an account)
+		// 3. If not found, fallback to the current sync task's TraderID
+		finalTraderID := traderID
+		existingOrder, err := orderStore.GetOrderByExchangeID(exchangeID, exchangeOrderID)
+		if err == nil && existingOrder != nil && existingOrder.TraderID != "" {
+			finalTraderID = existingOrder.TraderID
+			// Log if we're syncing a trade that belongs to a different trader than the sync context
+			if finalTraderID != traderID {
+				logger.Infof("  ℹ️  Trade %s belongs to trader %s (not current sync context %s), respecting local DB record",
+					trade.TradeID, finalTraderID, traderID)
+			}
+		}
+
 		orderRecord := &store.TraderOrder{
-			TraderID:        traderID,
+			TraderID:        finalTraderID,
 			ExchangeID:      exchangeID,
 			ExchangeType:    exchangeType,
 			ExchangeOrderID: exchangeOrderID,
@@ -262,7 +277,7 @@ func (t *FuturesTrader) SyncOrdersFromBinance(traderID string, exchangeID string
 
 		// Create fill record - use Unix milliseconds UTC
 		fillRecord := &store.TraderFill{
-			TraderID:        traderID,
+			TraderID:        finalTraderID,
 			ExchangeID:      exchangeID,
 			ExchangeType:    exchangeType,
 			OrderID:         orderRecord.ID,
@@ -286,7 +301,7 @@ func (t *FuturesTrader) SyncOrdersFromBinance(traderID string, exchangeID string
 
 		// Create/update position record using PositionBuilder
 		if err := posBuilder.ProcessTrade(
-			traderID, exchangeID, exchangeType,
+			finalTraderID, exchangeID, exchangeType,
 			symbol, positionSide, orderAction,
 			trade.Quantity, trade.Price, trade.Fee, trade.RealizedPnL,
 			tradeTimeMs, exchangeOrderID,
