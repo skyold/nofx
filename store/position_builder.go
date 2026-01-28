@@ -381,39 +381,18 @@ func (pb *PositionBuilder) RebuildFromFills(traderID string, orderStore *OrderSt
 		openPositions["LONG"] = []OpenPos{}
 		openPositions["SHORT"] = []OpenPos{}
 
-		for _, fill := range groupFills {
+		for i := 0; i < len(groupFills); i++ {
+			fill := groupFills[i]
+
 			// Determine side and action
-			// We need to know if this fill is OPENING or CLOSING.
-			// In many cases, realized_pnl != 0 implies closing.
-			// But for opening trades, realized_pnl is usually 0.
-			// Side: BUY or SELL.
-
 			isBuy := strings.EqualFold(fill.Side, "BUY")
-			// isSell := strings.EqualFold(fill.Side, "SELL")
-
-			// Try to determine Position Side (LONG/SHORT)
-			// If we have access to the Order, we could check PositionSide.
-			// But here we only have Fill.
-			// Heuristic:
-			// 1. If RealizedPnL != 0, it's a CLOSE.
-			//    If BUY & PnL!=0 -> Closing SHORT.
-			//    If SELL & PnL!=0 -> Closing LONG.
-			// 2. If RealizedPnL == 0, it's likely OPEN (or closing a losing trade with 0 PnL? Unlikely exactly 0).
-			//    Actually, PnL is computed by exchange. If it's 0, it's usually Open.
-			//    If BUY & PnL==0 -> Opening LONG.
-			//    If SELL & PnL==0 -> Opening SHORT.
-
-			// Note: This heuristic works for One-Way mode and Hedge Mode if strictly separated.
-			// But in Hedge Mode, you can Open Long (Buy) and Close Short (Buy).
-			// If PnL is reliable, we use it.
 
 			var positionSide string
 			var isOpen bool
 
-			// Check if we can rely on RealizedPnL
-			// Most exchanges (Binance, Bybit) provide PnL on close.
+			// Logic to determine if fill is Open or Close
+			// We check RealizedPnL first.
 			if fill.RealizedPnL != 0 {
-				// Definitely closing
 				isOpen = false
 				if isBuy {
 					positionSide = "SHORT" // Buy to close Short
@@ -421,18 +400,83 @@ func (pb *PositionBuilder) RebuildFromFills(traderID string, orderStore *OrderSt
 					positionSide = "LONG" // Sell to close Long
 				}
 			} else {
-				// PnL is 0. Likely Opening.
-				// Exception: Closing a trade at breakeven.
-				// To handle this, we can look at current open positions.
-				// If we have open SHORTs and we BUY, is it opening LONG or closing SHORT?
-				// Without explicit "ReduceOnly" or "PositionSide" flag, it's ambiguous.
-				// However, the unified algorithm (trader/position_rebuild.go) assumes PnL!=0 means close.
-				// Let's stick to that for now as it's the "standard" we want to sync with.
 				isOpen = true
 				if isBuy {
 					positionSide = "LONG"
 				} else {
 					positionSide = "SHORT"
+				}
+			}
+
+			// Aggregation Logic for Close Fills
+			// If this is a Close fill and has an OrderID, try to merge with subsequent close fills of the same order
+			if !isOpen && fill.ExchangeOrderID != "" {
+				totalQty := fill.Quantity
+				totalVal := fill.Price * fill.Quantity
+				totalFee := fill.Commission
+				totalPnL := fill.RealizedPnL
+
+				mergedCount := 0
+
+				for j := i + 1; j < len(groupFills); j++ {
+					nextFill := groupFills[j]
+
+					// Check if next fill belongs to same order
+					if nextFill.ExchangeOrderID != fill.ExchangeOrderID || nextFill.Side != fill.Side {
+						break
+					}
+
+					// Check if next fill is also a Close (consistent intent)
+					var nextIsOpen bool
+					if nextFill.RealizedPnL != 0 {
+						nextIsOpen = false
+					} else {
+						// Heuristic: if PnL is 0 but same OrderID as a Close fill, assume it's part of the Close
+						// (unless it's a Flip Order, but we assume same OrderID = same intent for simplicity here)
+						// For safety, let's require consistent direction implied by Side/PnL logic?
+						// Actually, if PnL=0, our logic above says isOpen=true.
+						// If we have Mixed PnL (some 0, some not) in same OrderID, it's tricky.
+						// But usually for "Repair History" we see all PnL != 0.
+						// Let's strictly aggregate only if next is also determined as Close, OR if we relax the rule.
+						// Given the user issue is "fragmented history", let's aggregate if Side matches.
+						nextIsOpen = true // Default
+					}
+
+					// Re-evaluate nextIsOpen based on strict PnL check
+					if nextFill.RealizedPnL == 0 {
+						nextIsOpen = true
+					} else {
+						nextIsOpen = false
+					}
+
+					// Only aggregate if next is also Close
+					if nextIsOpen {
+						break
+					}
+
+					// Merge
+					totalQty += nextFill.Quantity
+					totalVal += nextFill.Price * nextFill.Quantity
+					totalFee += nextFill.Commission
+					totalPnL += nextFill.RealizedPnL
+
+					// Use the latest time for the merged fill
+					fill.CreatedAt = nextFill.CreatedAt
+					fill.ExchangeTradeID = nextFill.ExchangeTradeID // Use last trade ID? Or keep first? Doesn't matter much for display.
+
+					mergedCount++
+				}
+
+				if mergedCount > 0 {
+					fill.Quantity = totalQty
+					fill.Price = totalVal / totalQty
+					fill.Commission = totalFee
+					fill.RealizedPnL = totalPnL
+
+					// Skip consumed fills
+					i += mergedCount
+
+					logger.Infof("  [REBUILD] Aggregated %d fills for Order %s (Total Qty: %.4f)", mergedCount+1, fill.ExchangeOrderID, fill.Quantity)
 				}
 			}
 

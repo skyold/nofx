@@ -1059,34 +1059,8 @@ func (e *StrategyEngine) BuildSystemPrompt(accountEquity float64, variant string
 
 	// 8. Custom Prompt
 	if e.config.CustomPrompt != "" {
-		if e.chaosManager.IsChaosMode(e.config.CustomPrompt) {
-			// In Chaos mode, we delegate the prompt building to ChaosManager
-			// However, we still want to keep the base structure if needed, or replace it entirely.
-			// Currently, ChaosManager.BuildPrompt appends to the existing prompt or replaces parts of it.
-			// But here we are at the end of the prompt.
-			// Let's modify how we integrate Chaos Prompt.
-
-			// Ideally, Chaos Mode should take over the whole prompt generation or significant parts of it.
-			// For now, to be minimally invasive, we append the Chaos specific instructions here.
-			// The Variant logic is inside BuildPrompt.
-			chaosPrompt := e.chaosManager.BuildPrompt(
-				e.config.PromptVariant,
-				e.config.CustomPrompt,
-				func(sb *strings.Builder) {
-					e.writeAvailableIndicators(sb)
-				},
-			)
-			// Since ChaosManager.BuildPrompt returns a full section or significant part,
-			// and here we are just appending to 'sb'.
-			// The current implementation of ChaosManager.BuildPrompt seems to return a string that
-			// includes "## Profile ..." and the custom prompt content.
-			// We should just append it.
-			sb.WriteString("\n\n")
-			sb.WriteString(chaosPrompt)
-		} else {
-			sb.WriteString("# 📌 Personalized Trading Strategy\n\n")
-			sb.WriteString(e.config.CustomPrompt)
-		}
+		sb.WriteString("# 📌 Personalized Trading Strategy\n\n")
+		sb.WriteString(e.config.CustomPrompt)
 		sb.WriteString("\n\n")
 		sb.WriteString("Note: The above personalized strategy is a supplement to the basic rules and cannot violate the basic risk control principles.\n")
 	}
@@ -2011,7 +1985,7 @@ func compactArrayOpen(s string) string {
 // ============================================================================
 
 func (e *StrategyEngine) validateDecisions(decisions []Decision, accountEquity float64, btcEthLeverage, altcoinLeverage int, btcEthPosRatio, altcoinPosRatio float64) error {
-	for i:= range decisions {
+	for i := range decisions {
 		if err := e.validateDecision(&decisions[i], accountEquity, btcEthLeverage, altcoinLeverage, btcEthPosRatio, altcoinPosRatio); err != nil {
 			return fmt.Errorf("decision #%d validation failed: %w", i+1, err)
 		}
