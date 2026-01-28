@@ -55,7 +55,7 @@ func (m *Manager) IsChaosMode(customPrompt string) bool {
 }
 
 // BuildPrompt builds the system prompt for Chaos mode
-func (m *Manager) BuildPrompt(variant string, customPrompt string, availableIndicatorsFunc func(*strings.Builder)) string {
+func (m *Manager) BuildPrompt(variant string, customPrompt string, availableIndicatorsFunc func(*strings.Builder), outputFormatFunc func() string) string {
 	var sb strings.Builder
 
 	// 1. Available Indicators (Context)
@@ -172,6 +172,59 @@ func (m *Manager) BuildPrompt(variant string, customPrompt string, availableIndi
 	}
 
 	sb.WriteString(finalPrompt)
+	sb.WriteString("\n\n")
+
+	// 5. Enforce Output Format (Append at the end to override any loose instructions)
+	// If outputFormatFunc is provided, use it (backward compatibility or override)
+	// Otherwise, use internal GetOutputSchema
+	if outputFormatFunc != nil {
+		sb.WriteString(outputFormatFunc())
+	} else {
+		sb.WriteString(m.GetOutputSchema())
+	}
+
+	return sb.String()
+}
+
+// GetOutputSchema returns the strictly typed Output Schema for Chaos Mode
+func (m *Manager) GetOutputSchema() string {
+	var sb strings.Builder
+
+	sb.WriteString("# Output Format (Strictly Follow)\n\n")
+	sb.WriteString("**Must use XML tags <reasoning> and <decision> to separate chain of thought and decision JSON.**\n\n")
+	sb.WriteString("## Structure Definition (TypeScript Interface)\n\n")
+	sb.WriteString("```typescript\n")
+	sb.WriteString("interface DecisionResponse {\n")
+	sb.WriteString("  reasoning: string; // Your chain of thought analysis\n")
+	sb.WriteString("  decisions: Decision[];\n")
+	sb.WriteString("}\n\n")
+
+	sb.WriteString("// Chaos Mode: Risk-Based Sizing\n")
+	sb.WriteString("interface Decision {\n")
+	sb.WriteString("  symbol: string;\n")
+	sb.WriteString("  action: \"open_long\" | \"open_short\" | \"close_long\" | \"close_short\" | \"hold\" | \"wait\";\n")
+	sb.WriteString("  // Fields required for open_* actions:\n")
+	sb.WriteString("  leverage?: number;\n")
+	sb.WriteString("  entry?: number;      // Entry price for risk calculation\n")
+	sb.WriteString("  stop_loss?: number;  // Absolute price level\n")
+	sb.WriteString("  take_profit?: number;\n")
+	sb.WriteString("  risk_r?: number;     // Risk Multiplier (e.g. 0.5 means 0.5R). DO NOT output position_size_usd.\n")
+	sb.WriteString("  confidence?: number; // 0-100\n")
+	sb.WriteString("  // Optional / Informational:\n")
+	sb.WriteString("  risk_usd?: number;   // Estimated dollar risk\n")
+	sb.WriteString("}\n")
+	sb.WriteString("```\n\n")
+
+	sb.WriteString("## Output Example\n\n")
+	sb.WriteString("<reasoning>\n...analysis...\n</reasoning>\n")
+	sb.WriteString("<decision>\n")
+	sb.WriteString("```json\n")
+	sb.WriteString("[\n")
+	sb.WriteString("  {\"symbol\": \"BTCUSDT\", \"action\": \"open_short\", \"leverage\": 5, \"entry\": 98000, \"stop_loss\": 99000, \"take_profit\": 95000, \"risk_r\": 0.5, \"confidence\": 85},\n")
+	sb.WriteString("  {\"symbol\": \"ETHUSDT\", \"action\": \"wait\"}\n")
+	sb.WriteString("]\n")
+	sb.WriteString("```\n")
+	sb.WriteString("</decision>\n\n")
 
 	return sb.String()
 }

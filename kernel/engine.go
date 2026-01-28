@@ -932,7 +932,7 @@ func (e *StrategyEngine) BuildSystemPrompt(accountEquity float64, variant string
 	if e.chaosManager.IsChaosMode(e.config.CustomPrompt) {
 		return e.chaosManager.BuildPrompt(variant, e.config.CustomPrompt, func(sb *strings.Builder) {
 			e.writeAvailableIndicators(sb)
-		})
+		}, nil)
 	}
 
 	// 0. Data Dictionary & Schema (ensure AI understands all fields)
