@@ -266,7 +266,12 @@ risk_r 只能由 opportunity_score 决定：
 Section 5：Execution & Interface Layer (执行与接口层)
 ━━━━━━━━━━━━━━━━━━━━
 
-5.1 <reasoning> (决策审计记录): 
+5.1 输出协议: 必须且仅允许输出包裹在 XML 标签内的 JSON 如果不是 json的输出将被认为是违规而被抛弃
+    格式如下：
+    <reasoning>{...}</reasoning>
+    <decision>[...]</decision>
+
+5.2 <reasoning> (决策审计记录): 
 
 {
   "prompt_meta": {
@@ -373,7 +378,26 @@ position_authorization 的判断逻辑来源于 Section 2.5，
 执行层与下游系统不得重新推导、弱化或覆盖该判断。
 
 
-5.2 执行约束（Strict Constraints）
+5.3 <decision> (原子化指令):
+[
+  {
+    "symbol": "BTCUSDT",
+    "action": "open_long | open_short | close_long | close_short | hold | wait",
+    "leverage": 5,
+    "entry": 63000,
+    "stop_loss": 62500,
+    "take_profit": 68000,
+    "risk_r": 0.5,
+    "confidence": 85,
+    "risk_usd": 250
+  },
+  {
+    "symbol": "ETHUSDT",
+    "action": "hold | wait"
+  }
+]
+
+5.4 执行约束（Strict Constraints）
 1.	计算顺序强制：必须先确定 SL → 计算 R:R → 映射 Base Risk → 应用风险约束 → 输出 final risk_r
 2.	零冗余：对于 action 为 wait / hold / close 的 symbol，只允许输出 symbol 与 action 字段
 3.	风险熔断：若 system_risk_flag = true，任何新开仓 open_* 指令均视为协议违规
