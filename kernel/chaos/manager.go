@@ -302,7 +302,9 @@ func (m *Manager) ValidateDecision(
 		return fmt.Errorf("%s: leverage must be provided for Chaos decision", decisionInfo())
 	}
 	if d.Leverage > maxLeverage {
-		return fmt.Errorf("%s: leverage %dx exceeds limit %dx for %s", decisionInfo(), d.Leverage, maxLeverage, d.Symbol)
+		logger.Infof("⚠️  [Leverage Adjustment] %s leverage %dx exceeds limit %dx for %s, adjusting to %dx",
+			decisionInfo(), d.Leverage, maxLeverage, d.Symbol, maxLeverage)
+		d.Leverage = maxLeverage
 	}
 
 	if d.PositionSizeUSD > maxPosValue {
