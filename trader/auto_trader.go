@@ -1079,10 +1079,21 @@ func (at *AutoTrader) executeOpenLongWithRecord(decision *kernel.Decision, actio
 	}
 	logger.Infof("  💰 Balance Check: Available=%.2f, Equity=%.2f, DecisionSize=%.2f", availableBalance, equity, decision.PositionSizeUSD)
 
+	// [RISK CONTROL] Get minimum position size first
+	minSize := 12.0
+	if at.config.StrategyConfig != nil && at.config.StrategyConfig.RiskControl.MinPositionSize > 0 {
+		minSize = at.config.StrategyConfig.RiskControl.MinPositionSize
+	}
+
 	// [CODE ENFORCED] Position Value Ratio Check: position_value <= equity × ratio
 	adjustedPositionSize, wasCapped := at.enforcePositionValueRatio(decision.PositionSizeUSD, equity, decision.Symbol)
 	if wasCapped {
 		decision.PositionSizeUSD = adjustedPositionSize
+		// Check if capped position is below minimum
+		if decision.PositionSizeUSD < minSize {
+			return fmt.Errorf("❌ [RISK CONTROL] Position capped by equity limit (Equity: %.2f) resulted in %.2f USDT, which is below minimum %.2f USDT",
+				equity, decision.PositionSizeUSD, minSize)
+		}
 	}
 
 	// ⚠️ Auto-adjust position size if insufficient margin
@@ -1090,12 +1101,6 @@ func (at *AutoTrader) executeOpenLongWithRecord(decision *kernel.Decision, actio
 	//        = positionSize * (1.01/leverage + 0.001)
 	marginFactor := 1.01/float64(decision.Leverage) + 0.001
 	maxAffordablePositionSize := availableBalance / marginFactor
-
-	// [RISK CONTROL] Check if funds are sufficient for minimum position size
-	minSize := 12.0
-	if at.config.StrategyConfig != nil && at.config.StrategyConfig.RiskControl.MinPositionSize > 0 {
-		minSize = at.config.StrategyConfig.RiskControl.MinPositionSize
-	}
 
 	if maxAffordablePositionSize < minSize {
 		return fmt.Errorf("❌ [INSUFFICIENT FUNDS] Max affordable position %.2f USDT < min %.2f USDT. Calculation: AvailableBalance=%.4f / MarginFactor=%.4f (Leverage=%d)",
@@ -1207,10 +1212,21 @@ func (at *AutoTrader) executeOpenShortWithRecord(decision *kernel.Decision, acti
 		equity = availableBalance // Fallback to available balance
 	}
 
+	// [RISK CONTROL] Get minimum position size first
+	minSize := 12.0
+	if at.config.StrategyConfig != nil && at.config.StrategyConfig.RiskControl.MinPositionSize > 0 {
+		minSize = at.config.StrategyConfig.RiskControl.MinPositionSize
+	}
+
 	// [CODE ENFORCED] Position Value Ratio Check: position_value <= equity × ratio
 	adjustedPositionSize, wasCapped := at.enforcePositionValueRatio(decision.PositionSizeUSD, equity, decision.Symbol)
 	if wasCapped {
 		decision.PositionSizeUSD = adjustedPositionSize
+		// Check if capped position is below minimum
+		if decision.PositionSizeUSD < minSize {
+			return fmt.Errorf("❌ [RISK CONTROL] Position capped by equity limit (Equity: %.2f) resulted in %.2f USDT, which is below minimum %.2f USDT",
+				equity, decision.PositionSizeUSD, minSize)
+		}
 	}
 
 	// ⚠️ Auto-adjust position size if insufficient margin
@@ -1218,12 +1234,6 @@ func (at *AutoTrader) executeOpenShortWithRecord(decision *kernel.Decision, acti
 	//        = positionSize * (1.01/leverage + 0.001)
 	marginFactor := 1.01/float64(decision.Leverage) + 0.001
 	maxAffordablePositionSize := availableBalance / marginFactor
-
-	// [RISK CONTROL] Check if funds are sufficient for minimum position size
-	minSize := 12.0
-	if at.config.StrategyConfig != nil && at.config.StrategyConfig.RiskControl.MinPositionSize > 0 {
-		minSize = at.config.StrategyConfig.RiskControl.MinPositionSize
-	}
 
 	if maxAffordablePositionSize < minSize {
 		return fmt.Errorf("❌ [INSUFFICIENT FUNDS] Max affordable position %.2f USDT < min %.2f USDT. Calculation: AvailableBalance=%.4f / MarginFactor=%.4f (Leverage=%d)",
@@ -2332,6 +2342,9 @@ func (at *AutoTrader) enforceMinPositionSize(positionSizeUSD float64) error {
 	}
 
 	if positionSizeUSD < minSize {
+		if positionSizeUSD == 0 {
+			return fmt.Errorf("❌ [RISK CONTROL] Position size is 0.00 USDT (below minimum %.2f USDT). This usually means the strategy decided not to allocate funds or calculation failed.", minSize)
+		}
 		return fmt.Errorf("❌ [RISK CONTROL] Position %.2f USDT below minimum (%.2f USDT)", positionSizeUSD, minSize)
 	}
 	return nil

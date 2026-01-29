@@ -221,6 +221,7 @@ export function DecisionCard({ decision, language, onSymbolClick }: DecisionCard
   const [showSystemPrompt, setShowSystemPrompt] = useState(false)
   const [showInputPrompt, setShowInputPrompt] = useState(false)
   const [showCoT, setShowCoT] = useState(false)
+  const [showDecisionJson, setShowDecisionJson] = useState(false)
 
   // Copy text to clipboard
   const copyToClipboard = async (text: string, label: string) => {
@@ -443,6 +444,41 @@ export function DecisionCard({ decision, language, onSymbolClick }: DecisionCard
                 }}
               >
                 {decision.cot_trace}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Decision JSON */}
+        {decision.decision_json && (
+          <div>
+            <button
+              onClick={() => setShowDecisionJson(!showDecisionJson)}
+              className="flex items-center gap-2 text-sm transition-colors w-full justify-between p-2 rounded hover:bg-white/5"
+            >
+              <div className="flex items-center gap-2">
+                <span className="text-base">📝</span>
+                <span className="font-semibold" style={{ color: '#0ECB81' }}>
+                  {language === 'zh' ? 'AI 决策' : 'AI Decision'}
+                </span>
+              </div>
+              <span
+                className="text-xs px-2 py-0.5 rounded"
+                style={{ background: 'rgba(14, 203, 129, 0.15)', color: '#0ECB81' }}
+              >
+                {showDecisionJson ? t('collapse', language) : t('expand', language)}
+              </span>
+            </button>
+            {showDecisionJson && (
+              <div
+                className="mt-2 rounded-lg p-4 text-sm font-mono whitespace-pre-wrap max-h-96 overflow-y-auto"
+                style={{
+                  background: '#0B0E11',
+                  border: '1px solid #2B3139',
+                  color: '#EAECEF',
+                }}
+              >
+                {decision.decision_json}
               </div>
             )}
           </div>

@@ -2245,7 +2245,7 @@ export const translations = {
       noHistory: '暂无历史仓位',
       noHistoryDesc: '平仓后的仓位记录将显示在此处',
       showingPositions: '显示 {count} / {total} 条记录',
-      totalPnL: '总盈亏',
+      totalPnL: '总已实现盈亏',
       // Stats
       totalTrades: '总交易次数',
       winLoss: '盈利: {win} / 亏损: {loss}',

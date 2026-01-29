@@ -391,9 +391,7 @@ func (s *PositionStore) GetFullStats(traderID string) (*TraderStats, error) {
 	if err := s.db.Model(&TraderPosition{}).Where("trader_id = ? AND status = ?", traderID, "CLOSED").Count(&count).Error; err != nil {
 		return nil, err
 	}
-	if count == 0 {
-		return stats, nil
-	}
+	// Do not return early if count == 0, because we still need to check OPEN positions for partial realized PnL
 
 	var positions []TraderPosition
 	err := s.db.Where("trader_id = ? AND status = ?", traderID, "CLOSED").
@@ -420,6 +418,19 @@ func (s *PositionStore) GetFullStats(traderID string) (*TraderStats, error) {
 			totalLoss += -pos.RealizedPnL
 		}
 	}
+
+	// Add realized PnL and fee from OPEN positions (partial closes)
+	var openStats struct {
+		TotalPnL float64
+		TotalFee float64
+	}
+	s.db.Model(&TraderPosition{}).
+		Select("COALESCE(SUM(realized_pnl), 0) as total_pnl, COALESCE(SUM(fee), 0) as total_fee").
+		Where("trader_id = ? AND status = ?", traderID, "OPEN").
+		Scan(&openStats)
+
+	stats.TotalPnL += openStats.TotalPnL
+	stats.TotalFee += openStats.TotalFee
 
 	if stats.TotalTrades > 0 {
 		stats.WinRate = float64(stats.WinTrades) / float64(stats.TotalTrades) * 100
