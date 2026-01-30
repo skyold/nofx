@@ -113,10 +113,11 @@ func (e *ChaosEngine) Execute(ctx *kernel.Context, mcpClient mcp.AIClient) (*ker
 	riskConfig := e.config.RiskControl
 
 	for i, d := range decisions {
-		// Validate using Chaos Manager
-		if err := e.manager.ValidateDecision(&d, ctx.Account.TotalEquity,
+		// Validate using Chaos Manager and get calculated PositionSizeUSD
+		positionSizeUSD, err := e.manager.ValidateDecision(&d, ctx.Account.TotalEquity,
 			riskConfig.BTCETHMaxLeverage, riskConfig.AltcoinMaxLeverage,
-			riskConfig.BTCETHMaxPositionValueRatio, riskConfig.AltcoinMaxPositionValueRatio); err != nil {
+			riskConfig.BTCETHMaxPositionValueRatio, riskConfig.AltcoinMaxPositionValueRatio)
+		if err != nil {
 			return fullDecision, fmt.Errorf("decision #%d validation failed: %w", i+1, err)
 		}
 
@@ -125,14 +126,16 @@ func (e *ChaosEngine) Execute(ctx *kernel.Context, mcpClient mcp.AIClient) (*ker
 			Symbol:          d.Symbol,
 			Action:          d.Action,
 			Leverage:        d.Leverage,
-			PositionSizeUSD: d.PositionSizeUSD,
+			PositionSizeUSD: positionSizeUSD, // Use the calculated value returned by ValidateDecision
 			StopLoss:        d.StopLoss,
 			TakeProfit:      d.TakeProfit,
 			Confidence:      d.Confidence,
 			RiskUSD:         d.RiskUSD,
-			Reasoning:       d.Reasoning,
-			EntryPrice:      d.EntryPrice,
-			RiskR:           d.RiskR,
+			// Reasoning removed from chaos.Decision as per new design
+			// AI Reasoning is now captured at the top level via CoTTrace
+			Reasoning:  "",
+			EntryPrice: d.EntryPrice,
+			RiskR:      d.RiskR,
 		}
 		kernelDecisions = append(kernelDecisions, kd)
 	}

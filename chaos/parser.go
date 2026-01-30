@@ -21,17 +21,15 @@ var (
 
 // RawDecision represents the structure expected from AI JSON
 type RawDecision struct {
-	Symbol          string  `json:"symbol"`
-	Action          string  `json:"action"`
-	Leverage        int     `json:"leverage,omitempty"`
-	PositionSizeUSD float64 `json:"position_size_usd,omitempty"`
-	StopLoss        float64 `json:"stop_loss,omitempty"`
-	TakeProfit      float64 `json:"take_profit,omitempty"`
-	Confidence      int     `json:"confidence,omitempty"`
-	RiskUSD         float64 `json:"risk_usd,omitempty"`
-	Reasoning       string  `json:"reasoning"`
-	EntryPrice      float64 `json:"entry,omitempty"`
-	RiskR           float64 `json:"risk_r,omitempty"`
+	Symbol     string  `json:"symbol"`
+	Action     string  `json:"action"`
+	Leverage   int     `json:"leverage,omitempty"`
+	StopLoss   float64 `json:"stop_loss,omitempty"`
+	TakeProfit float64 `json:"take_profit,omitempty"`
+	Confidence int     `json:"confidence,omitempty"`
+	RiskUSD    float64 `json:"risk_usd,omitempty"`
+	EntryPrice float64 `json:"entry,omitempty"`
+	RiskR      float64 `json:"risk_r,omitempty"`
 }
 
 func extractDecisions(response string) ([]Decision, error) {
@@ -112,17 +110,15 @@ func convertDecisions(raw []RawDecision) []Decision {
 	decisions := make([]Decision, len(raw))
 	for i, r := range raw {
 		decisions[i] = Decision{
-			Symbol:          r.Symbol,
-			Action:          r.Action,
-			Leverage:        r.Leverage,
-			PositionSizeUSD: r.PositionSizeUSD,
-			StopLoss:        r.StopLoss,
-			TakeProfit:      r.TakeProfit,
-			EntryPrice:      r.EntryPrice,
-			RiskR:           r.RiskR,
-			RiskUSD:         r.RiskUSD,
-			Confidence:      r.Confidence,
-			Reasoning:       r.Reasoning,
+			Symbol:     r.Symbol,
+			Action:     r.Action,
+			Leverage:   r.Leverage,
+			StopLoss:   r.StopLoss,
+			TakeProfit: r.TakeProfit,
+			EntryPrice: r.EntryPrice,
+			RiskR:      r.RiskR,
+			RiskUSD:    r.RiskUSD,
+			Confidence: r.Confidence,
 		}
 	}
 	return decisions
