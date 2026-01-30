@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"nofx/kernel/chaos"
 	"nofx/logger"
 	"nofx/market"
 	"nofx/mcp"
@@ -207,7 +206,7 @@ type OIDeltaData struct {
 type StrategyEngine struct {
 	config       *store.StrategyConfig
 	nofxosClient *nofxos.Client
-	chaosManager *chaos.Manager
+	// chaosManager *chaos.Manager // Removed embedded chaos manager
 }
 
 // NewStrategyEngine creates strategy execution engine
@@ -222,7 +221,7 @@ func NewStrategyEngine(config *store.StrategyConfig) *StrategyEngine {
 	return &StrategyEngine{
 		config:       config,
 		nofxosClient: client,
-		chaosManager: chaos.NewManager(),
+		// chaosManager: chaos.NewManager(),
 	}
 }
 
@@ -930,11 +929,11 @@ func (e *StrategyEngine) BuildSystemPrompt(accountEquity float64, variant string
 	promptSections := e.config.PromptSections
 
 	// 生成 Chaos 策略的 System Prompt 不影响原有策略
-	if e.chaosManager.IsChaosMode(e.config.CustomPrompt) {
-		return e.chaosManager.BuildPrompt(variant, e.config.CustomPrompt, func(sb *strings.Builder) {
-			e.writeAvailableIndicators(sb)
-		})
-	}
+	// if e.chaosManager.IsChaosMode(e.config.CustomPrompt) {
+	// 	return e.chaosManager.BuildPrompt(variant, e.config.CustomPrompt, func(sb *strings.Builder) {
+	// 		e.writeAvailableIndicators(sb)
+	// 	})
+	// }
 
 	// 0. Data Dictionary & Schema (ensure AI understands all fields)
 	lang := e.GetLanguage()
@@ -1803,13 +1802,7 @@ func formatFloatSlice(values []float64) string {
 // ============================================================================
 
 func (e *StrategyEngine) parseFullDecisionResponse(aiResponse string, accountEquity float64, btcEthLeverage, altcoinLeverage int, btcEthPosRatio, altcoinPosRatio float64) (*FullDecision, error) {
-
-	var cotTrace string
-	if e.chaosManager.IsChaosMode(e.config.CustomPrompt) {
-		cotTrace = e.chaosManager.ExtractReasoning(aiResponse)
-	} else {
-		cotTrace = extractCoTTrace(aiResponse)
-	}
+	cotTrace := extractCoTTrace(aiResponse)
 
 	decisions, err := extractDecisions(aiResponse)
 	if err != nil {
@@ -2005,22 +1998,9 @@ func (e *StrategyEngine) validateDecision(d *Decision, accountEquity float64, bt
 	}
 
 	if d.RiskR > 0 {
-		// 这是一个 Chaos 策略的决策，需要验证 Chaos 相关参数
-		// Decision
-		// ├─ RiskR > 0  → auditChaosDecision (新体系)
-		// └─ RiskR = 0  → validateDecision (旧体系)
-		chaosD := &chaos.Decision{
-			Symbol:          d.Symbol,
-			Action:          d.Action,
-			Leverage:        d.Leverage,
-			PositionSizeUSD: d.PositionSizeUSD,
-			StopLoss:        d.StopLoss,
-			TakeProfit:      d.TakeProfit,
-			EntryPrice:      d.EntryPrice,
-			RiskR:           d.RiskR,
-			Confidence:      d.Confidence,
-		}
-		return e.chaosManager.ValidateDecision(chaosD, accountEquity, btcEthLeverage, altcoinLeverage, btcEthPosRatio, altcoinPosRatio)
+		// 这是一个 Chaos 策略的决策，但是 kernel 已经不再支持 chaos 策略的验证
+		// Chaos 策略现在通过 chaos standalone 模式运行
+		return fmt.Errorf("chaos strategy validation is not supported in kernel engine, please use chaos standalone mode")
 	}
 
 	if !validActions[d.Action] {
