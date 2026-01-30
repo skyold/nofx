@@ -471,6 +471,13 @@ func (at *AutoTrader) Run() error {
 	return nil
 }
 
+// IsRunning checks if trader is running
+func (at *AutoTrader) IsRunning() bool {
+	at.isRunningMutex.RLock()
+	defer at.isRunningMutex.RUnlock()
+	return at.isRunning
+}
+
 // Stop stops the automatic trading
 func (at *AutoTrader) Stop() {
 	at.isRunningMutex.Lock()
