@@ -276,7 +276,19 @@ func (m *Manager) ValidateDecision(
 		// Back-calculate RiskR for consistency in logging/audit
 		// RiskAmount = Equity * 1% * RiskR => RiskR = RiskAmount / (Equity * 0.01)
 		if accountEquity > 0 {
-			d.RiskR = riskAmount / (accountEquity * baseRiskPercent)
+			calculatedRiskR := riskAmount / (accountEquity * baseRiskPercent)
+			if calculatedRiskR > MaxRiskR {
+				logger.Infof("⚠️  [RiskR Adjustment] Calculated RiskR %.2f (from RiskUSD %.2f) exceeds limit %.2f, clamping RiskUSD",
+					calculatedRiskR, d.RiskUSD, MaxRiskR)
+
+				// Clamp risk amount to MaxRiskR limit
+				// MaxRiskAmount = Equity * 1% * MaxRiskR
+				maxRiskAmount := accountEquity * baseRiskPercent * MaxRiskR
+				riskAmount = maxRiskAmount
+				d.RiskR = MaxRiskR
+			} else {
+				d.RiskR = calculatedRiskR
+			}
 		}
 	} else {
 		riskAmount = accountEquity * baseRiskPercent * d.RiskR

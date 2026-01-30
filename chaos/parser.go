@@ -40,10 +40,10 @@ func extractDecisions(response string) ([]Decision, error) {
 	var jsonPart string
 	if match := reDecisionTag.FindStringSubmatch(s); match != nil && len(match) > 1 {
 		jsonPart = strings.TrimSpace(match[1])
-		logger.Infof("✓ Extracted JSON using <decision> tag")
+		logger.Infof("✓ [Format Audit] Extracted JSON using <decision> tag")
 	} else {
 		jsonPart = s
-		logger.Infof("⚠️  <decision> tag not found, searching JSON in full text")
+		logger.Warnf("⚠️  [Format Audit] <decision> tag not found, triggering fallback search")
 	}
 
 	jsonPart = fixMissingQuotes(jsonPart)
@@ -64,7 +64,7 @@ func extractDecisions(response string) ([]Decision, error) {
 
 	jsonContent := strings.TrimSpace(reJSONArray.FindString(jsonPart))
 	if jsonContent == "" {
-		logger.Infof("⚠️  [SafeFallback] AI didn't output JSON decision, entering safe wait mode")
+		logger.Warnf("⚠️  [Format Audit] AI didn't output JSON decision, entering safe wait mode")
 
 		cotSummary := jsonPart
 		if len(cotSummary) > 240 {

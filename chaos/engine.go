@@ -90,9 +90,23 @@ func (e *ChaosEngine) Execute(ctx *kernel.Context, mcpClient mcp.AIClient) (*ker
 	}
 
 	// 4. Parse & Validate
+	// Step 4.1: Format Audit (Is the JSON valid? Does it follow the schema?)
 	decisions, err := extractDecisions(aiResponse)
+	if err != nil {
+		fullDecision := &kernel.FullDecision{
+			SystemPrompt:        systemPrompt,
+			UserPrompt:          userPrompt,
+			CoTTrace:            e.manager.ExtractReasoning(aiResponse),
+			RawResponse:         aiResponse,
+			Timestamp:           time.Now(),
+			AIRequestDurationMs: aiCallDuration.Milliseconds(),
+			Decisions:           []kernel.Decision{},
+		}
+		// If extraction failed completely, return error
+		return fullDecision, fmt.Errorf("format audit failed (JSON parsing error): %w", err)
+	}
 
-	// Prepare result
+	// Prepare result with initial parsed decisions
 	fullDecision := &kernel.FullDecision{
 		SystemPrompt:        systemPrompt,
 		UserPrompt:          userPrompt,
@@ -102,13 +116,7 @@ func (e *ChaosEngine) Execute(ctx *kernel.Context, mcpClient mcp.AIClient) (*ker
 		AIRequestDurationMs: aiCallDuration.Milliseconds(),
 	}
 
-	if err != nil {
-		fullDecision.Decisions = []kernel.Decision{}
-		// If extraction failed completely, return error
-		return fullDecision, fmt.Errorf("failed to parse decisions: %w", err)
-	}
-
-	// Validate and Convert
+	// Step 4.2: Content Audit (Risk Control & Business Logic)
 	var kernelDecisions []kernel.Decision
 	riskConfig := e.config.RiskControl
 
@@ -117,11 +125,14 @@ func (e *ChaosEngine) Execute(ctx *kernel.Context, mcpClient mcp.AIClient) (*ker
 		positionSizeUSD, err := e.manager.ValidateDecision(&d, ctx.Account.TotalEquity,
 			riskConfig.BTCETHMaxLeverage, riskConfig.AltcoinMaxLeverage,
 			riskConfig.BTCETHMaxPositionValueRatio, riskConfig.AltcoinMaxPositionValueRatio)
+
 		if err != nil {
-			return fullDecision, fmt.Errorf("decision #%d validation failed: %w", i+1, err)
+			// If content audit fails, we should log it but we might still want to return the raw response
+			// for debugging in Chaos Studio. However, for AutoTrader, this is a failure.
+			return fullDecision, fmt.Errorf("content audit failed for decision #%d: %w", i+1, err)
 		}
 
-		// Map to kernel.Decision
+		// Map to kernel.Decision (Processed Result)
 		kd := kernel.Decision{
 			Symbol:          d.Symbol,
 			Action:          d.Action,
