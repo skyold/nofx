@@ -150,7 +150,7 @@ type Decision struct {
 	// Common parameters
 	Confidence int     `json:"confidence,omitempty"` // Confidence level (0-100)
 	RiskUSD    float64 `json:"risk_usd,omitempty"`   // Maximum USD risk
-	Reasoning  string  `json:"reasoning"`
+	Reasoning  string  `json:"reasoning,omitempty"`
 
 	// Chaos 策略新加的参数，但保持 decision 结构体的兼容性所以不移除原因的元素
 	EntryPrice float64 `json:"entry,omitempty"`  // Entry price for risk calculation (json tag "entry" to match prompt example)
@@ -159,13 +159,14 @@ type Decision struct {
 
 // FullDecision AI's complete decision (including chain of thought)
 type FullDecision struct {
-	SystemPrompt        string     `json:"system_prompt"`
-	UserPrompt          string     `json:"user_prompt"`
-	CoTTrace            string     `json:"cot_trace"`
-	Decisions           []Decision `json:"decisions"`
-	RawResponse         string     `json:"raw_response"`
-	Timestamp           time.Time  `json:"timestamp"`
-	AIRequestDurationMs int64      `json:"ai_request_duration_ms,omitempty"`
+	SystemPrompt        string      `json:"system_prompt"`
+	UserPrompt          string      `json:"user_prompt"`
+	CoTTrace            string      `json:"cot_trace"`
+	Decisions           []Decision  `json:"decisions"`
+	RawDecisions        interface{} `json:"raw_decisions,omitempty"` // For audit: Raw LLM output structure before processing
+	RawResponse         string      `json:"raw_response"`
+	Timestamp           time.Time   `json:"timestamp"`
+	AIRequestDurationMs int64       `json:"ai_request_duration_ms,omitempty"`
 }
 
 // QuantData quantitative data structure (fund flow, position changes, price changes)

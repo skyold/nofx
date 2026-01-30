@@ -112,6 +112,7 @@ func (e *ChaosEngine) Execute(ctx *kernel.Context, mcpClient mcp.AIClient) (*ker
 		UserPrompt:          userPrompt,
 		CoTTrace:            e.manager.ExtractReasoning(aiResponse),
 		RawResponse:         aiResponse,
+		RawDecisions:        decisions, // Store raw decisions for audit visibility
 		Timestamp:           time.Now(),
 		AIRequestDurationMs: aiCallDuration.Milliseconds(),
 	}
