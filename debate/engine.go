@@ -620,10 +620,10 @@ func (e *DebateEngine) getParticipantVote(
 	// If no valid decisions, create a default one with session symbol
 	if primaryDecision == nil && session.Symbol != "" {
 		primaryDecision = &store.DebateDecision{
-			Action:     "hold",
-			Symbol:     session.Symbol,
-			Confidence: 50,
-			Leverage:   5,
+			Action:      "hold",
+			Symbol:      session.Symbol,
+			Confidence:  50,
+			Leverage:    5,
 			PositionPct: 0.2,
 		}
 		decisions = []*store.DebateDecision{primaryDecision}
@@ -977,14 +977,29 @@ func (e *DebateEngine) ExecuteConsensus(sessionID string, executor TraderExecuto
 
 	// Use available_balance for position sizing (not total equity)
 	availableBalance := 0.0
-	if avail, ok := balance["available_balance"].(float64); ok && avail > 0 {
+
+	// Try camelCase first (common in Go structs/maps from Binance)
+	if avail, ok := balance["availableBalance"].(float64); ok && avail > 0 {
+		availableBalance = avail
+		logger.Infof("Using availableBalance: %.2f", availableBalance)
+	} else if avail, ok := balance["available_balance"].(float64); ok && avail > 0 {
+		// Try snake_case (standard JSON)
 		availableBalance = avail
 		logger.Infof("Using available_balance: %.2f", availableBalance)
+	} else if eq, ok := balance["totalEquity"].(float64); ok && eq > 0 {
+		// Fallback to totalEquity
+		availableBalance = eq
+		logger.Infof("Fallback to totalEquity: %.2f", availableBalance)
 	} else if eq, ok := balance["total_equity"].(float64); ok && eq > 0 {
-		// Fallback to total_equity if available_balance not found
+		// Fallback to total_equity
 		availableBalance = eq
 		logger.Infof("Fallback to total_equity: %.2f", availableBalance)
+	} else if wallet, ok := balance["totalWalletBalance"].(float64); ok && wallet > 0 {
+		// Fallback to totalWalletBalance
+		availableBalance = wallet
+		logger.Infof("Fallback to totalWalletBalance: %.2f", availableBalance)
 	} else if wallet, ok := balance["wallet_balance"].(float64); ok && wallet > 0 {
+		// Fallback to wallet_balance
 		availableBalance = wallet
 		logger.Infof("Fallback to wallet_balance: %.2f", availableBalance)
 	}
@@ -1105,16 +1120,16 @@ func parseDecisions(response string) ([]*store.DebateDecision, int) {
 	if jsonContent != "" {
 		// Intermediate struct to handle both field naming conventions
 		type rawDecision struct {
-			Action       string  `json:"action"`
-			Symbol       string  `json:"symbol"`
-			Confidence   int     `json:"confidence"`
-			Leverage     int     `json:"leverage"`
-			PositionPct  float64 `json:"position_pct"`
-			StopLoss     float64 `json:"stop_loss"`
-			TakeProfit   float64 `json:"take_profit"`
-			StopLossPct  float64 `json:"stop_loss_pct"`  // Alternative field name
+			Action        string  `json:"action"`
+			Symbol        string  `json:"symbol"`
+			Confidence    int     `json:"confidence"`
+			Leverage      int     `json:"leverage"`
+			PositionPct   float64 `json:"position_pct"`
+			StopLoss      float64 `json:"stop_loss"`
+			TakeProfit    float64 `json:"take_profit"`
+			StopLossPct   float64 `json:"stop_loss_pct"`   // Alternative field name
 			TakeProfitPct float64 `json:"take_profit_pct"` // Alternative field name
-			Reasoning    string  `json:"reasoning"`
+			Reasoning     string  `json:"reasoning"`
 		}
 
 		convertRawDecision := func(r *rawDecision) *store.DebateDecision {

@@ -13,4 +13,5 @@ type Decision struct {
 	RiskR           float64
 	RiskUSD         float64 // Optional: explicit risk amount in USD
 	Confidence      int
+	Reasoning       string
 }

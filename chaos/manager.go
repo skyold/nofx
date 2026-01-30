@@ -137,22 +137,6 @@ func (m *Manager) BuildPrompt(variant string, customPrompt string, availableIndi
 	}
 
 	// 4. Append Profile Header (Optional, for transparency if not in "none" mode)
-	// If the user wants complete control, they can use "none".
-	// Otherwise, we can still prepend the profile summary for context if desired,
-	// BUT since the user asked to "keep template unchanged" and use replacement,
-	// we should rely primarily on the replacement.
-	// However, the original code appended a huge block.
-	// If the user's custom prompt *doesn't* have placeholders, the old behavior was to append.
-	// To maintain backward compatibility while enabling the new feature:
-	// If we detect placeholders were replaced, we assume the prompt is a template and don't append.
-	// If no placeholders were found/replaced, we might fallback to appending (or just doing nothing if v="none").
-
-	// Let's implement a clean strategy:
-	// If variant is "none", we just return the (possibly replaced) custom prompt.
-	// If variant is NOT "none", we check if replacement happened.
-	// If replacement happened, we trust the template.
-	// If replacement DID NOT happen (legacy prompt), we append the profile info as before.
-
 	if v != "none" && v != "" {
 		hasPlaceholders := strings.Contains(customPrompt, "{PRIMARY_TIMEFRAME}")
 

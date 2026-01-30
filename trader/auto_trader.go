@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"nofx/chaos"
 	"nofx/experience"
 	"nofx/kernel"
 	"nofx/logger"
@@ -556,11 +557,29 @@ func (at *AutoTrader) runCycle() error {
 
 	// Use configured prompt variant (default to "balanced" if empty for backward compatibility)
 	variant := "balanced"
-	if at.config.StrategyConfig != nil && at.config.StrategyConfig.PromptVariant != "" {
-		variant = at.config.StrategyConfig.PromptVariant
+	customPrompt := ""
+	if at.config.StrategyConfig != nil {
+		if at.config.StrategyConfig.PromptVariant != "" {
+			variant = at.config.StrategyConfig.PromptVariant
+		}
+		customPrompt = at.config.StrategyConfig.CustomPrompt
 	}
+	ctx.PromptVariant = variant
 
-	aiDecision, err := kernel.GetFullDecisionWithStrategy(ctx, at.mcpClient, at.strategyEngine, variant)
+	var aiDecision *kernel.FullDecision
+
+	// Check for Chaos Mode (Plan B)
+	// We use chaos.Manager to detect if this is a Chaos prompt
+	chaosManager := chaos.NewManager()
+	usePlanB := true // Toggle this to switch between Plan A (kernel-embedded) and Plan B (standalone)
+
+	if chaosManager.IsChaosMode(customPrompt) && usePlanB {
+		logger.Infof("🌀 Chaos Mode detected! Using ChaosEngine (Plan B)")
+		chaosEngine := chaos.NewChaosEngine(at.config.StrategyConfig)
+		aiDecision, err = chaosEngine.Execute(ctx, at.mcpClient)
+	} else {
+		aiDecision, err = kernel.GetFullDecisionWithStrategy(ctx, at.mcpClient, at.strategyEngine, variant)
+	}
 
 	if aiDecision != nil && aiDecision.AIRequestDurationMs > 0 {
 		record.AIRequestDurationMs = aiDecision.AIRequestDurationMs
