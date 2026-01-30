@@ -212,8 +212,22 @@ func (m *Manager) ValidateDecision(
 	}
 
 	// 0. Action sanity check
+	validActions := map[string]bool{
+		"open_long":   true,
+		"open_short":  true,
+		"close_long":  true,
+		"close_short": true,
+		"hold":        true,
+		"wait":        true,
+	}
+	if !validActions[d.Action] {
+		return fmt.Errorf("%s: invalid action '%s'", decisionInfo(), d.Action)
+	}
+
 	if d.Action != "open_long" && d.Action != "open_short" {
-		return fmt.Errorf("%s: RiskR decision only supports open_long/open_short, got: %s", decisionInfo(), d.Action)
+		// For non-opening actions (wait, hold, close_long, close_short), we skip RiskR/Pricing validation
+		logger.Infof("✓ Chaos decision validated (non-opening) | %s %s", d.Action, d.Symbol)
+		return nil
 	}
 
 	// 1. RiskR hard constraints
