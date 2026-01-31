@@ -75,43 +75,133 @@ Section 2 — Opportunity Classification Layer
 
 ━━━━━━━━━━━━━━━━━━━━
 Section 2.5：Position Management (Existing Positions Only)
+【最小修正版 · CN】
 ━━━━━━━━━━━━━━━━━━━━
 
-仅适用于已有持仓的品种。
-不创造新机会，
-不影响评分，
-不修改 risk_r。
+2.5.0 适用范围
 
-主要决策时间框架 = PRIMARY_TIMEFRAME。
+本层仅适用于“当前已存在持仓”的 symbol。
+本层：
+• 不创建新交易机会
+• 不参与评分
+• 不修改 risk_r
+• 不影响 Section 2 / Section 3 的任何判断
 
-激活条件（全部需要）：
-• 品种有活跃持仓
+主要决策时间框架 = PRIMARY_TIMEFRAME
+
+
+2.5.1 激活条件（全部必须满足）
+
+以下条件必须同时满足，否则本层不输出任何结果：
+
+• symbol 当前存在有效仓位
 • reasoning.position_authorization.status = AUTHORIZED
 
-否则 → 本部分无输出。
 
-评估原则：
-• 无盈亏，无回撤百分比，无保本逻辑
-• 仅基于过去的价格行为、时间消耗、结构完整性
-• 无未来预测
+2.5.2 评估原则（收敛修正）
 
-内部失效检查：
+评估仅允许基于以下信息：
 
-TIME_DECAY (时间衰减):
-• 经过时间 ≥ PRIMARY_TIMEFRAME 的 TIME_DECAY_N 个周期
-• 未达到 take_profit
-• 无明确的方向性结构进展
-• 价格仍在原始结构范围内震荡
+• 已发生的价格行为
+• 已消耗的时间
+• 原始入场时所依据的结构是否仍然成立
 
-STRUCTURE_WEAKENING (结构弱化):
-• ≥2 个连续收盘价未能守住原始结构关键水平
-• ATR 扩大但方向效率仍然疲软
+严格禁止：
 
-如果触发任意一项：
-• position_authorization.status = REVOKED
-• 内部原因映射（强制）：
-  TIME_DECAY → REGIME_INVALIDATED
-  STRUCTURE_WEAKENING → STRUCTURE_BROKEN
+• 使用盈亏（PnL / 浮盈 / 浮亏）作为依据
+• 使用“动能不足 / 推进乏力 / 未继续上涨或下跌”等主观效率判断
+• 使用 EMA 附近震荡、未破坏结构的横盘行为作为失效依据
+• 引入任何未来预测或假设性判断
+
+
+2.5.3 内部失效判定（唯一允许的两类）
+
+━━━━━━━━━━━━━━━━━━━━
+A) TIME_DECAY（时间衰减｜结构未失效）
+━━━━━━━━━━━━━━━━━━━━
+
+用于识别：结构仍然存在，但在合理时间内未产生结果。
+
+触发条件（必须全部满足）：
+
+• 已经过 ≥ TIME_DECAY_N 个 PRIMARY_TIMEFRAME 周期
+• take_profit 尚未触及
+• 价格始终运行在原始结构定义范围内
+• 未出现新的、清晰的顺向结构推进
+
+判定结果：
+
+status = REVOKED
+revocation_reason = REGIME_INVALIDATED
+
+说明：
+• TIME_DECAY ≠ 结构被破坏
+• TIME_DECAY 是耐心耗尽，而不是判断错误
+• 不得升级为 STRUCTURE_BROKEN
+
+
+━━━━━━━━━━━━━━━━━━━━
+B) STRUCTURE_WEAKENING（结构弱化｜结构被破坏）
+━━━━━━━━━━━━━━━━━━━━
+
+仅用于识别：原始入场结构已经被事实性否定。
+
+触发条件（必须同时满足）：
+
+1) ≥2 个连续 PRIMARY_TIMEFRAME 收盘价
+   未能守住原始结构的关键失效价位（Key Invalidation Level）
+
+2) 上述失守行为明确否定了原始入场假设
+   （例如区间下沿反转被有效击穿并确认，或回撤深度破坏趋势结构）
+
+仅当以上两个条件同时成立，
+才允许判定为 STRUCTURE_WEAKENING。
+
+判定结果：
+
+status = REVOKED
+revocation_reason = STRUCTURE_BROKEN
+
+明确禁止：
+
+• 仅因价格横盘或震荡
+• 仅因动能减弱
+• 仅因价格回到 EMA20 / EMA50 附近
+• 仅因价格未延续预期方向
+
+→ 不得触发 STRUCTURE_BROKEN
+
+
+2.5.4 显式排除项（防误杀条款）
+
+以下情况明确不构成任何撤销授权的理由：
+
+• 盈利仓位进入横盘整理
+• 盈利回吐但未触及原始结构失效点
+• 价格在原始结构内部反复震荡
+• 动能减弱但结构边界未被破坏
+
+上述情况：
+• status 必须保持 AUTHORIZED
+• 不得输出 position_authorization 撤销结果
+
+
+2.5.5 输出约束（保持不变）
+
+• 若未触发 TIME_DECAY 或 STRUCTURE_WEAKENING
+  → 不输出 position_authorization
+
+• 若触发任一失效判定
+  → 必须输出：
+
+{
+  "symbol": "...",
+  "status": "REVOKED",
+  "revocation_reason": "REGIME_INVALIDATED | STRUCTURE_BROKEN",
+  "evidence": [
+    "仅允许已发生的、可验证的价格与结构事实"
+  ]
+}
 
 ━━━━━━━━━━━━━━━━━━━━
 Section 3：Opportunity Evaluation Layer

@@ -227,6 +227,92 @@ opportunity ≠ NO_TRADE
 NO_TRADE 是完整、正确、稳定的系统输出。
 
 ━━━━━━━━━━━━━━━━━━━━
+Section 2.5：Position Lifecycle & Exposure Control
+（仓位生命周期与风险暴露控制）
+━━━━━━━━━━━━━━━━━━━━
+
+【设计目标】
+本层仅在 symbol 已存在 active_position 时生效。
+其唯一职责是：
+- 判断当前仓位的「风险暴露是否仍被系统授权」
+- 决定是否需要降低、冻结或撤销风险暴露
+- 避免所有“仅依赖价格止损”的被动退出
+
+本层：
+- 不生成新交易机会
+- 不增加系统总风险
+- 不覆盖 Section 1 / Section 2 的裁定
+
+
+━━━━━━━━━━━━━━━━━━━━
+2.5.1 Position State Snapshot（仓位状态快照）
+━━━━━━━━━━━━━━━━━━━━
+
+当 symbol 存在 active_position 时，系统必须记录：
+
+- position_direction: LONG | SHORT
+- entry_tf: PRIMARY_TIMEFRAME
+- holding_cycles: 已持有的主决策周期数
+- unrealized_rr: 当前浮动 R
+- max_favorable_excursion (MFE)
+- max_adverse_excursion (MAE)
+
+
+━━━━━━━━━━━━━━━━━━━━
+2.5.2 Exposure Authorization Zones（风险暴露授权区）
+━━━━━━━━━━━━━━━━━━━━
+
+系统将仓位风险暴露划分为：
+
+- AUTHORIZED
+  含义：
+    当前结构与资金条件允许继续暴露风险
+
+- REDUCED
+  含义：
+    结构或时间条件开始衰减，仅允许减仓或观望
+
+- REVOKED
+  含义：
+    风险暴露不再被授权，必须触发逻辑退出流程
+
+
+━━━━━━━━━━━━━━━━━━━━
+2.5.3 Exposure Reduction Triggers（风险削减触发）
+━━━━━━━━━━━━━━━━━━━━
+
+当出现以下任一事实时，允许进入 REDUCED 状态：
+
+- holding_cycles ≥ TIME_DECAY_N 且无结构延展
+- 波动率持续收缩并伴随推进失败
+- unrealized_rr ≥ TARGET_RR_1 且价格进入结构敏感区
+
+
+━━━━━━━━━━━━━━━━━━━━
+2.5.4 Forced Exposure Revocation（强制授权撤销）
+━━━━━━━━━━━━━━━━━━━━
+
+若出现以下任一情况，必须进入 REVOKED 状态：
+
+- market_regime 切换为 NO_TRADE / RANGE
+- structure_state 由 CLEAR → DEGRADED
+- higher_tf 出现明确反向结构确认
+- 连续 N 个周期无法恢复结构有效性
+
+该撤销视为「逻辑性退出授权」，不等同于止损失败。
+
+
+━━━━━━━━━━━━━━━━━━━━
+2.5.5 Output Discipline（输出纪律）
+━━━━━━━━━━━━━━━━━━━━
+
+- 本层只输出结构与授权状态判断
+- 不输出任何主观仓位建议
+- 所有授权变化必须可被 audit_path 复现
+- 本层结论将被 Section 5.2.1 直接引用，不得被执行层覆盖
+
+
+━━━━━━━━━━━━━━━━━━━━
 Section 3：Opportunity Evaluation Layer (机会评估层)
 ━━━━━━━━━━━━━━━━━━━━
 仅对 非 NO_TRADE 的 symbol 进行评分。
