@@ -23,13 +23,12 @@ var (
 type RawDecision struct {
 	Symbol     string  `json:"symbol"`
 	Action     string  `json:"action"`
-	Leverage   int     `json:"leverage,omitempty"`
-	StopLoss   float64 `json:"stop_loss,omitempty"`
-	TakeProfit float64 `json:"take_profit,omitempty"`
-	Confidence int     `json:"confidence,omitempty"`
-	RiskUSD    float64 `json:"risk_usd,omitempty"`
-	EntryPrice float64 `json:"entry,omitempty"`
-	RiskR      float64 `json:"risk_r,omitempty"`
+	Leverage   int     `json:"leverage"`
+	EntryPrice float64 `json:"entry"`
+	StopLoss   float64 `json:"stop_loss"`
+	TakeProfit float64 `json:"take_profit"`
+	RiskR      float64 `json:"risk_r"`
+	TotalScore int     `json:"total_score"`
 }
 
 func extractDecisions(response string) ([]Decision, error) {
@@ -117,8 +116,7 @@ func convertDecisions(raw []RawDecision) []Decision {
 			TakeProfit: r.TakeProfit,
 			EntryPrice: r.EntryPrice,
 			RiskR:      r.RiskR,
-			RiskUSD:    r.RiskUSD,
-			Confidence: r.Confidence,
+			Confidence: r.TotalScore,
 		}
 	}
 	return decisions

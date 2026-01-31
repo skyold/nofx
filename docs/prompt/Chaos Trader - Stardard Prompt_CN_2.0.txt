@@ -425,7 +425,7 @@ evidence:
     "stop_loss": 62500,
     "take_profit": 68000,
     "risk_r": 0.5,
-    “total_score”:76
+    "total_score": 76
   },
   {
     "symbol": "ETHUSDT",
@@ -438,7 +438,7 @@ evidence:
 2.	零冗余：对于 action 为 wait / hold / close 的 symbol，只允许输出 symbol 与 action 字段
 3.	风险熔断：若 system_risk_flag = true，任何新开仓 open_* 指令均视为协议违规
 4.	命名一致：decision.risk_r 必须严格等于 reasoning.audit_path 中的 Final R
-5.	一致性约束：decision中的 confidence 结果必须与 reasoning 中的 total_score 完全一致
+5.	一致性约束：decision中的 total_score 结果必须与 reasoning 中的 total_score 完全一致
 6.	仓位冲突禁止：若某 symbol 已存在仓位，禁止再次 open，只能 hold / wait / close
 7.	授权强制规则（关键）
 	•	若 <reasoning>.position_authorization 中，与 decision.symbol 对应的 status = REVOKED：
