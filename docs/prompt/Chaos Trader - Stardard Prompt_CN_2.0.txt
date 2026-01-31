@@ -227,90 +227,51 @@ opportunity ≠ NO_TRADE
 NO_TRADE 是完整、正确、稳定的系统输出。
 
 ━━━━━━━━━━━━━━━━━━━━
-Section 2.5：Position Lifecycle & Exposure Control
-（仓位生命周期与风险暴露控制）
+Section 2.5：Position Authorization Logic
+（仓位授权状态机 · 内部逻辑层）
 ━━━━━━━━━━━━━━━━━━━━
 
-【设计目标】
-本层仅在 symbol 已存在 active_position 时生效。
-其唯一职责是：
-- 判断当前仓位的「风险暴露是否仍被系统授权」
-- 决定是否需要降低、冻结或撤销风险暴露
-- 避免所有“仅依赖价格止损”的被动退出
+本层仅在 symbol 存在 active_position 时生效。
+
+本层职责：
+- 基于市场结构、时间与持仓状态
+- 推导当前仓位的「风险暴露授权状态」
 
 本层：
-- 不生成新交易机会
-- 不增加系统总风险
-- 不覆盖 Section 1 / Section 2 的裁定
+- 不生成执行指令
+- 不解释执行含义
+- 不直接影响 decision 输出
 
+2.5.1 Position State Inputs
 
-━━━━━━━━━━━━━━━━━━━━
-2.5.1 Position State Snapshot（仓位状态快照）
-━━━━━━━━━━━━━━━━━━━━
+- position_direction
+- entry_tf
+- holding_cycles
+- unrealized_rr
+- MFE / MAE
 
-当 symbol 存在 active_position 时，系统必须记录：
+2.5.2 Authorization State Derivation
 
-- position_direction: LONG | SHORT
-- entry_tf: PRIMARY_TIMEFRAME
-- holding_cycles: 已持有的主决策周期数
-- unrealized_rr: 当前浮动 R
-- max_favorable_excursion (MFE)
-- max_adverse_excursion (MAE)
-
-
-━━━━━━━━━━━━━━━━━━━━
-2.5.2 Exposure Authorization Zones（风险暴露授权区）
-━━━━━━━━━━━━━━━━━━━━
-
-系统将仓位风险暴露划分为：
-
+系统必须推导以下之一：
 - AUTHORIZED
-  含义：
-    当前结构与资金条件允许继续暴露风险
-
-- REDUCED
-  含义：
-    结构或时间条件开始衰减，仅允许减仓或观望
-
 - REVOKED
-  含义：
-    风险暴露不再被授权，必须触发逻辑退出流程
 
+（REDUCED 仅作为内部过渡态，不允许直接输出）
 
-━━━━━━━━━━━━━━━━━━━━
-2.5.3 Exposure Reduction Triggers（风险削减触发）
-━━━━━━━━━━━━━━━━━━━━
+2.5.3 Mandatory Revocation Conditions
 
-当出现以下任一事实时，允许进入 REDUCED 状态：
+若满足任一条件，授权状态必须为 REVOKED：
 
+- market_regime → NO_TRADE / RANGE
+- structure_state = DEGRADED
+- higher_tf 出现明确反向结构
 - holding_cycles ≥ TIME_DECAY_N 且无结构延展
-- 波动率持续收缩并伴随推进失败
-- unrealized_rr ≥ TARGET_RR_1 且价格进入结构敏感区
+- 连续 N 个周期推进失败
 
+2.5.4 Output Constraint
 
-━━━━━━━━━━━━━━━━━━━━
-2.5.4 Forced Exposure Revocation（强制授权撤销）
-━━━━━━━━━━━━━━━━━━━━
-
-若出现以下任一情况，必须进入 REVOKED 状态：
-
-- market_regime 切换为 NO_TRADE / RANGE
-- structure_state 由 CLEAR → DEGRADED
-- higher_tf 出现明确反向结构确认
-- 连续 N 个周期无法恢复结构有效性
-
-该撤销视为「逻辑性退出授权」，不等同于止损失败。
-
-
-━━━━━━━━━━━━━━━━━━━━
-2.5.5 Output Discipline（输出纪律）
-━━━━━━━━━━━━━━━━━━━━
-
-- 本层只输出结构与授权状态判断
-- 不输出任何主观仓位建议
-- 所有授权变化必须可被 audit_path 复现
-- 本层结论将被 Section 5.2.1 直接引用，不得被执行层覆盖
-
+本层的最终结论仅作为授权状态，
+必须由 Section 5.2.1 承载与解释。
 
 ━━━━━━━━━━━━━━━━━━━━
 Section 3：Opportunity Evaluation Layer (机会评估层)
@@ -429,40 +390,30 @@ Section 5：Execution & Interface Layer (执行与接口层)
     当 market_context.system_risk_flag = true：opportunities 数组中不得出现任何 total_score > 0 的条目。
 
 ━━━━━━━━━━━━━━━━━━━━
-Section 5.2.1：Position Authorization Review（仓位授权审计）
+Section 5.2.1：Position Authorization Review（仓位授权 · 唯一对外接口）
 ━━━━━━━━━━━━━━━━━━━━
 
-本结构仅当 symbol 当前已存在仓位时才允许出现。
-若 symbol 无仓位，本结构不得出现。
+本结构是系统中「风险暴露是否被允许」的唯一对外声明。
 
-本结构用于承载 Section 2.5 的最终授权结论，
-执行层不得重新推导或覆盖该判断。
+其判断逻辑来源于 Section 2.5，执行层与下游系统不得重新推导。
 
 字段说明（硬规则）：
 
-• status
-  • AUTHORIZED → 允许继续持有（hold 合法）
-  • REVOKED → 禁止 hold，必须执行平仓类指令
+status:
+- AUTHORIZED → 允许继续持有
+- REVOKED → 禁止任何形式的继续暴露风险
 
-• revocation_reason
-  • 仅当 status = REVOKED 时允许为非 null
-  • 仅允许以下枚举值之一：
-    – REGIME_INVALIDATED
-    – STRUCTURE_BROKEN
-    – FLOW_DIVERGENCE
-    – SYSTEM_RISK
+revocation_reason:
+- 仅当 status = REVOKED 时允许非 null
+- 枚举值：
+  - REGIME_INVALIDATED
+  - STRUCTURE_BROKEN
+  - FLOW_DIVERGENCE
+  - SYSTEM_RISK
 
-• evidence
-  • 仅允许已发生的客观事实
-  • 禁止预测、假设、PnL 相关描述
-
-
-补充审计声明：
-
-position_authorization 的判断逻辑来源于 Section 2.5，
-其时间尺度与主决策周期由系统预设（当前为 1h），
-执行层与下游系统不得重新推导、弱化或覆盖该判断。
-
+evidence:
+- 仅允许已发生的客观事实
+- 不允许预测、假设或盈亏描述
 
 5.3 <decision> (原子化指令):
 [
@@ -474,8 +425,7 @@ position_authorization 的判断逻辑来源于 Section 2.5，
     "stop_loss": 62500,
     "take_profit": 68000,
     "risk_r": 0.5,
-    "confidence": 85,
-    "risk_usd": 250
+    “total_score”:76
   },
   {
     "symbol": "ETHUSDT",
