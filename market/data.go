@@ -1267,6 +1267,11 @@ func Normalize(symbol string) string {
 	return symbol + "USDT"
 }
 
+// ParseFloat parses float value (exported wrapper)
+func ParseFloat(v interface{}) (float64, error) {
+	return parseFloat(v)
+}
+
 // parseFloat parses float value
 func parseFloat(v interface{}) (float64, error) {
 	switch val := v.(type) {

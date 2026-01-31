@@ -321,11 +321,202 @@ func (t *FuturesTrader) SyncOrdersFromBinance(traderID string, exchangeID string
 		logger.Infof("  ⚠️ %d symbols failed, not updating lastSyncTime to retry next time: %v", len(failedSymbols), failedSymbols)
 	}
 
+	// Step 5: [NEW] Reconcile positions with snapshot
+	// After processing all incremental trades, perform a snapshot check for all active symbols
+	// This fixes "Phantom Positions" where a close was missed or happened externally
+	// We only do this if we successfully synced trades (or if no new trades were found but we have active symbols)
+	if len(failedSymbols) == 0 {
+		t.reconcilePositions(traderID, exchangeID, exchangeType, st, symbolMap)
+	}
+
 	logger.Infof("✅ Binance order sync completed: %d new trades synced, %d skipped (already exist)", syncedCount, skippedCount)
 	return nil
 }
 
-// getPositionSymbols returns list of symbols that have active positions
+// reconcilePositions compares local OPEN positions with exchange active positions and fixes discrepancies
+func (t *FuturesTrader) reconcilePositions(traderID, exchangeID, exchangeType string, st *store.Store, relevantSymbols map[string]bool) {
+	// 1. Get ALL active positions from exchange (Snapshot)
+	exchangePositions, err := t.GetPositions()
+	if err != nil {
+		logger.Infof("  ⚠️ Failed to get exchange positions for reconciliation: %v", err)
+		return
+	}
+
+	// Map: Symbol -> Side -> Quantity
+	// Normalize symbol and side
+	type PosKey struct {
+		Symbol string
+		Side   string
+	}
+	exchangePosMap := make(map[PosKey]float64)
+
+	for _, pos := range exchangePositions {
+		symbol, _ := pos["symbol"].(string)
+		if symbol == "" {
+			continue
+		}
+
+		// Binance Futures API returns positions as list.
+		// For One-Way Mode: Side is usually "BOTH" or empty, but positionAmt can be + or -
+		// For Hedge Mode: Side is "LONG" or "SHORT"
+		// We need to normalize to our internal "LONG"/"SHORT" representation
+
+		positionAmtStr, _ := pos["positionAmt"].(string)
+		positionSide, _ := pos["positionSide"].(string) // "BOTH", "LONG", "SHORT"
+
+		qty, _ := market.ParseFloat(positionAmtStr)
+		if qty == 0 {
+			continue
+		}
+
+		symbol = market.Normalize(symbol)
+
+		var side string
+		var absQty float64
+
+		if positionSide == "LONG" {
+			side = "LONG"
+			absQty = qty
+		} else if positionSide == "SHORT" {
+			side = "SHORT"
+			absQty = -qty // API returns negative for short? Usually positive for Hedge Short, but check API.
+			// Actually Binance Hedge Mode: Short positionAmt is negative? Let's assume absolute.
+			// Wait, documentation says: "positionAmt": "-0.001" for SHORT usually.
+			// Let's take absolute value for quantity storage.
+			if absQty < 0 {
+				absQty = -absQty
+			}
+		} else {
+			// One-way mode "BOTH"
+			if qty > 0 {
+				side = "LONG"
+				absQty = qty
+			} else {
+				side = "SHORT"
+				absQty = -qty
+			}
+		}
+
+		exchangePosMap[PosKey{Symbol: symbol, Side: side}] = absQty
+	}
+
+	// 2. Get ALL local OPEN positions
+	localPositions, err := st.Position().GetOpenPositions(traderID)
+	if err != nil {
+		logger.Infof("  ⚠️ Failed to get local positions for reconciliation: %v", err)
+		return
+	}
+
+	// 3. Compare and Fix
+	positionStore := st.Position()
+	nowMs := time.Now().UTC().UnixMilli()
+
+	// A. Check for Phantom Positions (Local exists, Exchange does not or quantity mismatch)
+	for _, localPos := range localPositions {
+		// Only check symbols that we are interested in (or should we check all?)
+		// Checking all is safer to catch ghosts.
+		// But if we are in a partial sync (e.g. only syncing specific symbols), we should be careful?
+		// SyncOrdersFromBinance targets specific symbols? No, it targets "changedSymbols" but logic above discovers ALL relevant symbols.
+		// However, relevantSymbols might not cover everything if detection failed.
+		// Safest approach: Only reconcile symbols that appear in exchange snapshot OR local DB.
+		// Since we have full snapshot of exchange positions, we can trust it for ANY symbol.
+
+		key := PosKey{Symbol: localPos.Symbol, Side: localPos.Side}
+		exchangeQty, existsOnExchange := exchangePosMap[key]
+
+		if !existsOnExchange {
+			// Phantom Position! Exchange has 0, Local has > 0
+			logger.Infof("  👻 Found PHANTOM position: %s %s (Local: %.6f, Exchange: 0). Closing it.",
+				localPos.Symbol, localPos.Side, localPos.Quantity)
+
+			// Force close
+			// We don't have exit price/time from a specific trade, so we use current info or 0?
+			// Ideally we should have found the trade. If not, this is a "force sync" close.
+			err := positionStore.ClosePositionFully(
+				localPos.ID,
+				0, // Exit Price unknown
+				"force_sync_reconcile",
+				nowMs,
+				0, // PnL unknown
+				0, // Fee unknown
+				"reconcile",
+			)
+			if err != nil {
+				logger.Errorf("    Failed to close phantom position: %v", err)
+			}
+		} else {
+			// Exists on both. Check quantity.
+			diff := localPos.Quantity - exchangeQty
+			if diff < -0.000001 || diff > 0.000001 {
+				logger.Infof("  ⚖️ Quantity Mismatch for %s %s: Local %.6f != Exchange %.6f. Adjusting.",
+					localPos.Symbol, localPos.Side, localPos.Quantity, exchangeQty)
+
+				// Adjust quantity
+				// We use UpdatePositionQuantityAndPrice but with 0 price/fee difference to just set quantity?
+				// Actually UpdatePositionQuantityAndPrice adds/subtracts.
+				// Let's calculate delta.
+				// delta := exchangeQty - localPos.Quantity
+
+				// We don't want to affect Entry Price if possible, or do we?
+				// If we assume partial close happened, Entry Price stays same.
+				// If we assume partial open happened, Entry Price might change.
+				// Without trade details, safer to keep Entry Price same and just fix Quantity.
+				// But UpdatePositionQuantityAndPrice recalculates Entry Price.
+
+				// Let's use a direct update for reconciliation to avoid messing up Entry Price with 0
+				err := st.GormDB().Model(&store.TraderPosition{}).Where("id = ?", localPos.ID).
+					Updates(map[string]interface{}{
+						"quantity":   exchangeQty,
+						"updated_at": nowMs,
+						"source":     "reconcile",
+					}).Error
+
+				if err != nil {
+					logger.Errorf("    Failed to update position quantity: %v", err)
+				}
+			}
+		}
+	}
+
+	// B. Check for Missing Positions (Exchange exists, Local does not)
+	// (Optional: If we missed the OPEN trade entirely)
+	for key, qty := range exchangePosMap {
+		// Check if we already have it locally
+		found := false
+		for _, localPos := range localPositions {
+			if localPos.Symbol == key.Symbol && localPos.Side == key.Side {
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			logger.Infof("  👻 Found MISSING position: %s %s (Exchange: %.6f, Local: 0). Creating it.",
+				key.Symbol, key.Side, qty)
+
+			// Create new position
+			// We don't know Entry Price/Time. Use current market price? Or 0?
+			// Ideally fetch ticker price. For now, 0 to indicate unknown.
+			newPos := &store.TraderPosition{
+				TraderID:     traderID,
+				ExchangeID:   exchangeID,
+				ExchangeType: exchangeType,
+				Symbol:       key.Symbol,
+				Side:         key.Side,
+				Quantity:     qty,
+				EntryPrice:   0, // Unknown
+				Status:       "OPEN",
+				Source:       "reconcile",
+				CreatedAt:    store.UnixTime(nowMs),
+				UpdatedAt:    store.UnixTime(nowMs),
+			}
+			if err := positionStore.CreateOpenPosition(newPos); err != nil {
+				logger.Errorf("    Failed to create missing position: %v", err)
+			}
+		}
+	}
+}
+
 // Used as fallback when COMMISSION detection fails
 func (t *FuturesTrader) getPositionSymbols() []string {
 	positions, err := t.GetPositions()

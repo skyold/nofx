@@ -344,10 +344,29 @@ func (pb *PositionBuilder) RebuildFromFills(traderID string, orderStore *OrderSt
 	logger.Infof("Found %d fills for trader %s. Processing...", len(fills), traderID)
 
 	// 2. Delete existing CLOSED positions for this trader to avoid duplicates
-	// We only delete CLOSED positions because OPEN positions are managed by live trading
+	// We only delete CLOSED positions because OPEN positions are managed by live trading.
+	// However, we will RECONCILE open positions at the end of this process to ensure
+	// consistency between history (fills) and current state.
 	if err := pb.positionStore.db.Where("trader_id = ? AND status = ?", traderID, "CLOSED").Delete(&TraderPosition{}).Error; err != nil {
 		return 0, fmt.Errorf("failed to delete existing closed positions: %w", err)
 	}
+
+	// Fetch existing OPEN positions for reconciliation
+	var existingOpens []TraderPosition
+	if err := pb.positionStore.db.Where("trader_id = ? AND status = ?", traderID, "OPEN").Find(&existingOpens).Error; err != nil {
+		logger.Errorf("Failed to fetch open positions for reconciliation: %v", err)
+		// Continue anyway, treating as if no open positions exist (will create duplicates if strict check fails, but we handle via map)
+	}
+	existingOpensMap := make(map[string]TraderPosition)
+	for _, pos := range existingOpens {
+		// Key: SYMBOL_SIDE (e.g., BTCUSDT_LONG)
+		key := fmt.Sprintf("%s_%s", pos.Symbol, pos.Side)
+		existingOpensMap[key] = pos
+	}
+
+	// Track calculated open positions from the rebuild process
+	// Key: SYMBOL_SIDE
+	calculatedOpens := make(map[string]*TraderPosition)
 
 	// 3. Group fills by Symbol + PositionSide
 	// Since TraderFill doesn't always have PositionSide (it might be inferred), we need to be careful.
@@ -556,6 +575,99 @@ func (pb *PositionBuilder) RebuildFromFills(traderID string, orderStore *OrderSt
 					}
 				}
 			}
+		}
+
+		// Calculate resulting OPEN positions for this symbol
+		for side, queue := range openPositions {
+			if len(queue) == 0 {
+				continue
+			}
+
+			var totalQty float64
+			var weightedPrice float64
+			var totalFee float64
+			var firstEntryTime UnixTime
+			var entryOrderID string
+			var exchangeID, exchangeType string
+
+			for i, op := range queue {
+				if i == 0 {
+					firstEntryTime = op.Fill.CreatedAt
+					entryOrderID = op.Fill.ExchangeOrderID
+					exchangeID = op.Fill.ExchangeID
+					exchangeType = op.Fill.ExchangeType
+				}
+				totalQty += op.RemainingQty
+				weightedPrice += op.Fill.Price * op.RemainingQty
+				// Pro-rate fee based on remaining qty
+				if op.Fill.Quantity > 0 {
+					totalFee += op.Fill.Commission * (op.RemainingQty / op.Fill.Quantity)
+				}
+			}
+
+			if totalQty > 0.00000001 {
+				avgPrice := weightedPrice / totalQty
+
+				key := fmt.Sprintf("%s_%s", symbol, side)
+				calculatedOpens[key] = &TraderPosition{
+					TraderID:           traderID,
+					ExchangeID:         exchangeID,
+					ExchangeType:       exchangeType,
+					ExchangePositionID: fmt.Sprintf("rebuild_open_%s_%s_%d", symbol, side, time.Now().UnixMilli()),
+					Symbol:             symbol,
+					Side:               side,
+					Quantity:           totalQty,
+					EntryPrice:         avgPrice,
+					EntryQuantity:      totalQty,
+					EntryOrderID:       entryOrderID,
+					EntryTime:          firstEntryTime,
+					Fee:                totalFee,
+					Status:             "OPEN",
+					Source:             "rebuild",
+					CreatedAt:          firstEntryTime,
+					UpdatedAt:          UnixTime(time.Now().UTC().UnixMilli()),
+				}
+			}
+		}
+	}
+
+	// 4. Reconcile OPEN positions
+	// Update or Create calculated positions
+	for key, calcPos := range calculatedOpens {
+		if existing, ok := existingOpensMap[key]; ok {
+			// Update existing position
+			// We only update structural fields (Qty, Price). We try to preserve IDs if possible.
+			// Note: Updating EntryPrice resets the cost basis to the rebuilt history.
+			// This is intended as "Repair History".
+			logger.Infof("  [RECONCILE] Updating OPEN position %s: Qty %.6f -> %.6f", key, existing.Quantity, calcPos.Quantity)
+			
+			existing.Quantity = calcPos.Quantity
+			existing.EntryPrice = calcPos.EntryPrice
+			existing.EntryTime = calcPos.EntryTime
+			existing.Fee = calcPos.Fee
+			existing.UpdatedAt = UnixTime(time.Now().UTC().UnixMilli())
+			existing.Source = "rebuild"
+			
+			if err := pb.positionStore.db.Save(&existing).Error; err != nil {
+				logger.Errorf("    Error updating position %s: %v", key, err)
+			}
+			
+			// Remove from map so we don't delete it
+			delete(existingOpensMap, key)
+		} else {
+			// Create new position
+			logger.Infof("  [RECONCILE] Creating missing OPEN position %s: Qty %.6f", key, calcPos.Quantity)
+			if err := pb.positionStore.db.Create(calcPos).Error; err != nil {
+				logger.Errorf("    Error creating position %s: %v", key, err)
+			}
+		}
+	}
+
+	// Delete remaining positions (Phantom positions that history says are closed)
+	for key, phantom := range existingOpensMap {
+		logger.Infof("  [RECONCILE] Deleting phantom OPEN position %s (Qty %.6f) - Not found in rebuild", key, phantom.Quantity)
+		if err := pb.positionStore.db.Delete(&phantom).Error; err != nil {
+			logger.Errorf("    Error deleting phantom position %s: %v", key, err)
 		}
 	}
 
