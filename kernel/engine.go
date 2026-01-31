@@ -106,26 +106,25 @@ type RecentOrder struct {
 
 // Context trading context (complete information passed to AI)
 type Context struct {
-	CurrentTime        string                             `json:"current_time"`
-	RuntimeMinutes     int                                `json:"runtime_minutes"`
-	CallCount          int                                `json:"call_count"`
-	Account            AccountInfo                        `json:"account"`
-	Positions          []PositionInfo                     `json:"positions"`
-	CandidateCoins     []CandidateCoin                    `json:"candidate_coins"`
-	PromptVariant      string                             `json:"prompt_variant,omitempty"`
-	TradingStats       *TradingStats                      `json:"trading_stats,omitempty"`
-	RecentOrders       []RecentOrder                      `json:"recent_orders,omitempty"`
-	MarketDataMap      map[string]*market.Data            `json:"-"`
-	MultiTFMarket      map[string]map[string]*market.Data `json:"-"`
-	OITopDataMap       map[string]*OITopData              `json:"-"`
-	QuantDataMap       map[string]*QuantData              `json:"-"`
-	OIRankingData      *nofxos.OIRankingData              `json:"-"` // Market-wide OI ranking data
-	NetFlowRankingData *nofxos.NetFlowRankingData         `json:"-"` // Market-wide fund flow ranking data
-	PriceRankingData   *nofxos.PriceRankingData           `json:"-"` // Market-wide price gainers/losers
-	BTCETHLeverage     int                                `json:"-"`
-	AltcoinLeverage    int                                `json:"-"`
-	Timeframes         []string                           `json:"-"`
-	IsChaosMode        bool                               `json:"is_chaos_mode,omitempty"`
+	CurrentTime     string                             `json:"current_time"`
+	RuntimeMinutes  int                                `json:"runtime_minutes"`
+	CallCount       int                                `json:"call_count"`
+	Account         AccountInfo                        `json:"account"`
+	Positions       []PositionInfo                     `json:"positions"`
+	CandidateCoins  []CandidateCoin                    `json:"candidate_coins"`
+	PromptVariant   string                             `json:"prompt_variant,omitempty"`
+	TradingStats    *TradingStats                      `json:"trading_stats,omitempty"`
+	RecentOrders    []RecentOrder                      `json:"recent_orders,omitempty"`
+	MarketDataMap   map[string]*market.Data            `json:"-"`
+	MultiTFMarket   map[string]map[string]*market.Data `json:"-"`
+	OITopDataMap    map[string]*OITopData              `json:"-"`
+	QuantDataMap    map[string]*QuantData              `json:"-"`
+	OIRankingData      *nofxos.OIRankingData      `json:"-"` // Market-wide OI ranking data
+	NetFlowRankingData *nofxos.NetFlowRankingData `json:"-"` // Market-wide fund flow ranking data
+	PriceRankingData   *nofxos.PriceRankingData   `json:"-"` // Market-wide price gainers/losers
+	BTCETHLeverage     int                          `json:"-"`
+	AltcoinLeverage int                                `json:"-"`
+	Timeframes      []string                           `json:"-"`
 }
 
 // Decision AI trading decision
@@ -206,7 +205,6 @@ type OIDeltaData struct {
 type StrategyEngine struct {
 	config       *store.StrategyConfig
 	nofxosClient *nofxos.Client
-	// chaosManager *chaos.Manager // Removed embedded chaos manager
 }
 
 // NewStrategyEngine creates strategy execution engine
@@ -221,7 +219,6 @@ func NewStrategyEngine(config *store.StrategyConfig) *StrategyEngine {
 	return &StrategyEngine{
 		config:       config,
 		nofxosClient: client,
-		// chaosManager: chaos.NewManager(),
 	}
 }
 
@@ -332,6 +329,10 @@ func GetFullDecisionWithStrategy(ctx *Context, mcpClient mcp.AIClient, engine *S
 
 	return decision, nil
 }
+
+// ============================================================================
+// Market Data Fetching
+// ============================================================================
 
 // fetchMarketDataWithStrategy fetches market data using strategy config (multiple timeframes)
 func fetchMarketDataWithStrategy(ctx *Context, engine *StrategyEngine) error {
@@ -928,13 +929,6 @@ func (e *StrategyEngine) BuildSystemPrompt(accountEquity float64, variant string
 	riskControl := e.config.RiskControl
 	promptSections := e.config.PromptSections
 
-	// 生成 Chaos 策略的 System Prompt 不影响原有策略
-	// if e.chaosManager.IsChaosMode(e.config.CustomPrompt) {
-	// 	return e.chaosManager.BuildPrompt(variant, e.config.CustomPrompt, func(sb *strings.Builder) {
-	// 		e.writeAvailableIndicators(sb)
-	// 	})
-	// }
-
 	// 0. Data Dictionary & Schema (ensure AI understands all fields)
 	lang := e.GetLanguage()
 	schemaPrompt := GetSchemaPrompt(lang)
@@ -1346,7 +1340,7 @@ func (e *StrategyEngine) BuildUserPrompt(ctx *Context) string {
 	}
 
 	sb.WriteString("---\n\n")
-	//sb.WriteString("Now please analyze and output your decision (Chain of Thought + JSON)\n")
+	sb.WriteString("Now please analyze and output your decision (Chain of Thought + JSON)\n")
 
 	return sb.String()
 }

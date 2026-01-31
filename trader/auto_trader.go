@@ -36,13 +36,13 @@ type AutoTraderConfig struct {
 	BybitSecretKey string
 
 	// OKX API configuration
-	OKXAPIKey     string
-	OKXSecretKey  string
+	OKXAPIKey    string
+	OKXSecretKey string
 	OKXPassphrase string
 
 	// Bitget API configuration
-	BitgetAPIKey     string
-	BitgetSecretKey  string
+	BitgetAPIKey    string
+	BitgetSecretKey string
 	BitgetPassphrase string
 
 	// Hyperliquid configuration
@@ -104,9 +104,9 @@ type AutoTrader struct {
 	config                AutoTraderConfig
 	trader                Trader // Use Trader interface (supports multiple platforms)
 	mcpClient             mcp.AIClient
-	store                 *store.Store           // Data storage (decision records, etc.)
+	store                 *store.Store             // Data storage (decision records, etc.)
 	strategyEngine        *kernel.StrategyEngine // Strategy engine (uses strategy configuration)
-	cycleNumber           int                    // Current cycle number
+	cycleNumber           int                      // Current cycle number
 	initialBalance        float64
 	dailyPnL              float64
 	customPrompt          string // Custom trading strategy prompt
@@ -657,7 +657,10 @@ func (at *AutoTrader) runCycle() error {
 	// }
 	logger.Info()
 	logger.Info(strings.Repeat("-", 70))
-	// Sort decisions: ensure close positions first, then open positions (prevent position stacking overflow)
+	// 8. Sort decisions: ensure close positions first, then open positions (prevent position stacking overflow)
+	logger.Info(strings.Repeat("-", 70))
+
+	// 8. Sort decisions: ensure close positions first, then open positions (prevent position stacking overflow)
 	sortedDecisions := sortDecisionsByPriority(aiDecision.Decisions)
 
 	logger.Info("🔄 Execution order (optimized): Close positions first → Open positions later")
@@ -1692,7 +1695,7 @@ func (at *AutoTrader) GetAccountInfo() (map[string]interface{}, error) {
 	}, nil
 }
 
-// GetPositions gets position list (prioritizing local database for trader isolation)
+// GetPositions gets position list (for API)
 func (at *AutoTrader) GetPositions() ([]map[string]interface{}, error) {
 	var result []map[string]interface{}
 

@@ -2,15 +2,14 @@ package chaos
 
 import (
 	"fmt"
-	"strings"
-	"time"
-
-	"nofx/kernel"
+	kernel "nofx/kernel"
 	"nofx/logger"
 	"nofx/market"
 	"nofx/mcp"
 	"nofx/provider/nofxos"
 	"nofx/store"
+	"strings"
+	"time"
 )
 
 // ChaosEngine handles Chaos mode execution
@@ -91,6 +90,7 @@ func (e *ChaosEngine) Execute(ctx *kernel.Context, mcpClient mcp.AIClient) (*ker
 
 	// 4. Parse & Validate
 	// Step 4.1: Format Audit (Is the JSON valid? Does it follow the schema?)
+	// This step verifies if the LLM followed the communication protocol (JSON format, field types, etc.)
 	decisions, err := extractDecisions(aiResponse)
 	if err != nil {
 		fullDecision := &kernel.FullDecision{
@@ -118,6 +118,7 @@ func (e *ChaosEngine) Execute(ctx *kernel.Context, mcpClient mcp.AIClient) (*ker
 	}
 
 	// Step 4.2: Content Audit (Risk Control & Business Logic)
+	// This step validates the business logic (Action validity, R:R ratio) and enforces risk controls (RiskR limits)
 	var kernelDecisions []kernel.Decision
 	riskConfig := e.config.RiskControl
 
