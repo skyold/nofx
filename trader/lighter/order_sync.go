@@ -88,27 +88,22 @@ func (t *LighterTraderV2) SyncOrdersFromLighter(traderID string, exchangeID stri
 			FilledQuantity:  trade.Quantity,
 			AvgFillPrice:    trade.Price,
 			Commission:      trade.Fee,
-			FilledAt:        store.UnixTime(tradeTimeMs),
-			CreatedAt:       store.UnixTime(tradeTimeMs),
-			UpdatedAt:       store.UnixTime(tradeTimeMs),
+			FilledAt:        tradeTimeMs,
+			CreatedAt:       tradeTimeMs,
+			UpdatedAt:       tradeTimeMs,
 		}
 
-		// Insert order record (or find existing)
+		// Insert order record
 		if err := orderStore.CreateOrder(orderRecord); err != nil {
-			logger.Infof("  ⚠️ Failed to sync order %s: %v", trade.TradeID, err)
+			logger.Infof("  ⚠️ Failed to sync trade %s: %v", trade.TradeID, err)
 			continue
-		}
-
-		// Ensure status is updated to FILLED
-		if orderRecord.ID > 0 {
-			orderStore.UpdateOrderStatus(orderRecord.ID, "FILLED", trade.Quantity, trade.Price, trade.Fee)
 		}
 
 		// Create fill record - use Unix milliseconds UTC
 		fillRecord := &store.TraderFill{
 			TraderID:        traderID,
-			ExchangeID:      exchangeID,
-			ExchangeType:    exchangeType,
+			ExchangeID:      exchangeID,   // UUID
+			ExchangeType:    exchangeType, // Exchange type
 			OrderID:         orderRecord.ID,
 			ExchangeOrderID: trade.TradeID,
 			ExchangeTradeID: trade.TradeID,
@@ -118,10 +113,10 @@ func (t *LighterTraderV2) SyncOrdersFromLighter(traderID string, exchangeID stri
 			Quantity:        trade.Quantity,
 			QuoteQuantity:   trade.Price * trade.Quantity,
 			Commission:      trade.Fee,
-			CommissionAsset: "USDC", // Lighter uses USDC
+			CommissionAsset: "USDT",
 			RealizedPnL:     trade.RealizedPnL,
-			IsMaker:         false, // Lighter doesn't expose this easily in user fills, assuming taker for now
-			CreatedAt:       store.UnixTime(tradeTimeMs),
+			IsMaker:         false,
+			CreatedAt:       tradeTimeMs,
 		}
 
 		if err := orderStore.CreateFill(fillRecord); err != nil {

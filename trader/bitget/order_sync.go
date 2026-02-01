@@ -222,9 +222,9 @@ func (t *BitgetTrader) SyncOrdersFromBitget(traderID string, exchangeID string, 
 			FilledQuantity:  trade.FillQty,
 			AvgFillPrice:    trade.FillPrice,
 			Commission:      trade.Fee,
-			FilledAt:        store.UnixTime(execTimeMs),
-			CreatedAt:       store.UnixTime(execTimeMs),
-			UpdatedAt:       store.UnixTime(execTimeMs),
+			FilledAt:        execTimeMs,
+			CreatedAt:       execTimeMs,
+			UpdatedAt:       execTimeMs,
 		}
 
 		// Insert order record
@@ -250,7 +250,7 @@ func (t *BitgetTrader) SyncOrdersFromBitget(traderID string, exchangeID string, 
 			CommissionAsset: trade.FeeAsset,
 			RealizedPnL:     trade.ProfitLoss,
 			IsMaker:         false,
-			CreatedAt:       store.UnixTime(execTimeMs),
+			CreatedAt:       execTimeMs,
 		}
 
 		if err := orderStore.CreateFill(fillRecord); err != nil {

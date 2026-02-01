@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
-	"nofx/chaos"
 	"nofx/experience"
 	"nofx/kernel"
 	"nofx/logger"
@@ -44,13 +43,13 @@ type AutoTraderConfig struct {
 	BybitSecretKey string
 
 	// OKX API configuration
-	OKXAPIKey    string
-	OKXSecretKey string
+	OKXAPIKey     string
+	OKXSecretKey  string
 	OKXPassphrase string
 
 	// Bitget API configuration
-	BitgetAPIKey    string
-	BitgetSecretKey string
+	BitgetAPIKey     string
+	BitgetSecretKey  string
 	BitgetPassphrase string
 
 	// Gate API configuration
@@ -116,9 +115,9 @@ type AutoTrader struct {
 	config                AutoTraderConfig
 	trader                Trader // Use Trader interface (supports multiple platforms)
 	mcpClient             mcp.AIClient
-	store                 *store.Store             // Data storage (decision records, etc.)
+	store                 *store.Store           // Data storage (decision records, etc.)
 	strategyEngine        *kernel.StrategyEngine // Strategy engine (uses strategy configuration)
-	cycleNumber           int                      // Current cycle number
+	cycleNumber           int                    // Current cycle number
 	initialBalance        float64
 	dailyPnL              float64
 	customPrompt          string // Custom trading strategy prompt
@@ -454,10 +453,20 @@ func (at *AutoTrader) Run() error {
 		}
 	}
 
+	// Check if this is a chaos strategy
+	isChaosStrategy := at.IsChaosStrategy()
+	if isChaosStrategy {
+		logger.Infof("🌀 [%s] Chaos trading strategy detected (Plan B)", at.name)
+	}
+
 	// Execute immediately on first run
 	if isGridStrategy {
 		if err := at.RunGridCycle(); err != nil {
 			logger.Infof("❌ Grid execution failed: %v", err)
+		}
+	} else if isChaosStrategy {
+		if err := at.RunChaosCycle(); err != nil {
+			logger.Infof("❌ Chaos execution failed: %v", err)
 		}
 	} else {
 		if err := at.runCycle(); err != nil {
@@ -479,6 +488,10 @@ func (at *AutoTrader) Run() error {
 			if isGridStrategy {
 				if err := at.RunGridCycle(); err != nil {
 					logger.Infof("❌ Grid execution failed: %v", err)
+				}
+			} else if isChaosStrategy {
+				if err := at.RunChaosCycle(); err != nil {
+					logger.Infof("❌ Chaos execution failed: %v", err)
 				}
 			} else {
 				if err := at.runCycle(); err != nil {
@@ -587,29 +600,15 @@ func (at *AutoTrader) runCycle() error {
 
 	// Use configured prompt variant (default to "balanced" if empty for backward compatibility)
 	variant := "balanced"
-	customPrompt := ""
 	if at.config.StrategyConfig != nil {
 		if at.config.StrategyConfig.PromptVariant != "" {
 			variant = at.config.StrategyConfig.PromptVariant
 		}
-		customPrompt = at.config.StrategyConfig.CustomPrompt
 	}
 	ctx.PromptVariant = variant
 
 	var aiDecision *kernel.FullDecision
-
-	// Check for Chaos Mode (Plan B)
-	// We use chaos.Manager to detect if this is a Chaos prompt
-	chaosManager := chaos.NewManager()
-	usePlanB := true // Toggle this to switch between Plan A (kernel-embedded) and Plan B (standalone)
-
-	if chaosManager.IsChaosMode(customPrompt) && usePlanB {
-		logger.Infof("🌀 Chaos Mode detected! Using ChaosEngine (Plan B)")
-		chaosEngine := chaos.NewChaosEngine(at.config.StrategyConfig)
-		aiDecision, err = chaosEngine.Execute(ctx, at.mcpClient)
-	} else {
-		aiDecision, err = kernel.GetFullDecisionWithStrategy(ctx, at.mcpClient, at.strategyEngine, variant)
-	}
+	aiDecision, err = kernel.GetFullDecisionWithStrategy(ctx, at.mcpClient, at.strategyEngine, variant)
 
 	if aiDecision != nil && aiDecision.AIRequestDurationMs > 0 {
 		record.AIRequestDurationMs = aiDecision.AIRequestDurationMs
@@ -624,7 +623,7 @@ func (at *AutoTrader) runCycle() error {
 		record.InputPrompt = aiDecision.UserPrompt
 		record.CoTTrace = aiDecision.CoTTrace
 		record.RawResponse = aiDecision.RawResponse // Save raw AI response for debugging
-		
+
 		// Prefer RawDecisions (Chaos mode) for DecisionJSON to preserve original structure (e.g. total_score)
 		if aiDecision.RawDecisions != nil {
 			decisionJSON, _ := json.MarshalIndent(aiDecision.RawDecisions, "", "  ")
