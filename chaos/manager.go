@@ -263,7 +263,7 @@ func (m *Manager) ValidateDecision(
 
 	riskRewardRatio := reward / risk
 	if riskRewardRatio < 1 {
-		return 0, fmt.Errorf("%s: Chaos decision requires R:R ≥ 1 (got %.2f). Params: Entry=%.2f, SL=%.2f, TP=%.2f, Risk=%.2f, Reward=%.2f",
+		return 0, fmt.Errorf("%s: Chaos decision requires R:R ≥ 1 (got %.4f). Params: Entry=%.4f, SL=%.4f, TP=%.4f, Risk=%.4f, Reward=%.4f",
 			decisionInfo(), riskRewardRatio, d.EntryPrice, d.StopLoss, d.TakeProfit, risk, reward)
 	}
 

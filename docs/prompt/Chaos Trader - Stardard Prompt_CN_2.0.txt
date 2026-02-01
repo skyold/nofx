@@ -288,7 +288,7 @@ Section 3：Opportunity Evaluation Layer (机会评估层)
 	•	必须给出明确、价格级 stop_loss（单一价格）
 	•	必须给出明确、价格级 take_profit（单一价格）
 	•	必须显式计算 R:R
-	•	若 R:R < 1:2 → 总分 = 0
+	•	若 R:R < 1.0 → 总分 = 0
 	•	若 stop_loss 或 take_profit 仅以“区间 / 上沿 / 下沿 / 附近”等模糊方式描述 → 总分 = 0
 Structural Validity 的评分只能基于“已明确给出的 SL / TP”
 
