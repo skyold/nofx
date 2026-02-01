@@ -435,7 +435,7 @@ evidence:
 
 5.4 执行约束（Strict Constraints）
 1.	计算顺序强制：必须先确定 SL → 计算 R:R → 映射 Base Risk → 应用风险约束 → 输出 final risk_r
-2.	零冗余：对于 action 为 wait / hold / close 的 symbol，只允许输出 symbol 与 action 字段
+2.	零冗余：对于 action 为 wait / hold / close_long / close_short 的 symbol，只允许输出 symbol 与 action 字段
 3.	风险熔断：若 system_risk_flag = true，任何新开仓 open_* 指令均视为协议违规
 4.	命名一致：decision.risk_r 必须严格等于 reasoning.audit_path 中的 Final R
 5.	一致性约束：decision中的 total_score 结果必须与 reasoning 中的 total_score 完全一致

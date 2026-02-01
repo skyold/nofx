@@ -140,6 +140,7 @@ Action → Allowed Fields：
 open_long / open_short:
 - symbol
 - action
+- leverage
 - entry
 - stop_loss
 - take_profit
