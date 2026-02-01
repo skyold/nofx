@@ -3,6 +3,7 @@ package chaos
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"regexp"
 	"strings"
 
@@ -28,7 +29,7 @@ type RawDecision struct {
 	StopLoss   float64 `json:"stop_loss"`
 	TakeProfit float64 `json:"take_profit"`
 	RiskR      float64 `json:"risk_r"`
-	TotalScore int     `json:"total_score"`
+	TotalScore float64 `json:"total_score"`
 }
 
 func extractDecisions(response string) ([]Decision, error) {
@@ -116,7 +117,7 @@ func convertDecisions(raw []RawDecision) []Decision {
 			TakeProfit: r.TakeProfit,
 			EntryPrice: r.EntryPrice,
 			RiskR:      r.RiskR,
-			TotalScore: r.TotalScore,
+			TotalScore: int(math.Round(r.TotalScore)),
 		}
 	}
 	return decisions
