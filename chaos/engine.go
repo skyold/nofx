@@ -142,8 +142,7 @@ func (e *ChaosEngine) Execute(ctx *kernel.Context, mcpClient mcp.AIClient) (*ker
 			PositionSizeUSD: positionSizeUSD, // Use the calculated value returned by ValidateDecision
 			StopLoss:        d.StopLoss,
 			TakeProfit:      d.TakeProfit,
-			Confidence:      d.Confidence,
-			RiskUSD:         d.RiskUSD,
+			Confidence:      d.TotalScore,
 			// Reasoning removed from chaos.Decision as per new design
 			// AI Reasoning is now captured at the top level via CoTTrace
 			Reasoning:  "",

@@ -601,7 +601,12 @@ func (at *AutoTrader) runCycle() error {
 		record.InputPrompt = aiDecision.UserPrompt
 		record.CoTTrace = aiDecision.CoTTrace
 		record.RawResponse = aiDecision.RawResponse // Save raw AI response for debugging
-		if len(aiDecision.Decisions) > 0 {
+		
+		// Prefer RawDecisions (Chaos mode) for DecisionJSON to preserve original structure (e.g. total_score)
+		if aiDecision.RawDecisions != nil {
+			decisionJSON, _ := json.MarshalIndent(aiDecision.RawDecisions, "", "  ")
+			record.DecisionJSON = string(decisionJSON)
+		} else if len(aiDecision.Decisions) > 0 {
 			decisionJSON, _ := json.MarshalIndent(aiDecision.Decisions, "", "  ")
 			record.DecisionJSON = string(decisionJSON)
 		}

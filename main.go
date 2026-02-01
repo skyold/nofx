@@ -1,9 +1,11 @@
 package main
 
 import (
+	"nofx/analyzer"
 	"nofx/api"
 	"nofx/auth"
 	"nofx/backtest"
+	"nofx/chaos"
 	"nofx/config"
 	"nofx/crypto"
 	"nofx/experience"
@@ -103,6 +105,14 @@ func main() {
 		logger.Warnf("⚠️ Failed to restore backtest history: %v", err)
 	}
 
+	// Initialize Analyzer Engine & Scheduler
+	// Use default strategy config for Analyzer (can be customized later)
+	defaultStrategyCfg := store.GetDefaultStrategyConfig("en")
+	analyzerEngine := chaos.NewAnalyzerEngine(st, &defaultStrategyCfg)
+	scheduler := analyzer.NewScheduler(st, analyzerEngine, mcpClient)
+	scheduler.Start()
+	defer scheduler.Stop()
+
 	// Load all traders from database to memory (may auto-start traders with IsRunning=true)
 	if err := traderManager.LoadTradersFromStore(st); err != nil {
 		logger.Fatalf("❌ Failed to load traders: %v", err)
@@ -129,7 +139,7 @@ func main() {
 	}
 
 	// Start API server
-	server := api.NewServer(traderManager, st, cryptoService, backtestManager, cfg.APIServerPort)
+	server := api.NewServer(traderManager, st, cryptoService, backtestManager, scheduler, cfg.APIServerPort)
 	go func() {
 		if err := server.Start(); err != nil {
 			logger.Fatalf("❌ Failed to start API server: %v", err)

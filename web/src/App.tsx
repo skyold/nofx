@@ -13,6 +13,8 @@ import { LandingPage } from './pages/LandingPage'
 import { FAQPage } from './pages/FAQPage'
 import { StrategyStudioPage } from './pages/StrategyStudioPage'
 import { ChaosStudioPage } from './pages/ChaosStudioPage'
+import { AnalystStudioPage } from './pages/AnalystStudioPage'
+import { AnalysisDashboardPage } from './pages/AnalysisDashboardPage'
 import { DebateArenaPage } from './pages/DebateArenaPage'
 import { StrategyMarketPage } from './pages/StrategyMarketPage'
 import { TimeMachinePage } from './pages/TimeMachinePage'
@@ -44,6 +46,8 @@ type Page =
   | 'trader'
   | 'chaos'
   | 'chaos-studio'
+  | 'analyst-studio'
+  | 'analysis-dashboard'
   | 'backtest'
   | 'strategy'
   | 'strategy-market'
@@ -76,6 +80,8 @@ function App() {
     if (path === '/traders' || hash === 'traders') return 'traders'
     if (path === '/chaos' || hash === 'chaos') return 'chaos'
     if (path === '/chaos-studio' || hash === 'chaos-studio') return 'chaos-studio'
+    if (path === '/analyst-studio' || hash === 'analyst-studio') return 'analyst-studio'
+    if (path === '/analysis-dashboard' || hash === 'analysis-dashboard') return 'analysis-dashboard'
     if (path === '/backtest' || hash === 'backtest') return 'backtest'
     if (path === '/strategy' || hash === 'strategy') return 'strategy'
     if (path === '/strategy-market' || hash === 'strategy-market') return 'strategy-market'
@@ -108,6 +114,8 @@ function App() {
       'trader': '/dashboard',
       'chaos': '/chaos',
       'chaos-studio': '/chaos-studio',
+      'analyst-studio': '/analyst-studio',
+      'analysis-dashboard': '/analysis-dashboard',
       'backtest': '/backtest',
       'strategy': '/strategy',
       'debate': '/debate',
@@ -505,6 +513,10 @@ function App() {
               <TransactionListPage />
             ) : currentPage === 'chaos-studio' ? (
               <ChaosStudioPage />
+            ) : currentPage === 'analyst-studio' ? (
+              <AnalystStudioPage />
+            ) : currentPage === 'analysis-dashboard' ? (
+              <AnalysisDashboardPage />
             ) : currentPage === 'chaos' ? (
               <ChaosDashboardPage
                 selectedTrader={selectedTrader}

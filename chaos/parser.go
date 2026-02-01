@@ -116,7 +116,7 @@ func convertDecisions(raw []RawDecision) []Decision {
 			TakeProfit: r.TakeProfit,
 			EntryPrice: r.EntryPrice,
 			RiskR:      r.RiskR,
-			Confidence: r.TotalScore,
+			TotalScore: r.TotalScore,
 		}
 	}
 	return decisions

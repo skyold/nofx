@@ -29,6 +29,8 @@ type Store struct {
 	equity   *EquityStore
 	order    *OrderStore
 	grid     *GridStore
+	analysis       *AnalysisStore
+	analystProfile *AnalystProfileStore
 
 	mu sync.RWMutex
 }
@@ -159,6 +161,12 @@ func (s *Store) initTables() error {
 	}
 	if err := s.Grid().InitTables(); err != nil {
 		return fmt.Errorf("failed to initialize grid tables: %w", err)
+	}
+	if err := s.Analysis().initTables(); err != nil {
+		return fmt.Errorf("failed to initialize analysis tables: %w", err)
+	}
+	if err := s.AnalystProfile().initTables(); err != nil {
+		return fmt.Errorf("failed to initialize analyst profile tables: %w", err)
 	}
 	return nil
 }
@@ -291,6 +299,26 @@ func (s *Store) Grid() *GridStore {
 		s.grid = NewGridStore(s.gdb)
 	}
 	return s.grid
+}
+
+// Analysis gets analysis storage
+func (s *Store) Analysis() *AnalysisStore {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.analysis == nil {
+		s.analysis = NewAnalysisStore(s.gdb)
+	}
+	return s.analysis
+}
+
+// AnalystProfile gets analyst profile storage
+func (s *Store) AnalystProfile() *AnalystProfileStore {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.analystProfile == nil {
+		s.analystProfile = NewAnalystProfileStore(s.gdb)
+	}
+	return s.analystProfile
 }
 
 // Close closes database connection

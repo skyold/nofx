@@ -201,6 +201,17 @@ func (s *Server) setupRoutes() {
 			protected.GET("/transactions", s.handleGetTransactions)
 			protected.PUT("/transactions/:id/trader", s.handleAssignTransaction)
 
+			// Analysis Studio
+			protected.GET("/analysts", s.handleListAnalystProfiles)
+			protected.POST("/analysts", s.handleCreateAnalystProfile)
+			protected.GET("/analysts/:id", s.handleGetAnalystProfile)
+			protected.PUT("/analysts/:id", s.handleUpdateAnalystProfile)
+			protected.DELETE("/analysts/:id", s.handleDeleteAnalystProfile)
+			protected.POST("/analysts/:id/trigger", s.handleTriggerAnalysis)
+
+			protected.GET("/analysis-sessions", s.handleListAnalysisSessions)
+			protected.GET("/analysis-sessions/:id", s.handleGetAnalysisSession)
+
 			// Data for specified trader (using query parameter ?trader_id=xxx)
 			protected.GET("/status", s.handleStatus)
 			protected.GET("/account", s.handleAccount)
