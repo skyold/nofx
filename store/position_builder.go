@@ -343,6 +343,23 @@ func (pb *PositionBuilder) RebuildFromFills(traderID string, orderStore *OrderSt
 
 	logger.Infof("Found %d fills for trader %s. Processing...", len(fills), traderID)
 
+	// 1.5. Get all orders for this trader to help identify fill intent
+	var orders []TraderOrder
+	ordersMap := make(map[int64]TraderOrder)
+	ordersExchangeMap := make(map[string]TraderOrder)
+
+	if err := pb.positionStore.db.Where("trader_id = ?", traderID).Find(&orders).Error; err == nil {
+		for _, o := range orders {
+			ordersMap[o.ID] = o
+			if o.ExchangeOrderID != "" {
+				ordersExchangeMap[o.ExchangeOrderID] = o
+			}
+		}
+		logger.Infof("Loaded %d orders for reference", len(orders))
+	} else {
+		logger.Warnf("Failed to fetch orders for reference: %v", err)
+	}
+
 	// 2. Delete existing CLOSED positions for this trader to avoid duplicates
 	// We only delete CLOSED positions because OPEN positions are managed by live trading.
 	// However, we will RECONCILE open positions at the end of this process to ensure
@@ -409,21 +426,105 @@ func (pb *PositionBuilder) RebuildFromFills(traderID string, orderStore *OrderSt
 			var positionSide string
 			var isOpen bool
 
-			// Logic to determine if fill is Open or Close
-			// We check RealizedPnL first.
-			if fill.RealizedPnL != 0 {
-				isOpen = false
-				if isBuy {
-					positionSide = "SHORT" // Buy to close Short
+			// Try to find corresponding order
+			var matchedOrder TraderOrder
+			var hasOrder bool
+
+			if fill.OrderID > 0 {
+				matchedOrder, hasOrder = ordersMap[fill.OrderID]
+			}
+			if !hasOrder && fill.ExchangeOrderID != "" {
+				matchedOrder, hasOrder = ordersExchangeMap[fill.ExchangeOrderID]
+			}
+
+			if hasOrder {
+				// Use order info
+				action := strings.ToLower(matchedOrder.OrderAction)
+				posSide := strings.ToUpper(matchedOrder.PositionSide)
+
+				if action != "" {
+					if strings.Contains(action, "open") {
+						isOpen = true
+					} else if strings.Contains(action, "close") {
+						isOpen = false
+					} else {
+						// Fallback if action is ambiguous
+						if fill.RealizedPnL != 0 {
+							isOpen = false
+						} else {
+							isOpen = true
+						}
+					}
 				} else {
-					positionSide = "LONG" // Sell to close Long
+					// No OrderAction, check PositionSide + Side
+					if posSide != "" && posSide != "BOTH" {
+						if posSide == "LONG" {
+							if matchedOrder.Side == "BUY" {
+								isOpen = true
+							} else {
+								isOpen = false
+							}
+						} else { // SHORT
+							if matchedOrder.Side == "SELL" {
+								isOpen = true
+							} else {
+								isOpen = false
+							}
+						}
+					} else {
+						// Fallback to PnL check
+						if fill.RealizedPnL != 0 {
+							isOpen = false
+						} else {
+							isOpen = true
+						}
+					}
+				}
+
+				// Determine PositionSide
+				if posSide != "" && posSide != "BOTH" {
+					positionSide = posSide
+				} else {
+					// Infer
+					if strings.Contains(action, "long") {
+						positionSide = "LONG"
+					} else if strings.Contains(action, "short") {
+						positionSide = "SHORT"
+					} else {
+						// Fallback inference
+						if isOpen {
+							if isBuy {
+								positionSide = "LONG"
+							} else {
+								positionSide = "SHORT"
+							}
+						} else {
+							if isBuy {
+								positionSide = "SHORT"
+							} else {
+								positionSide = "LONG"
+							}
+						}
+					}
 				}
 			} else {
-				isOpen = true
-				if isBuy {
-					positionSide = "LONG"
+				// No order found - use legacy heuristic
+				// Logic to determine if fill is Open or Close
+				// We check RealizedPnL first.
+				if fill.RealizedPnL != 0 {
+					isOpen = false
+					if isBuy {
+						positionSide = "SHORT" // Buy to close Short
+					} else {
+						positionSide = "LONG" // Sell to close Long
+					}
 				} else {
-					positionSide = "SHORT"
+					isOpen = true
+					if isBuy {
+						positionSide = "LONG"
+					} else {
+						positionSide = "SHORT"
+					}
 				}
 			}
 
@@ -640,18 +741,18 @@ func (pb *PositionBuilder) RebuildFromFills(traderID string, orderStore *OrderSt
 			// Note: Updating EntryPrice resets the cost basis to the rebuilt history.
 			// This is intended as "Repair History".
 			logger.Infof("  [RECONCILE] Updating OPEN position %s: Qty %.6f -> %.6f", key, existing.Quantity, calcPos.Quantity)
-			
+
 			existing.Quantity = calcPos.Quantity
 			existing.EntryPrice = calcPos.EntryPrice
 			existing.EntryTime = calcPos.EntryTime
 			existing.Fee = calcPos.Fee
 			existing.UpdatedAt = UnixTime(time.Now().UTC().UnixMilli())
 			existing.Source = "rebuild"
-			
+
 			if err := pb.positionStore.db.Save(&existing).Error; err != nil {
 				logger.Errorf("    Error updating position %s: %v", key, err)
 			}
-			
+
 			// Remove from map so we don't delete it
 			delete(existingOpensMap, key)
 		} else {

@@ -127,11 +127,11 @@ func TestRebuildFromFills_ClosedPosition_ClearsOpen(t *testing.T) {
 
 	// 1. Create an existing Open Position (maybe with wrong qty)
 	existingPos := &store.TraderPosition{
-		TraderID:   traderID,
-		Symbol:     symbol,
-		Side:       "LONG",
-		Quantity:   50.0, // Wrong quantity
-		Status:     "OPEN",
+		TraderID: traderID,
+		Symbol:   symbol,
+		Side:     "LONG",
+		Quantity: 50.0, // Wrong quantity
+		Status:   "OPEN",
 	}
 	db.Create(existingPos)
 
@@ -183,5 +183,97 @@ func TestRebuildFromFills_ClosedPosition_ClearsOpen(t *testing.T) {
 	db.Model(&store.TraderPosition{}).Where("trader_id = ? AND status = ?", traderID, "OPEN").Count(&count)
 	if count != 0 {
 		t.Errorf("expected 0 open positions, got %d. Phantom/Existing position was not cleared!", count)
+	}
+}
+
+func TestRebuildFromFills_ZeroPnL_Close(t *testing.T) {
+	db := setupTestDB(t)
+	posStore := store.NewPositionStore(db)
+	pb := store.NewPositionBuilder(posStore)
+
+	traderID := "trader1"
+	symbol := "BTCUSDT"
+
+	t1 := time.Now().Add(-1 * time.Hour).UnixMilli()
+	t2 := time.Now().UnixMilli()
+
+	// 1. Create Orders (Open and Close)
+	// We need orders to disambiguate 0 PnL close
+	orders := []store.TraderOrder{
+		{
+			ID:              1,
+			TraderID:        traderID,
+			Symbol:          symbol,
+			ExchangeOrderID: "ord_open",
+			Side:            "BUY",
+			OrderAction:     "open_long",
+			PositionSide:    "LONG",
+			Status:          "FILLED",
+			CreatedAt:       store.UnixTime(t1),
+		},
+		{
+			ID:              2,
+			TraderID:        traderID,
+			Symbol:          symbol,
+			ExchangeOrderID: "ord_close",
+			Side:            "SELL",
+			OrderAction:     "close_long",
+			PositionSide:    "LONG",
+			Status:          "FILLED",
+			CreatedAt:       store.UnixTime(t2),
+		},
+	}
+	for _, o := range orders {
+		db.Create(&o)
+	}
+
+	// 2. Create Fills (Open and Close with 0 PnL)
+	fills := []store.TraderFill{
+		{
+			TraderID:        traderID,
+			Symbol:          symbol,
+			Side:            "BUY",
+			Price:           50000,
+			Quantity:        1,
+			RealizedPnL:     0,
+			OrderID:         1, // Links to Open Order
+			ExchangeOrderID: "ord_open",
+			ExchangeTradeID: "trade1",
+			CreatedAt:       store.UnixTime(t1),
+		},
+		{
+			TraderID:        traderID,
+			Symbol:          symbol,
+			Side:            "SELL",
+			Price:           50000, // Break even
+			Quantity:        1,
+			RealizedPnL:     0, // 0 PnL! This caused the bug
+			OrderID:         2, // Links to Close Order
+			ExchangeOrderID: "ord_close",
+			ExchangeTradeID: "trade2",
+			CreatedAt:       store.UnixTime(t2),
+		},
+	}
+	for _, f := range fills {
+		db.Create(&f)
+	}
+
+	// 3. Run RebuildFromFills
+	rebuiltCount, err := pb.RebuildFromFills(traderID, nil)
+	if err != nil {
+		t.Fatalf("RebuildFromFills failed: %v", err)
+	}
+
+	// 4. Verify
+	// Should create 1 closed position (despite 0 PnL)
+	if rebuiltCount != 1 {
+		t.Errorf("expected 1 rebuilt closed position, got %d", rebuiltCount)
+	}
+
+	// Should have NO open positions
+	var count int64
+	db.Model(&store.TraderPosition{}).Where("trader_id = ? AND status = ?", traderID, "OPEN").Count(&count)
+	if count != 0 {
+		t.Errorf("expected 0 open positions, got %d. Zero PnL Close was treated as Open!", count)
 	}
 }
