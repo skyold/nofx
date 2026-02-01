@@ -4,9 +4,7 @@ import { useLanguage } from '../contexts/LanguageContext'
 import {
   Plus,
   Trash2,
-  Check,
   Save,
-  Zap,
   Play,
   Clock,
   Bot,

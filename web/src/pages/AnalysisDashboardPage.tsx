@@ -3,17 +3,14 @@ import { useAuth } from '../contexts/AuthContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import {
   Calendar,
-  Clock,
   TrendingUp,
   TrendingDown,
   Minus,
   MessageSquare,
-  ChevronRight,
-  ChevronDown,
   BarChart2,
   Brain,
 } from 'lucide-react'
-import type { AnalysisSession, AnalysisRecord, AnalysisSessionDetail } from '../types'
+import type { AnalysisSession, AnalysisSessionDetail } from '../types'
 import { notify } from '../lib/notify'
 import { api } from '../lib/api'
 import { DeepVoidBackground } from '../components/DeepVoidBackground'
