@@ -86,9 +86,9 @@ func (t *AsterTrader) SyncOrdersFromAster(traderID string, exchangeID string, ex
 			FilledQuantity:  trade.Quantity,
 			AvgFillPrice:    trade.Price,
 			Commission:      trade.Fee,
-			FilledAt:        store.UnixTime(tradeTimeMs),
-			CreatedAt:       store.UnixTime(tradeTimeMs),
-			UpdatedAt:       store.UnixTime(tradeTimeMs),
+			FilledAt:        tradeTimeMs,
+			CreatedAt:       tradeTimeMs,
+			UpdatedAt:       tradeTimeMs,
 		}
 
 		// Insert order record
@@ -114,7 +114,7 @@ func (t *AsterTrader) SyncOrdersFromAster(traderID string, exchangeID string, ex
 			CommissionAsset: "USDT",
 			RealizedPnL:     trade.RealizedPnL,
 			IsMaker:         false,
-			CreatedAt:       store.UnixTime(tradeTimeMs),
+			CreatedAt:       tradeTimeMs,
 		}
 
 		if err := orderStore.CreateFill(fillRecord); err != nil {
