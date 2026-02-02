@@ -470,3 +470,24 @@ func (s *OrderStore) GetTransactions(page, pageSize int, exchangeID, traderID, s
 func (s *OrderStore) UpdateTransactionTrader(id int64, traderID string) error {
 	return s.db.Model(&TraderFill{}).Where("id = ?", id).Update("trader_id", traderID).Error
 }
+
+// FillWithAction is a helper struct for RebuildFromFills
+type FillWithAction struct {
+	TraderFill
+	OrderAction string
+}
+
+// GetFillsWithActions gets all fills for a trader with their corresponding order actions
+func (s *OrderStore) GetFillsWithActions(traderID string) ([]*FillWithAction, error) {
+	var results []*FillWithAction
+	err := s.db.Table("trader_fills").
+		Select("trader_fills.*, trader_orders.order_action").
+		Joins("LEFT JOIN trader_orders ON trader_fills.order_id = trader_orders.id").
+		Where("trader_fills.trader_id = ?", traderID).
+		Order("trader_fills.created_at ASC").
+		Scan(&results).Error
+	if err != nil {
+		return nil, fmt.Errorf("failed to get fills with actions: %w", err)
+	}
+	return results, nil
+}

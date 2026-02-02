@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"nofx/chaos"
 	"nofx/kernel"
 	"nofx/logger"
 	"nofx/market"
@@ -377,9 +378,9 @@ func (s *Server) handlePreviewPrompt(c *gin.Context) {
 	}
 
 	var req struct {
-		Config          store.StrategyConfig `json:"config" binding:"required"`
-		AccountEquity   float64              `json:"account_equity"`
-		PromptVariant   string               `json:"prompt_variant"`
+		Config        store.StrategyConfig `json:"config" binding:"required"`
+		AccountEquity float64              `json:"account_equity"`
+		PromptVariant string               `json:"prompt_variant"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -396,13 +397,22 @@ func (s *Server) handlePreviewPrompt(c *gin.Context) {
 	}
 
 	// Create strategy engine to build prompt
-	engine := kernel.NewStrategyEngine(&req.Config)
+	type PromptBuilder interface {
+		BuildSystemPrompt(accountEquity float64, variant string) string
+	}
 
-	// Build system prompt (using built-in method from strategy engine)
-	systemPrompt := engine.BuildSystemPrompt(
-		req.AccountEquity,
-		req.PromptVariant,
-	)
+	var engine PromptBuilder
+	chaosManager := chaos.NewManager()
+
+	if chaosManager.IsChaosMode(req.Config.CustomPrompt) {
+		// Chaos Mode
+		engine = chaos.NewChaosEngine(&req.Config)
+	} else {
+		// Standard Mode
+		engine = kernel.NewStrategyEngine(&req.Config)
+	}
+
+	systemPrompt := engine.BuildSystemPrompt(req.AccountEquity, req.PromptVariant)
 
 	c.JSON(http.StatusOK, gin.H{
 		"system_prompt":  systemPrompt,
@@ -534,11 +544,25 @@ func (s *Server) handleStrategyTestRun(c *gin.Context) {
 		PriceRankingData:   priceRankingData,
 	}
 
-	// Build System Prompt
-	systemPrompt := engine.BuildSystemPrompt(1000.0, req.PromptVariant)
+	// Build Prompts (System & User)
+	type PromptBuilder interface {
+		BuildSystemPrompt(accountEquity float64, variant string) string
+		BuildUserPrompt(ctx *kernel.Context) string
+	}
 
-	// Build User Prompt (using real market data)
-	userPrompt := engine.BuildUserPrompt(testContext)
+	var builder PromptBuilder
+	chaosManager := chaos.NewManager()
+
+	if chaosManager.IsChaosMode(req.Config.CustomPrompt) {
+		// Chaos Mode
+		builder = chaos.NewChaosEngine(&req.Config)
+	} else {
+		// Standard Mode
+		builder = engine
+	}
+
+	systemPrompt := builder.BuildSystemPrompt(1000.0, req.PromptVariant)
+	userPrompt := builder.BuildUserPrompt(testContext)
 
 	// If requesting real AI call
 	if req.RunRealAI && req.AIModelID != "" {
@@ -639,4 +663,3 @@ func (s *Server) runRealAITest(userID, modelID, systemPrompt, userPrompt string)
 
 	return response, nil
 }
-

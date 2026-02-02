@@ -32,6 +32,13 @@ func NewChaosEngine(config *store.StrategyConfig) *ChaosEngine {
 	}
 }
 
+// BuildSystemPrompt builds the system prompt for Chaos mode
+func (e *ChaosEngine) BuildSystemPrompt(accountEquity float64, variant string) string {
+	return e.manager.BuildPrompt(variant, e.config.CustomPrompt, func(sb *strings.Builder) {
+		e.writeAvailableIndicators(sb)
+	})
+}
+
 // GetFullDecision gets the full decision for Chaos mode
 func GetFullDecision(ctx *kernel.Context, mcpClient mcp.AIClient) (*kernel.FullDecision, error) {
 	// Use default config if not provided in context (similar to kernel.GetFullDecision)

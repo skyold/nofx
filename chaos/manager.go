@@ -190,8 +190,8 @@ func (m *Manager) ValidateDecision(
 ) (float64, error) {
 	decisionInfo := func() string {
 		return fmt.Sprintf(
-			"decision[symbol=%s action=%s lev=%d entry=%.8f sl=%.8f tp=%.8f risk_r=%.2f conf=%d]",
-			d.Symbol, d.Action, d.Leverage, d.EntryPrice, d.StopLoss, d.TakeProfit, d.RiskR, d.Confidence,
+			"decision[symbol=%s action=%s lev=%d entry=%.8f sl=%.8f tp=%.8f risk_r=%.2f score=%d]",
+			d.Symbol, d.Action, d.Leverage, d.EntryPrice, d.StopLoss, d.TakeProfit, d.RiskR, d.TotalScore,
 		)
 	}
 
@@ -267,32 +267,10 @@ func (m *Manager) ValidateDecision(
 			decisionInfo(), riskRewardRatio, d.EntryPrice, d.StopLoss, d.TakeProfit, risk, reward)
 	}
 
-	// 4. Position sizing via RiskR or RiskUSD
-	// If RiskUSD is provided and valid, use it directly (converting to equivalent RiskR logic)
-	// Otherwise use RiskR based on account equity
+	// 4. Position sizing via RiskR
+	// Chaos mode uses RiskR based sizing: Risk Amount = Equity * 1% * RiskR
 	var riskAmount float64
-	if d.RiskUSD > 0 {
-		riskAmount = d.RiskUSD
-		// Back-calculate RiskR for consistency in logging/audit
-		// RiskAmount = Equity * 1% * RiskR => RiskR = RiskAmount / (Equity * 0.01)
-		if accountEquity > 0 {
-			calculatedRiskR := riskAmount / (accountEquity * baseRiskPercent)
-			if calculatedRiskR > MaxRiskR {
-				logger.Infof("⚠️  [RiskR Adjustment] Calculated RiskR %.2f (from RiskUSD %.2f) exceeds limit %.2f, clamping RiskUSD",
-					calculatedRiskR, d.RiskUSD, MaxRiskR)
-
-				// Clamp risk amount to MaxRiskR limit
-				// MaxRiskAmount = Equity * 1% * MaxRiskR
-				maxRiskAmount := accountEquity * baseRiskPercent * MaxRiskR
-				riskAmount = maxRiskAmount
-				d.RiskR = MaxRiskR
-			} else {
-				d.RiskR = calculatedRiskR
-			}
-		}
-	} else {
-		riskAmount = accountEquity * baseRiskPercent * d.RiskR
-	}
+	riskAmount = accountEquity * baseRiskPercent * d.RiskR
 
 	quantity := riskAmount / risk
 	// Calculate PositionSizeUSD but return it instead of modifying d (as d doesn't have the field anymore)

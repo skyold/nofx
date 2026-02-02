@@ -258,6 +258,11 @@ func (s *PositionStore) DeleteAllOpenPositions(traderID string) error {
 	return s.db.Where("trader_id = ? AND status = ?", traderID, "OPEN").Delete(&TraderPosition{}).Error
 }
 
+// DeleteAllPositions deletes all positions (OPEN and CLOSED) for a trader
+func (s *PositionStore) DeleteAllPositions(traderID string) error {
+	return s.db.Where("trader_id = ?", traderID).Delete(&TraderPosition{}).Error
+}
+
 // GetOpenPositions gets all open positions
 func (s *PositionStore) GetOpenPositions(traderID string) ([]*TraderPosition, error) {
 	var positions []*TraderPosition
