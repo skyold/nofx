@@ -114,6 +114,8 @@ func (e *ChaosEngine) Execute(ctx *kernel.Context, mcpClient mcp.AIClient) (*ker
 	}
 
 	// Prepare result with initial parsed decisions
+	// Note: We need to convert chaos.Decision (pointers) to a structure suitable for RawDecisions if it expects values,
+	// but RawDecisions is []chaos.Decision, so it's fine.
 	fullDecision := &kernel.FullDecision{
 		SystemPrompt:        systemPrompt,
 		UserPrompt:          userPrompt,
@@ -124,6 +126,21 @@ func (e *ChaosEngine) Execute(ctx *kernel.Context, mcpClient mcp.AIClient) (*ker
 		AIRequestDurationMs: aiCallDuration.Milliseconds(),
 	}
 
+	// Extract Reasoning for strict validation
+	reasoning, errReasoning := extractReasoningJSON(aiResponse)
+	if errReasoning != nil {
+		logger.Warnf("⚠️  [Format Audit] Failed to parse reasoning JSON: %v. Strict validation might be skipped or limited.", errReasoning)
+	}
+
+	// Check 1: Unique symbol assertion
+	seenSymbols := make(map[string]bool)
+	for _, d := range decisions {
+		if seenSymbols[d.Symbol] {
+			return fullDecision, fmt.Errorf("Strict Constraint Violation: Duplicate symbol %s found in decisions", d.Symbol)
+		}
+		seenSymbols[d.Symbol] = true
+	}
+
 	// Step 4.2: Content Audit (Risk Control & Business Logic)
 	// This step validates the business logic (Action validity, R:R ratio) and enforces risk controls (RiskR limits)
 	var kernelDecisions []kernel.Decision
@@ -131,7 +148,7 @@ func (e *ChaosEngine) Execute(ctx *kernel.Context, mcpClient mcp.AIClient) (*ker
 
 	for i, d := range decisions {
 		// Validate using Chaos Manager and get calculated PositionSizeUSD
-		positionSizeUSD, err := e.manager.ValidateDecision(&d, ctx.Account.TotalEquity,
+		positionSizeUSD, err := e.manager.ValidateDecision(&d, reasoning, ctx.Account.TotalEquity,
 			riskConfig.BTCETHMaxLeverage, riskConfig.AltcoinMaxLeverage,
 			riskConfig.BTCETHMaxPositionValueRatio, riskConfig.AltcoinMaxPositionValueRatio)
 
@@ -141,20 +158,43 @@ func (e *ChaosEngine) Execute(ctx *kernel.Context, mcpClient mcp.AIClient) (*ker
 			return fullDecision, fmt.Errorf("content audit failed for decision #%d: %w", i+1, err)
 		}
 
+		// Safe dereference for kernel.Decision
+		var entry, sl, tp, riskR float64
+		var leverage, score int
+
+		if d.EntryPrice != nil {
+			entry = *d.EntryPrice
+		}
+		if d.StopLoss != nil {
+			sl = *d.StopLoss
+		}
+		if d.TakeProfit != nil {
+			tp = *d.TakeProfit
+		}
+		if d.RiskR != nil {
+			riskR = *d.RiskR
+		}
+		if d.Leverage != nil {
+			leverage = *d.Leverage
+		}
+		if d.TotalScore != nil {
+			score = *d.TotalScore
+		}
+
 		// Map to kernel.Decision (Processed Result)
 		kd := kernel.Decision{
 			Symbol:          d.Symbol,
 			Action:          d.Action,
-			Leverage:        d.Leverage,
+			Leverage:        leverage,
 			PositionSizeUSD: positionSizeUSD, // Use the calculated value returned by ValidateDecision
-			StopLoss:        d.StopLoss,
-			TakeProfit:      d.TakeProfit,
-			Confidence:      d.TotalScore,
+			StopLoss:        sl,
+			TakeProfit:      tp,
+			Confidence:      score,
 			// Reasoning removed from chaos.Decision as per new design
 			// AI Reasoning is now captured at the top level via CoTTrace
 			Reasoning:  "",
-			EntryPrice: d.EntryPrice,
-			RiskR:      d.RiskR,
+			EntryPrice: entry,
+			RiskR:      riskR,
 		}
 		kernelDecisions = append(kernelDecisions, kd)
 	}

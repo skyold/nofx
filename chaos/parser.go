@@ -18,18 +18,34 @@ var (
 	reArrayOpenSpace = regexp.MustCompile(`^\[\s+\{`)
 	reInvisibleRunes = regexp.MustCompile("[\u200B\u200C\u200D\uFEFF]")
 	reDecisionTag    = regexp.MustCompile(`(?s)<decision>(.*?)</decision>`)
+	// Support both <execution_reasoning> (Standard) and <reasoning> (Legacy/Fallback)
+	reReasoningTag = regexp.MustCompile(`(?s)<(execution_)?reasoning>(.*?)</(execution_)?reasoning>`)
 )
 
 // RawDecision represents the structure expected from AI JSON
 type RawDecision struct {
-	Symbol     string  `json:"symbol"`
-	Action     string  `json:"action"`
-	Leverage   int     `json:"leverage"`
-	EntryPrice float64 `json:"entry"`
-	StopLoss   float64 `json:"stop_loss"`
-	TakeProfit float64 `json:"take_profit"`
-	RiskR      float64 `json:"risk_r"`
-	TotalScore float64 `json:"total_score"`
+	Symbol     string   `json:"symbol"`
+	Action     string   `json:"action"`
+	Leverage   *int     `json:"leverage"`
+	EntryPrice *float64 `json:"entry"`
+	StopLoss   *float64 `json:"stop_loss"`
+	TakeProfit *float64 `json:"take_profit"`
+	RiskR      *float64 `json:"risk_r"`
+	TotalScore *float64 `json:"total_score"`
+}
+
+// Reasoning represents the structured reasoning output from AI
+// Now flexible to support different strategy structures
+type Reasoning struct {
+	Raw            map[string]interface{}
+	SystemRiskFlag bool
+	Opportunities  []Opportunity
+}
+
+// Opportunity for validation (Audit Path)
+type Opportunity struct {
+	Symbol    string
+	AuditPath string
 }
 
 func extractDecisions(response string) ([]Decision, error) {
@@ -42,52 +58,26 @@ func extractDecisions(response string) ([]Decision, error) {
 		jsonPart = strings.TrimSpace(match[1])
 		logger.Infof("✓ [Format Audit] Extracted JSON using <decision> tag")
 	} else {
+		// Fallback: try to find JSON array directly if tag is missing
 		jsonPart = s
-		logger.Warnf("⚠️  [Format Audit] <decision> tag not found, triggering fallback search")
 	}
 
 	jsonPart = fixMissingQuotes(jsonPart)
 
+	// Try to find JSON array
+	var jsonContent string
 	if m := reJSONFence.FindStringSubmatch(jsonPart); m != nil && len(m) > 1 {
-		jsonContent := strings.TrimSpace(m[1])
-		jsonContent = compactArrayOpen(jsonContent)
-		jsonContent = fixMissingQuotes(jsonContent)
-		if err := validateJSONFormat(jsonContent); err != nil {
-			return nil, fmt.Errorf("JSON format validation failed: %w\nJSON content: %s\nFull response:\n%s", err, jsonContent, response)
-		}
-		var rawDecisions []RawDecision
-		if err := json.Unmarshal([]byte(jsonContent), &rawDecisions); err != nil {
-			return nil, fmt.Errorf("JSON parsing failed: %w\nJSON content: %s", err, jsonContent)
-		}
-		return convertDecisions(rawDecisions), nil
+		jsonContent = strings.TrimSpace(m[1])
+	} else {
+		jsonContent = strings.TrimSpace(reJSONArray.FindString(jsonPart))
 	}
 
-	jsonContent := strings.TrimSpace(reJSONArray.FindString(jsonPart))
 	if jsonContent == "" {
 		logger.Warnf("⚠️  [Format Audit] AI didn't output JSON decision, entering safe wait mode")
-
-		cotSummary := jsonPart
-		if len(cotSummary) > 240 {
-			cotSummary = cotSummary[:240] + "..."
-		}
-
 		fallbackDecision := Decision{
 			Symbol: "ALL",
 			Action: "wait",
-			// Reasoning is not in Decision struct? Wait, kernel.Decision has Reasoning.
-			// chaos.Decision doesn't have Reasoning in types.go I just wrote?
-			// Let me check types.go again.
 		}
-		// Wait, chaos.Decision struct I wrote matches kernel/chaos/types.go which does NOT have Reasoning.
-		// But kernel.Decision DOES have Reasoning.
-		// If I use chaos.Decision, I lose reasoning?
-		// Ah, manager.go doesn't validate reasoning.
-		// But the final result needs reasoning.
-		// Maybe I should add Reasoning to chaos.Decision or keep it separate.
-		// In kernel/chaos/types.go: no Reasoning.
-		// In kernel/engine.go: Reasoning is part of Decision.
-		// If I want to return kernel.Decision (or compatible), I should capture reasoning.
-
 		return []Decision{fallbackDecision}, nil
 	}
 
@@ -106,19 +96,100 @@ func extractDecisions(response string) ([]Decision, error) {
 	return convertDecisions(rawDecisions), nil
 }
 
+func extractReasoningJSON(response string) (*Reasoning, error) {
+	s := removeInvisibleRunes(response)
+	var jsonContent string
+
+	if match := reReasoningTag.FindStringSubmatch(s); match != nil {
+		// match[0] is full string
+		// match[1] is "execution_" or "" (prefix)
+		// match[2] is content
+		// match[3] is "execution_" or "" (suffix)
+		if len(match) > 2 {
+			jsonContent = strings.TrimSpace(match[2])
+		}
+	} else {
+		// Fallback: Try to find JSON object directly if tag is missing
+		// This handles cases where prompt returns raw JSON without XML tags
+		firstBrace := strings.Index(s, "{")
+		lastBrace := strings.LastIndex(s, "}")
+		if firstBrace >= 0 && lastBrace > firstBrace {
+			jsonContent = s[firstBrace : lastBrace+1]
+		} else {
+			return nil, fmt.Errorf("<execution_reasoning> tag not found and no valid JSON object detected")
+		}
+	}
+
+	jsonContent = fixMissingQuotes(jsonContent)
+
+	// Parse into generic map
+	var rawMap map[string]interface{}
+	if err := json.Unmarshal([]byte(jsonContent), &rawMap); err != nil {
+		return nil, fmt.Errorf("reasoning JSON parsing failed: %w", err)
+	}
+
+	reasoning := &Reasoning{
+		Raw: rawMap,
+	}
+
+	// 1. Extract SystemRiskFlag (Flexible Location)
+	// Try root level
+	if v, ok := rawMap["system_risk_flag"]; ok {
+		if boolVal, ok := v.(bool); ok {
+			reasoning.SystemRiskFlag = boolVal
+		}
+	} else if v, ok := rawMap["market_context"]; ok {
+		// Try nested in market_context (Standard Prompt style)
+		if mcMap, ok := v.(map[string]interface{}); ok {
+			if flag, ok := mcMap["system_risk_flag"]; ok {
+				if boolVal, ok := flag.(bool); ok {
+					reasoning.SystemRiskFlag = boolVal
+				}
+			}
+		}
+	}
+
+	// 2. Extract Opportunities for Audit Path (Flexible)
+	// Only if "opportunities" key exists and is array
+	if v, ok := rawMap["opportunities"]; ok {
+		if oppsArray, ok := v.([]interface{}); ok {
+			for _, item := range oppsArray {
+				if oppMap, ok := item.(map[string]interface{}); ok {
+					opp := Opportunity{}
+					if s, ok := oppMap["symbol"].(string); ok {
+						opp.Symbol = s
+					}
+					if ap, ok := oppMap["audit_path"].(string); ok {
+						opp.AuditPath = ap
+					}
+					reasoning.Opportunities = append(reasoning.Opportunities, opp)
+				}
+			}
+		}
+	}
+
+	return reasoning, nil
+}
+
 func convertDecisions(raw []RawDecision) []Decision {
 	decisions := make([]Decision, len(raw))
 	for i, r := range raw {
-		decisions[i] = Decision{
+		d := Decision{
 			Symbol:     r.Symbol,
 			Action:     r.Action,
 			Leverage:   r.Leverage,
+			EntryPrice: r.EntryPrice,
 			StopLoss:   r.StopLoss,
 			TakeProfit: r.TakeProfit,
-			EntryPrice: r.EntryPrice,
 			RiskR:      r.RiskR,
-			TotalScore: int(math.Round(r.TotalScore)),
 		}
+
+		if r.TotalScore != nil {
+			score := int(math.Round(*r.TotalScore))
+			d.TotalScore = &score
+		}
+
+		decisions[i] = d
 	}
 	return decisions
 }

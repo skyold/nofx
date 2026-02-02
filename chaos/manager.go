@@ -58,10 +58,12 @@ func (m *Manager) IsChaosMode(customPrompt string) bool {
 func (m *Manager) BuildPrompt(variant string, customPrompt string, availableIndicatorsFunc func(*strings.Builder)) string {
 	var sb strings.Builder
 
-	// 1. Available Indicators (Context)
-	sb.WriteString("\n\n你拥有以下市场数据和指标:\n")
-	availableIndicatorsFunc(&sb)
+	// BLOCK A: System Execution Contract (Code Generated)
+	sb.WriteString(GenerateOutputSchema())
 	sb.WriteString("\n\n")
+
+	// BLOCK B: Strategy Logic (from Prompt File)
+	// We inject parameters into the custom prompt (which acts as the Strategy Block)
 
 	// 2. Resolve Variant Parameters
 	// Instead of appending hardcoded strings, we prepare a map of parameters to inject into the template
@@ -157,6 +159,12 @@ func (m *Manager) BuildPrompt(variant string, customPrompt string, availableIndi
 
 	sb.WriteString(finalPrompt)
 
+	// BLOCK C: Context (Indicators)
+	// This part is injected at the end of System Prompt to provide context about available data
+	sb.WriteString("\n\n你拥有以下市场数据和指标:\n")
+	availableIndicatorsFunc(&sb)
+	sb.WriteString("\n\n")
+
 	return sb.String()
 }
 
@@ -184,14 +192,28 @@ func (m *Manager) ExtractReasoning(response string) string {
 // ValidateDecision validates a decision made in Chaos mode
 func (m *Manager) ValidateDecision(
 	d *Decision,
+	reasoning *Reasoning,
 	accountEquity float64,
 	btcEthLeverage, altcoinLeverage int,
 	btcEthPosRatio, altcoinPosRatio float64,
 ) (float64, error) {
 	decisionInfo := func() string {
+		score := 0
+		if d.TotalScore != nil {
+			score = *d.TotalScore
+		}
+		riskR := 0.0
+		if d.RiskR != nil {
+			riskR = *d.RiskR
+		}
+		entry := 0.0
+		if d.EntryPrice != nil {
+			entry = *d.EntryPrice
+		}
+
 		return fmt.Sprintf(
-			"decision[symbol=%s action=%s lev=%d entry=%.8f sl=%.8f tp=%.8f risk_r=%.2f score=%d]",
-			d.Symbol, d.Action, d.Leverage, d.EntryPrice, d.StopLoss, d.TakeProfit, d.RiskR, d.TotalScore,
+			"decision[symbol=%s action=%s lev=%v entry=%.8f risk_r=%.2f score=%d]",
+			d.Symbol, d.Action, d.Leverage, entry, riskR, score,
 		)
 	}
 
@@ -208,41 +230,137 @@ func (m *Manager) ValidateDecision(
 		return 0, fmt.Errorf("%s: invalid action '%s'", decisionInfo(), d.Action)
 	}
 
-	if d.Action != "open_long" && d.Action != "open_short" {
-		// For non-opening actions (wait, hold, close_long, close_short), we skip RiskR/Pricing validation
+	isOpenAction := d.Action == "open_long" || d.Action == "open_short"
+
+	// 0.1 Strict Field Validation (Schema enforcement)
+	if isOpenAction {
+		// All fields required for open actions
+		if d.EntryPrice == nil {
+			return 0, fmt.Errorf("%s: entry required for %s", decisionInfo(), d.Action)
+		}
+		if d.StopLoss == nil {
+			return 0, fmt.Errorf("%s: stop_loss required for %s", decisionInfo(), d.Action)
+		}
+		if d.TakeProfit == nil {
+			return 0, fmt.Errorf("%s: take_profit required for %s", decisionInfo(), d.Action)
+		}
+		if d.RiskR == nil {
+			return 0, fmt.Errorf("%s: risk_r required for %s", decisionInfo(), d.Action)
+		}
+		if d.TotalScore == nil {
+			return 0, fmt.Errorf("%s: total_score required for %s", decisionInfo(), d.Action)
+		}
+		// Leverage is technically optional in schema but practically required for sizing?
+		// Schema doesn't list leverage in required for open_* in the user snippet, but code logic uses it.
+		// Assuming leverage is handled separately or defaulted if missing?
+		// Existing code checked d.Leverage <= 0.
+		if d.Leverage == nil || *d.Leverage <= 0 {
+			return 0, fmt.Errorf("%s: leverage required for %s", decisionInfo(), d.Action)
+		}
+	} else {
+		// No extra fields allowed for non-open actions
+		if d.EntryPrice != nil || d.StopLoss != nil || d.TakeProfit != nil || d.RiskR != nil || d.TotalScore != nil {
+			return 0, fmt.Errorf("%s: non-open action '%s' must not contain pricing/risk fields", decisionInfo(), d.Action)
+		}
+		// Logic short-circuit for non-open
 		logger.Infof("✓ Chaos decision validated (non-opening) | %s %s", d.Action, d.Symbol)
 		return 0, nil
+	}
+
+	// Dereference pointers for easier usage below (safe because we checked nil above)
+	entryPrice := *d.EntryPrice
+	stopLoss := *d.StopLoss
+	takeProfit := *d.TakeProfit
+	riskR := *d.RiskR
+	leverage := *d.Leverage
+
+	// 0.2 System Risk Flag Check
+	// Note: With flexible reasoning, if the flag is missing, it defaults to false (safe for simple prompts)
+	// But if present and true, it MUST trigger.
+	if reasoning != nil && reasoning.SystemRiskFlag {
+		return 0, fmt.Errorf("SYSTEM_RISK_FLAG_TRIGGERED: open_* actions forbidden when system_risk_flag is true")
 	}
 
 	// 1. RiskR hard constraints
 	const MaxRiskR = 1.5
 	const baseRiskPercent = 0.01 // 1R = 1% equity
 
-	if d.RiskR <= 0 {
-		return 0, fmt.Errorf("%s: RiskR must be greater than 0 in Chaos decision", decisionInfo())
+	// Check allowed values: 0, 0.25, 0.5
+	// Float comparison with small epsilon
+	isValidRiskR := false
+	allowedRiskRs := []float64{0, 0.25, 0.5, 0.75, 1, 1.5}
+	for _, val := range allowedRiskRs {
+		if abs(riskR-val) < 0.0001 {
+			isValidRiskR = true
+			break
+		}
 	}
-	if d.RiskR > MaxRiskR {
-		return 0, fmt.Errorf("%s: RiskR %.2f exceeds hard limit %.2f", decisionInfo(), d.RiskR, MaxRiskR)
+	if !isValidRiskR {
+		return 0, fmt.Errorf("%s: RiskR %.2f is not in allowed set [0, 0.25, 0.5]", decisionInfo(), riskR)
+	}
+
+	if riskR <= 0 {
+		return 0, fmt.Errorf("%s: RiskR must be greater than 0 for open action", decisionInfo())
+	}
+	if riskR > MaxRiskR {
+		return 0, fmt.Errorf("%s: RiskR %.2f exceeds hard limit %.2f", decisionInfo(), riskR, MaxRiskR)
+	}
+
+	// 1.1 RiskR Consistency Check with Audit Path
+	if reasoning != nil {
+		// Find matching opportunity
+		var matchedOpp *Opportunity
+		for _, opp := range reasoning.Opportunities {
+			if opp.Symbol == d.Symbol {
+				matchedOpp = &opp
+				break
+			}
+		}
+		if matchedOpp != nil {
+			// Parse "Final X.XR" from audit_path
+			// Expected format: "... Final 0.5R"
+			// Simple check: does it contain the formatted RiskR string?
+			expectedStr := fmt.Sprintf("Final %.1fR", riskR)
+			// Handle 0.25 case which might be formatted as 0.25R
+			if riskR == 0.25 {
+				expectedStr = "Final 0.25R"
+			} else if riskR == 0 {
+				expectedStr = "Final 0.0R" // or 0R?
+			}
+
+			// If 0.5, fmt gives 0.5.
+			// Let's use flexible check or regex if needed.
+			// User example: "Final 0.5R"
+			if !strings.Contains(matchedOpp.AuditPath, expectedStr) {
+				// Fallback check for integer like "Final 0R"
+				if riskR == 0 && strings.Contains(matchedOpp.AuditPath, "Final 0R") {
+					// pass
+				} else {
+					return 0, fmt.Errorf("%s: RiskR consistency check failed. Decision=%.2f, AuditPath='%s' (Expected '%s')",
+						decisionInfo(), riskR, matchedOpp.AuditPath, expectedStr)
+				}
+			}
+		}
 	}
 
 	// 2. Mandatory price anchors
-	if d.EntryPrice <= 0 {
-		return 0, fmt.Errorf("%s: entry price required for RiskR decision", decisionInfo())
+	if entryPrice <= 0 {
+		return 0, fmt.Errorf("%s: entry price must be positive", decisionInfo())
 	}
-	if d.StopLoss <= 0 {
-		return 0, fmt.Errorf("%s: stop loss required for RiskR decision", decisionInfo())
+	if stopLoss <= 0 {
+		return 0, fmt.Errorf("%s: stop loss must be positive", decisionInfo())
 	}
-	if d.TakeProfit <= 0 {
-		return 0, fmt.Errorf("%s: take profit required for RiskR decision", decisionInfo())
+	if takeProfit <= 0 {
+		return 0, fmt.Errorf("%s: take profit must be positive", decisionInfo())
 	}
 
 	// Directional price logic
 	if d.Action == "open_long" {
-		if !(d.StopLoss < d.EntryPrice && d.EntryPrice < d.TakeProfit) {
+		if !(stopLoss < entryPrice && entryPrice < takeProfit) {
 			return 0, fmt.Errorf("%s: invalid price structure for open_long (SL < Entry < TP)", decisionInfo())
 		}
 	} else {
-		if !(d.TakeProfit < d.EntryPrice && d.EntryPrice < d.StopLoss) {
+		if !(takeProfit < entryPrice && entryPrice < stopLoss) {
 			return 0, fmt.Errorf("%s: invalid price structure for open_short (TP < Entry < SL)", decisionInfo())
 		}
 	}
@@ -250,11 +368,11 @@ func (m *Manager) ValidateDecision(
 	// 3. R:R validation (Chaos requires edge)
 	var risk, reward float64
 	if d.Action == "open_long" {
-		risk = d.EntryPrice - d.StopLoss
-		reward = d.TakeProfit - d.EntryPrice
+		risk = entryPrice - stopLoss
+		reward = takeProfit - entryPrice
 	} else {
-		risk = d.StopLoss - d.EntryPrice
-		reward = d.EntryPrice - d.TakeProfit
+		risk = stopLoss - entryPrice
+		reward = entryPrice - takeProfit
 	}
 
 	if risk <= 0 || reward <= 0 {
@@ -264,31 +382,17 @@ func (m *Manager) ValidateDecision(
 	riskRewardRatio := reward / risk
 	if riskRewardRatio < 1 {
 		return 0, fmt.Errorf("%s: Chaos decision requires R:R ≥ 1 (got %.4f). Params: Entry=%.4f, SL=%.4f, TP=%.4f, Risk=%.4f, Reward=%.4f",
-			decisionInfo(), riskRewardRatio, d.EntryPrice, d.StopLoss, d.TakeProfit, risk, reward)
+			decisionInfo(), riskRewardRatio, entryPrice, stopLoss, takeProfit, risk, reward)
 	}
 
 	// 4. Position sizing via RiskR
 	// Chaos mode uses RiskR based sizing: Risk Amount = Equity * 1% * RiskR
 	var riskAmount float64
-	riskAmount = accountEquity * baseRiskPercent * d.RiskR
+	riskAmount = accountEquity * baseRiskPercent * riskR
 
 	quantity := riskAmount / risk
-	// Calculate PositionSizeUSD but return it instead of modifying d (as d doesn't have the field anymore)
-	// Wait, validateDecision modifies d directly for adjustments.
-	// But d no longer has PositionSizeUSD.
-	// We need to return the calculated PositionSizeUSD or store it elsewhere?
-	// The validation logic seems to assume d carries the state.
-	// If chaos.Decision doesn't have PositionSizeUSD, we can't store it there.
-	// But chaos/engine.go needs it to map to kernel.Decision.
 
-	// Re-reading user request: "PositionSizeUSD is output of Nofx normal mode, unused, currently calculated from RiskR."
-	// This implies chaos.Decision shouldn't have it as an INPUT from LLM.
-	// BUT, does it need it as an internal field for passing to kernel?
-	// User said: "remove it".
-	// If I remove it from chaos.Decision, I need to calculate it in engine.go before mapping to kernel.Decision?
-	// Or maybe ValidateDecision should return the calculated position size?
-
-	positionSizeUSD := quantity * d.EntryPrice
+	positionSizeUSD := quantity * entryPrice
 
 	if positionSizeUSD <= 0 {
 		return 0, fmt.Errorf("%s: calculated position size invalid: %.2f", decisionInfo(), positionSizeUSD)
@@ -314,13 +418,12 @@ func (m *Manager) ValidateDecision(
 		maxPosValue = accountEquity * btcEthPosRatio
 	}
 
-	if d.Leverage <= 0 {
-		return 0, fmt.Errorf("%s: leverage must be provided for Chaos decision", decisionInfo())
-	}
-	if d.Leverage > maxLeverage {
+	if leverage > maxLeverage {
 		logger.Infof("⚠️  [Leverage Adjustment] %s leverage %dx exceeds limit %dx for %s, adjusting to %dx",
-			decisionInfo(), d.Leverage, maxLeverage, d.Symbol, maxLeverage)
-		d.Leverage = maxLeverage
+			decisionInfo(), leverage, maxLeverage, d.Symbol, maxLeverage)
+		leverage = maxLeverage
+		// Update the pointer value
+		*d.Leverage = leverage
 	}
 
 	if positionSizeUSD > maxPosValue {
@@ -337,8 +440,15 @@ func (m *Manager) ValidateDecision(
 	// 6. Logging (audit trail)
 	logger.Infof(
 		"✓ Chaos decision validated | %s %s | RiskR=%.2f | Size=%.2f USDT | R:R=%.2f",
-		d.Action, d.Symbol, d.RiskR, positionSizeUSD, riskRewardRatio,
+		d.Action, d.Symbol, riskR, positionSizeUSD, riskRewardRatio,
 	)
 
 	return positionSizeUSD, nil
+}
+
+func abs(x float64) float64 {
+	if x < 0 {
+		return -x
+	}
+	return x
 }

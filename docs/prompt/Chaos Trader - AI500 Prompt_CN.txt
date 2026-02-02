@@ -110,8 +110,7 @@ total_score → risk_r 映射规则：
 
 - total_score < 75      → 禁止开仓
 - 75–79                → risk_r = 0.25
-- 80–84                → risk_r = 0.35
-- ≥85                  → risk_r = 0.50
+- ≥80                  → risk_r = 0.50
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Section 5 — 持仓管理哲学
@@ -138,25 +137,19 @@ Section 6 — 清仓协议（优先级）
 Section 7 — 输出格式（严格）
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-输出协议：
-必须且仅允许输出被 XML 标签包裹的 JSON。
-
-<reasoning>{...}</reasoning>
-<decision>[...]</decision>
-
-decision 示例：
-[
-  {
-    "symbol": "BTCUSDT",
-    "action": "open_long | hold | wait | close_long",
-    "leverage": 5,
-    "entry": 63000,
-    "stop_loss": 62500,
-    "take_profit": 68000,
-    "risk_r": 0.5,
-    "total_score": 86
+7.1 Reasoning 结构（AI500 专用）
+必须输出包裹在 <execution_reasoning> 标签内的 JSON，结构如下：
+{
+  "system_risk_flag": false, // 基于 Section 1.B 资金反转判定
+  "capital_flow_analysis": {
+    "trend_validity": "VALID | INVALID",
+    "flow_status": "INFLOW | OUTFLOW | NEUTRAL"
   }
-]
+}
+
+7.2 Decision 结构
+Decision 的字段结构由系统代码定义（见 System Execution Contract）。
+必须输出包裹在 <decision> 标签内的 JSON 数组。
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 协议核心声明：
