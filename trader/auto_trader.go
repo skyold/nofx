@@ -2053,6 +2053,9 @@ func (at *AutoTrader) recordAndConfirmOrder(orderResult map[string]interface{}, 
 		return
 	}
 
+	// Generate a local Client Order ID for tracking
+	clientOrderID := fmt.Sprintf("auto_%d", time.Now().UnixNano())
+
 	// Get order ID (supports multiple types)
 	var orderID string
 	switch v := orderResult["orderId"].(type) {
@@ -2090,7 +2093,7 @@ func (at *AutoTrader) recordAndConfirmOrder(orderResult map[string]interface{}, 
 	case "binance", "lighter", "hyperliquid", "bybit", "okx", "bitget", "aster":
 		// Record order immediately (status: NEW) so it appears in DB
 		// Fills and position updates will be handled by OrderSync to avoid double counting
-		orderRecord := at.createOrderRecord(orderID, symbol, action, positionSide, quantity, price, leverage)
+		orderRecord := at.createOrderRecord(orderID, clientOrderID, symbol, action, positionSide, quantity, price, leverage)
 		if err := at.store.Order().CreateOrder(orderRecord); err != nil {
 			logger.Infof("  ⚠️ Failed to record order: %v", err)
 		} else {
@@ -2102,7 +2105,7 @@ func (at *AutoTrader) recordAndConfirmOrder(orderResult map[string]interface{}, 
 	}
 
 	// For exchanges without OrderSync (e.g., Binance): record immediately and poll for fill data
-	orderRecord := at.createOrderRecord(orderID, symbol, action, positionSide, quantity, price, leverage)
+	orderRecord := at.createOrderRecord(orderID, clientOrderID, symbol, action, positionSide, quantity, price, leverage)
 	if err := at.store.Order().CreateOrder(orderRecord); err != nil {
 		logger.Infof("  ⚠️ Failed to record order: %v", err)
 	} else {
@@ -2184,21 +2187,23 @@ func (at *AutoTrader) recordPositionChange(orderID, symbol, side, action string,
 		// Open position: create new position record
 		nowMs := time.Now().UTC().UnixMilli()
 		pos := &store.TraderPosition{
-			TraderID:     at.id,
-			ExchangeID:   at.exchangeID, // Exchange account UUID
-			ExchangeType: at.exchange,   // Exchange type: binance/bybit/okx/etc
-			Symbol:       symbol,
-			Side:         side, // LONG or SHORT
-			Quantity:     quantity,
-			EntryPrice:   price,
-			EntryOrderID: orderID,
-			EntryTime:    store.UnixTime(nowMs),
-			Leverage:     leverage,
-			Status:       "OPEN",
-			CreatedAt:    store.UnixTime(nowMs),
-			UpdatedAt:    store.UnixTime(nowMs),
+			TraderID:           at.id,
+			ExchangeID:         at.exchangeID,                             // Exchange account UUID
+			ExchangeType:       at.exchange,                               // Exchange type: binance/bybit/okx/etc
+			ExchangePositionID: at.exchangeID + "_" + symbol + "_" + side, // Construct a unique ID for merging
+			Symbol:             symbol,
+			Side:               side, // LONG or SHORT
+			Quantity:           quantity,
+			EntryPrice:         price,
+			EntryOrderID:       orderID,
+			EntryTime:          store.UnixTime(nowMs),
+			Leverage:           leverage,
+			Status:             "OPEN",
+			CreatedAt:          store.UnixTime(nowMs),
+			UpdatedAt:          store.UnixTime(nowMs),
 		}
-		if err := at.store.Position().Create(pos); err != nil {
+		// Use CreateOpenPosition to handle merging logic
+		if err := at.store.Position().CreateOpenPosition(pos); err != nil {
 			logger.Infof("  ⚠️ Failed to record position: %v", err)
 		} else {
 			logger.Infof("  📊 Position recorded [%s] %s %s @ %.4f", at.id[:8], symbol, side, price)
@@ -2224,7 +2229,7 @@ func (at *AutoTrader) recordPositionChange(orderID, symbol, side, action string,
 }
 
 // createOrderRecord creates an order record struct from order details
-func (at *AutoTrader) createOrderRecord(orderID, symbol, action, positionSide string, quantity, price float64, leverage int) *store.TraderOrder {
+func (at *AutoTrader) createOrderRecord(orderID, clientOrderID, symbol, action, positionSide string, quantity, price float64, leverage int) *store.TraderOrder {
 	// Determine order type (market for auto trader)
 	orderType := "MARKET"
 
@@ -2251,6 +2256,7 @@ func (at *AutoTrader) createOrderRecord(orderID, symbol, action, positionSide st
 		ExchangeID:      at.exchangeID,
 		ExchangeType:    at.exchange,
 		ExchangeOrderID: orderID,
+		ClientOrderID:   clientOrderID, // Save Client Order ID
 		Symbol:          normalizedSymbol,
 		Side:            side,
 		PositionSide:    positionSide,

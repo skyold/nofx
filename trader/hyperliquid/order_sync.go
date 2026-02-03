@@ -131,7 +131,13 @@ func (t *HyperliquidTrader) SyncOrdersFromHyperliquid(traderID string, exchangeI
 			trade.TradeID, symbol, trade.Side, trade.Quantity, trade.Price, trade.RealizedPnL, trade.Fee, orderAction)
 	}
 
-	logger.Infof("✅ Order sync completed: %d new trades synced", syncedCount)
+	logger.Infof("✅ Hyperliquid order sync completed: %d new trades synced", syncedCount)
+
+	// Reconcile positions to fix ghost positions
+	if err := st.Position().ReconcilePositions(t, traderID, exchangeID); err != nil {
+		logger.Infof("⚠️ Failed to reconcile positions: %v", err)
+	}
+
 	return nil
 }
 

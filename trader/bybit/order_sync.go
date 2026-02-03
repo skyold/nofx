@@ -294,6 +294,12 @@ func (t *BybitTrader) SyncOrdersFromBybit(traderID string, exchangeID string, ex
 	}
 
 	logger.Infof("✅ Bybit order sync completed: %d new trades synced", syncedCount)
+
+	// Reconcile positions to fix ghost positions
+	if err := st.Position().ReconcilePositions(t, traderID, exchangeID); err != nil {
+		logger.Infof("⚠️ Failed to reconcile positions: %v", err)
+	}
+
 	return nil
 }
 

@@ -268,6 +268,12 @@ func (t *OKXTrader) SyncOrdersFromOKX(traderID string, exchangeID string, exchan
 	}
 
 	logger.Infof("✅ OKX order sync completed: %d new trades synced", syncedCount)
+
+	// Reconcile positions to fix ghost positions
+	if err := st.Position().ReconcilePositions(t, traderID, exchangeID); err != nil {
+		logger.Infof("⚠️ Failed to reconcile positions: %v", err)
+	}
+
 	return nil
 }
 

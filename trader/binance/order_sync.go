@@ -287,6 +287,14 @@ func (t *FuturesTrader) SyncOrdersFromBinance(traderID string, exchangeID string
 	}
 
 	logger.Infof("✅ Binance order sync completed: %d new trades synced, %d skipped (already exist)", syncedCount, skippedCount)
+
+	// Final Step: Reconcile positions to fix ghost positions or mismatches
+	// This ensures that even if we missed some trades (e.g. liquidation, external close),
+	// the final position state matches the exchange.
+	if err := st.Position().ReconcilePositions(t, traderID, exchangeID); err != nil {
+		logger.Infof("⚠️ Failed to reconcile positions: %v", err)
+	}
+
 	return nil
 }
 
