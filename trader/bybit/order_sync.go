@@ -241,9 +241,9 @@ func (t *BybitTrader) SyncOrdersFromBybit(traderID string, exchangeID string, ex
 			FilledQuantity:  trade.ExecQty,
 			AvgFillPrice:    trade.ExecPrice,
 			Commission:      trade.ExecFee,
-			FilledAt:        execTimeMs,
-			CreatedAt:       execTimeMs,
-			UpdatedAt:       execTimeMs,
+			FilledAt:        store.UnixTime(execTimeMs),
+			CreatedAt:       store.UnixTime(execTimeMs),
+			UpdatedAt:       store.UnixTime(execTimeMs),
 		}
 
 		// Insert order record
@@ -269,7 +269,7 @@ func (t *BybitTrader) SyncOrdersFromBybit(traderID string, exchangeID string, ex
 			CommissionAsset: "USDT",
 			RealizedPnL:     trade.ClosedPnL,
 			IsMaker:         trade.IsMaker,
-			CreatedAt:       execTimeMs,
+			CreatedAt:       store.UnixTime(execTimeMs),
 		}
 
 		if err := orderStore.CreateFill(fillRecord); err != nil {

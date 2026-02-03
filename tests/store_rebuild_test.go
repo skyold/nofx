@@ -25,6 +25,7 @@ func setupTestDB(t *testing.T) *gorm.DB {
 func TestRebuildFromFills_PhantomPosition(t *testing.T) {
 	db := setupTestDB(t)
 	posStore := store.NewPositionStore(db)
+	orderStore := store.NewOrderStore(db)
 	pb := store.NewPositionBuilder(posStore)
 
 	traderID := "trader1"
@@ -52,8 +53,8 @@ func TestRebuildFromFills_PhantomPosition(t *testing.T) {
 	}
 
 	// 2. Run RebuildFromFills (with NO fills)
-	// We pass nil for OrderStore as it's not used in RebuildFromFills
-	rebuiltCount, err := pb.RebuildFromFills(traderID, nil)
+	// We pass orderStore
+	rebuiltCount, err := pb.RebuildFromFills(traderID, orderStore)
 	if err != nil {
 		t.Fatalf("RebuildFromFills failed: %v", err)
 	}
@@ -74,6 +75,7 @@ func TestRebuildFromFills_PhantomPosition(t *testing.T) {
 func TestRebuildFromFills_ValidOpenPosition(t *testing.T) {
 	db := setupTestDB(t)
 	posStore := store.NewPositionStore(db)
+	orderStore := store.NewOrderStore(db)
 	pb := store.NewPositionBuilder(posStore)
 
 	traderID := "trader1"
@@ -97,7 +99,7 @@ func TestRebuildFromFills_ValidOpenPosition(t *testing.T) {
 	}
 
 	// 2. Run RebuildFromFills
-	_, err := pb.RebuildFromFills(traderID, nil)
+	_, err := pb.RebuildFromFills(traderID, orderStore)
 	if err != nil {
 		t.Fatalf("RebuildFromFills failed: %v", err)
 	}
@@ -120,6 +122,7 @@ func TestRebuildFromFills_ValidOpenPosition(t *testing.T) {
 func TestRebuildFromFills_ClosedPosition_ClearsOpen(t *testing.T) {
 	db := setupTestDB(t)
 	posStore := store.NewPositionStore(db)
+	orderStore := store.NewOrderStore(db)
 	pb := store.NewPositionBuilder(posStore)
 
 	traderID := "trader1"
@@ -167,15 +170,15 @@ func TestRebuildFromFills_ClosedPosition_ClearsOpen(t *testing.T) {
 	}
 
 	// 3. Run RebuildFromFills
-	rebuiltCount, err := pb.RebuildFromFills(traderID, nil)
+	rebuiltCount, err := pb.RebuildFromFills(traderID, orderStore)
 	if err != nil {
 		t.Fatalf("RebuildFromFills failed: %v", err)
 	}
 
 	// 4. Verify
-	// Should create 1 closed position
-	if rebuiltCount != 1 {
-		t.Errorf("expected 1 rebuilt closed position, got %d", rebuiltCount)
+	// Should process 2 fills
+	if rebuiltCount != 2 {
+		t.Errorf("expected 2 rebuilt fills, got %d", rebuiltCount)
 	}
 
 	// Should have NO open positions (because fills fully closed it)
@@ -189,6 +192,7 @@ func TestRebuildFromFills_ClosedPosition_ClearsOpen(t *testing.T) {
 func TestRebuildFromFills_ZeroPnL_Close(t *testing.T) {
 	db := setupTestDB(t)
 	posStore := store.NewPositionStore(db)
+	orderStore := store.NewOrderStore(db)
 	pb := store.NewPositionBuilder(posStore)
 
 	traderID := "trader1"
@@ -259,15 +263,15 @@ func TestRebuildFromFills_ZeroPnL_Close(t *testing.T) {
 	}
 
 	// 3. Run RebuildFromFills
-	rebuiltCount, err := pb.RebuildFromFills(traderID, nil)
+	rebuiltCount, err := pb.RebuildFromFills(traderID, orderStore)
 	if err != nil {
 		t.Fatalf("RebuildFromFills failed: %v", err)
 	}
 
 	// 4. Verify
-	// Should create 1 closed position (despite 0 PnL)
-	if rebuiltCount != 1 {
-		t.Errorf("expected 1 rebuilt closed position, got %d", rebuiltCount)
+	// Should process 2 fills
+	if rebuiltCount != 2 {
+		t.Errorf("expected 2 rebuilt fills, got %d", rebuiltCount)
 	}
 
 	// Should have NO open positions

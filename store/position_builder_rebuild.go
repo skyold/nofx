@@ -3,6 +3,7 @@ package store
 import (
 	"fmt"
 	"nofx/logger"
+	"strings"
 )
 
 // RebuildFromFills rebuilds all positions from trade history (fills)
@@ -49,18 +50,28 @@ func (pb *PositionBuilder) RebuildFromFills(traderID string, orderStore *OrderSt
 			// But GetFillsWithActions only joins order_action.
 		}
 
+		// Determine position side from action
+		var posSide string
+		if strings.Contains(action, "_long") {
+			posSide = "LONG"
+		} else if strings.Contains(action, "_short") {
+			posSide = "SHORT"
+		} else {
+			posSide = fill.Side // Fallback
+		}
+
 		err := pb.ProcessTrade(
 			fill.TraderID,
 			fill.ExchangeID,
 			fill.ExchangeType,
 			fill.Symbol,
-			fill.Side,
+			posSide,
 			action,
 			fill.Quantity,
 			fill.Price,
 			fill.Commission,
 			fill.RealizedPnL,
-			fill.CreatedAt,
+			int64(fill.CreatedAt),
 			fmt.Sprintf("%d", fill.OrderID), // Use internal order ID as reference
 		)
 

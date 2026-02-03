@@ -219,9 +219,9 @@ func (t *FuturesTrader) SyncOrdersFromBinance(traderID string, exchangeID string
 			FilledQuantity:  trade.Quantity,
 			AvgFillPrice:    trade.Price,
 			Commission:      trade.Fee,
-			FilledAt:        tradeTimeMs,
-			CreatedAt:       tradeTimeMs,
-			UpdatedAt:       tradeTimeMs,
+			FilledAt:        store.UnixTime(tradeTimeMs),
+			CreatedAt:       store.UnixTime(tradeTimeMs),
+			UpdatedAt:       store.UnixTime(tradeTimeMs),
 		}
 
 		// Insert order record
@@ -247,7 +247,7 @@ func (t *FuturesTrader) SyncOrdersFromBinance(traderID string, exchangeID string
 			CommissionAsset: "USDT",
 			RealizedPnL:     trade.RealizedPnL,
 			IsMaker:         false,
-			CreatedAt:       tradeTimeMs,
+			CreatedAt:       store.UnixTime(tradeTimeMs),
 		}
 
 		if err := orderStore.CreateFill(fillRecord); err != nil {

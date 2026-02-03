@@ -79,9 +79,9 @@ func (t *HyperliquidTrader) SyncOrdersFromHyperliquid(traderID string, exchangeI
 				FilledQuantity:  trade.Quantity,
 				AvgFillPrice:    trade.Price,
 				Commission:      trade.Fee,
-				FilledAt:        tradeTimeMs,
-				CreatedAt:       tradeTimeMs,
-				UpdatedAt:       tradeTimeMs,
+				FilledAt:        store.UnixTime(tradeTimeMs),
+				CreatedAt:       store.UnixTime(tradeTimeMs),
+				UpdatedAt:       store.UnixTime(tradeTimeMs),
 			}
 
 			// Insert order record
@@ -104,10 +104,10 @@ func (t *HyperliquidTrader) SyncOrdersFromHyperliquid(traderID string, exchangeI
 				Quantity:        trade.Quantity,
 				QuoteQuantity:   trade.Price * trade.Quantity,
 				Commission:      trade.Fee,
-				CommissionAsset: "USDT",
+				CommissionAsset: "USDC", // Hyperliquid uses USDC
 				RealizedPnL:     trade.RealizedPnL,
 				IsMaker:         false, // Hyperliquid GetTrades doesn't provide maker/taker info
-				CreatedAt:       tradeTimeMs,
+				CreatedAt:       store.UnixTime(tradeTimeMs),
 			}
 
 			if err := orderStore.CreateFill(fillRecord); err != nil {

@@ -88,9 +88,9 @@ func (t *LighterTraderV2) SyncOrdersFromLighter(traderID string, exchangeID stri
 			FilledQuantity:  trade.Quantity,
 			AvgFillPrice:    trade.Price,
 			Commission:      trade.Fee,
-			FilledAt:        tradeTimeMs,
-			CreatedAt:       tradeTimeMs,
-			UpdatedAt:       tradeTimeMs,
+			FilledAt:        store.UnixTime(tradeTimeMs),
+			CreatedAt:       store.UnixTime(tradeTimeMs),
+			UpdatedAt:       store.UnixTime(tradeTimeMs),
 		}
 
 		// Insert order record
@@ -116,7 +116,7 @@ func (t *LighterTraderV2) SyncOrdersFromLighter(traderID string, exchangeID stri
 			CommissionAsset: "USDT",
 			RealizedPnL:     trade.RealizedPnL,
 			IsMaker:         false,
-			CreatedAt:       tradeTimeMs,
+			CreatedAt:       store.UnixTime(tradeTimeMs),
 		}
 
 		if err := orderStore.CreateFill(fillRecord); err != nil {
