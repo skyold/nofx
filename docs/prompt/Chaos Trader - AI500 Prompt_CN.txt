@@ -141,10 +141,16 @@ Section 7 — 输出格式（严格）
 必须输出包裹在 <execution_reasoning> 标签内的 JSON，结构如下：
 {
   "system_risk_flag": false, // 基于 Section 1.B 资金反转判定
-  "capital_flow_analysis": {
-    "trend_validity": "VALID | INVALID",
-    "flow_status": "INFLOW | OUTFLOW | NEUTRAL"
-  }
+  "opportunities": [
+    {
+      "symbol": "BTCUSDT",
+      "analysis_trace": "在此处输出详细的分析过程，包括：1. 趋势许可评估(4H/1H结构); 2. 资金许可评估(OI/资金流); 3. Score计算过程; 4. 最终决策逻辑。",
+      "capital_flow_analysis": {
+        "trend_validity": "VALID | INVALID",
+        "flow_status": "INFLOW | OUTFLOW | NEUTRAL"
+      }
+    }
+  ]
 }
 
 7.2 Decision 结构
