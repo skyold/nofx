@@ -1393,9 +1393,12 @@ func (s *Server) handleClosePosition(c *gin.Context) {
 	}
 
 	// Get current position info BEFORE closing (to get quantity and price)
+	// This also helps us detect "ghost positions" (exist locally but not on exchange)
 	positions, err := tempTrader.GetPositions()
 	if err != nil {
 		logger.Infof("⚠️ Failed to get positions: %v", err)
+		SafeInternalError(c, "Failed to query exchange positions", err)
+		return
 	}
 
 	var posQty float64
@@ -1413,6 +1416,37 @@ func (s *Server) handleClosePosition(c *gin.Context) {
 			}
 			break
 		}
+	}
+
+	// Case 1: Ghost Position - Position exists in DB (since user clicked it) but 0 on exchange
+	if posQty == 0 {
+		logger.Infof("👻 Detected ghost position (exists locally but 0 on exchange): %s %s", req.Symbol, req.Side)
+
+		// Directly delete/close in local DB without calling exchange API
+		// This avoids API errors like "position not found" or "invalid mode"
+		if err := s.store.GormDB().Where("trader_id = ? AND symbol = ? AND side = ? AND status = ?", traderID, req.Symbol, req.Side, "OPEN").Delete(&store.TraderPosition{}).Error; err != nil {
+			logger.Errorf("❌ Failed to delete ghost position: %v", err)
+			SafeInternalError(c, "Failed to delete ghost position", err)
+			return
+		}
+
+		logger.Infof("✅ Ghost position deleted from database")
+
+		c.JSON(http.StatusOK, gin.H{
+			"message": "Position synced (was already closed on exchange)",
+			"symbol":  req.Symbol,
+			"side":    req.Side,
+			"result":  map[string]interface{}{"status": "CLOSED_EXTERNALLY"},
+		})
+		return
+	}
+
+	// Case 2: Real Position - Exists on exchange, need to close it
+	// First, cancel all open orders for this symbol to avoid "-4067 Position side cannot be changed" error
+	// This is necessary because some exchanges lock the position mode if there are open orders
+	logger.Infof("🔄 Real position found (qty: %.4f). Cancelling open orders before closing...", posQty)
+	if err := tempTrader.CancelAllOrders(req.Symbol); err != nil {
+		logger.Infof("⚠️ Failed to cancel open orders (non-fatal): %v", err)
 	}
 
 	// Execute close position operation
