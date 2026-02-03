@@ -118,6 +118,12 @@ func (t *FuturesTrader) SyncOrdersFromBinance(traderID string, exchangeID string
 
 	if len(changedSymbols) == 0 {
 		logger.Infof("📭 No symbols with new trades to sync")
+		// Even if no new trades, we MUST Reconcile positions to fix ghost positions
+		// This is critical when trades are missed (e.g. liquidation) or position is closed externally
+		if err := st.Position().ReconcilePositions(t, traderID, exchangeID); err != nil {
+			logger.Infof("⚠️ Failed to reconcile positions: %v", err)
+		}
+
 		// DON'T update lastSyncTime to current time here!
 		// Keep using the last actual trade time from DB to avoid creating gaps
 		// The lastSyncTimeMs from DB already has +1000ms buffer added
@@ -159,6 +165,12 @@ func (t *FuturesTrader) SyncOrdersFromBinance(traderID string, exchangeID string
 		if len(failedSymbols) > 0 {
 			logger.Infof("  ⚠️ %d symbols failed: %v", len(failedSymbols), failedSymbols)
 		}
+
+		// Still reconcile positions!
+		if err := st.Position().ReconcilePositions(t, traderID, exchangeID); err != nil {
+			logger.Infof("⚠️ Failed to reconcile positions: %v", err)
+		}
+
 		return nil
 	}
 
