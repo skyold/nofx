@@ -202,6 +202,10 @@ func (m *Manager) ValidateDecision(
 		if d.TotalScore != nil {
 			score = *d.TotalScore
 		}
+		lev := 0
+		if d.Leverage != nil {
+			lev = *d.Leverage
+		}
 		riskR := 0.0
 		if d.RiskR != nil {
 			riskR = *d.RiskR
@@ -212,8 +216,8 @@ func (m *Manager) ValidateDecision(
 		}
 
 		return fmt.Sprintf(
-			"decision[symbol=%s action=%s lev=%v entry=%.8f risk_r=%.2f score=%d]",
-			d.Symbol, d.Action, d.Leverage, entry, riskR, score,
+			"decision[symbol=%s action=%s lev=%d entry=%.8f risk_r=%.2f score=%d]",
+			d.Symbol, d.Action, lev, entry, riskR, score,
 		)
 	}
 
@@ -259,8 +263,27 @@ func (m *Manager) ValidateDecision(
 		}
 	} else {
 		// No extra fields allowed for non-open actions
-		if d.EntryPrice != nil || d.StopLoss != nil || d.TakeProfit != nil || d.RiskR != nil || d.TotalScore != nil {
-			return 0, fmt.Errorf("%s: non-open action '%s' must not contain pricing/risk fields", decisionInfo(), d.Action)
+		var disallowed []string
+		if d.Leverage != nil {
+			disallowed = append(disallowed, "leverage")
+		}
+		if d.EntryPrice != nil {
+			disallowed = append(disallowed, "entry")
+		}
+		if d.StopLoss != nil {
+			disallowed = append(disallowed, "stop_loss")
+		}
+		if d.TakeProfit != nil {
+			disallowed = append(disallowed, "take_profit")
+		}
+		if d.RiskR != nil {
+			disallowed = append(disallowed, "risk_r")
+		}
+		if d.TotalScore != nil {
+			disallowed = append(disallowed, "total_score")
+		}
+		if len(disallowed) > 0 {
+			return 0, fmt.Errorf("%s: non-open action '%s' must include ONLY symbol+action (disallowed: %s)", decisionInfo(), d.Action, strings.Join(disallowed, ", "))
 		}
 		// Logic short-circuit for non-open
 		logger.Infof("✓ Chaos decision validated (non-opening) | %s %s", d.Action, d.Symbol)
@@ -285,7 +308,6 @@ func (m *Manager) ValidateDecision(
 	const MaxRiskR = 1.5
 	const baseRiskPercent = 0.01 // 1R = 1% equity
 
-	// Check allowed values: 0, 0.25, 0.5
 	// Float comparison with small epsilon
 	isValidRiskR := false
 	allowedRiskRs := []float64{0, 0.25, 0.5, 0.75, 1, 1.5}
@@ -296,7 +318,7 @@ func (m *Manager) ValidateDecision(
 		}
 	}
 	if !isValidRiskR {
-		return 0, fmt.Errorf("%s: RiskR %.2f is not in allowed set [0, 0.25, 0.5]", decisionInfo(), riskR)
+		return 0, fmt.Errorf("%s: RiskR %.2f is not in allowed set [0, 0.25, 0.5, 0.75, 1, 1.5]", decisionInfo(), riskR)
 	}
 
 	if riskR <= 0 {

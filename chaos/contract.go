@@ -65,13 +65,17 @@ func GenerateOutputSchema() string {
 	sb.WriteString(`[
   {
     "symbol": "BTCUSDT",
-    "action": "open_long | open_short | close_long | close_short | hold | wait",
+    "action": "open_long",
     "leverage": 5,
     "entry": 63000.00,
     "stop_loss": 62000.00,
     "take_profit": 65000.00,
     "risk_r": 0.5,
     "total_score": 85
+  },
+  {
+    "symbol": "BTCUSDT",
+    "action": "close_long"
   },
   {
     "symbol": "ETHUSDT",
@@ -82,9 +86,9 @@ func GenerateOutputSchema() string {
 
 	sb.WriteString("\nCritical Field Constraints:\n")
 	sb.WriteString("- action: Must be one of [open_long, open_short, close_long, close_short, hold, wait]\n")
-	sb.WriteString("- risk_r: Must be exactly 0, 0.25, or 0.5\n")
-	sb.WriteString("- open_* actions: MUST include entry, stop_loss, take_profit, risk_r, total_score\n")
-	sb.WriteString("- non-open actions: MUST NOT include pricing or risk fields\n")
+	sb.WriteString("- risk_r (open_* only): Must be one of [0.25, 0.5, 0.75, 1, 1.5]\n")
+	sb.WriteString("- open_* actions: MUST include leverage, entry, stop_loss, take_profit, risk_r, total_score\n")
+	sb.WriteString("- close_*/hold/wait actions: MUST include ONLY symbol and action\n")
 
 	return sb.String()
 }
