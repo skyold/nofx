@@ -809,6 +809,7 @@ export interface Transaction {
   realized_pnl: number
   is_maker: boolean
   created_at: number
+  client_order_id?: string
 }
 
 export interface TransactionListResponse {

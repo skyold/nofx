@@ -105,6 +105,7 @@ export function TransactionListPage() {
                         <ArrowUpDown className="w-3 h-3" />
                       </th>
                       <th className="px-4 py-3">{language === 'zh' ? '订单号' : 'Order ID'}</th>
+                      <th className="px-4 py-3">{language === 'zh' ? '成交号' : 'Trade ID'}</th>
                       <th className="px-4 py-3">{language === 'zh' ? '交易所' : 'Exchange'}</th>
                       <th className="px-4 py-3">{language === 'zh' ? '交易对' : 'Symbol'}</th>
                       <th className="px-4 py-3">{language === 'zh' ? '方向' : 'Side'}</th>
@@ -126,6 +127,9 @@ export function TransactionListPage() {
                         </td>
                         <td className="px-4 py-3 font-mono text-xs text-nofx-text-muted" title={tx.exchange_order_id}>
                           {tx.exchange_order_id.length > 12 ? tx.exchange_order_id.slice(0, 8) + '...' : tx.exchange_order_id}
+                        </td>
+                        <td className="px-4 py-3 font-mono text-xs text-nofx-text-muted" title={tx.exchange_trade_id}>
+                          {tx.exchange_trade_id.length > 12 ? tx.exchange_trade_id.slice(0, 8) + '...' : tx.exchange_trade_id}
                         </td>
                         <td className="px-4 py-3">
                           <span className="px-2 py-0.5 rounded bg-white/5 text-xs border border-white/10">

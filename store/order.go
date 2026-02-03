@@ -67,6 +67,9 @@ type TraderFill struct {
 	RealizedPnL     float64  `gorm:"column:realized_pnl;default:0" json:"realized_pnl"`
 	IsMaker         bool     `gorm:"column:is_maker;default:false" json:"is_maker"`
 	CreatedAt       UnixTime `gorm:"column:created_at" json:"created_at"` // Unix milliseconds UTC
+
+	// Enriched fields from Order (not stored in trader_fills table)
+	ClientOrderID string `gorm:"-" json:"client_order_id"`
 }
 
 // TableName returns the table name for TraderFill
@@ -427,38 +430,56 @@ func (s *OrderStore) GetTransactions(page, pageSize int, exchangeID, traderID, s
 	var fills []*TraderFill
 	var total int64
 
-	query := s.db.Model(&TraderFill{})
+	// Base query for counting
+	countQuery := s.db.Model(&TraderFill{})
 
 	if exchangeID != "" {
-		query = query.Where("exchange_id = ?", exchangeID)
+		countQuery = countQuery.Where("exchange_id = ?", exchangeID)
 	}
 	if traderID != "" {
 		if traderID == "unassigned" {
-			// For empty trader ID
-			query = query.Where("trader_id = ''")
+			countQuery = countQuery.Where("trader_id = ''")
 		} else {
-			query = query.Where("trader_id = ?", traderID)
+			countQuery = countQuery.Where("trader_id = ?", traderID)
 		}
 	}
 
 	// Count total records
-	if err := query.Count(&total).Error; err != nil {
+	if err := countQuery.Count(&total).Error; err != nil {
 		return nil, 0, fmt.Errorf("failed to count transactions: %w", err)
 	}
 
-	// Get paginated records
+	// Get paginated records with ClientOrderID
 	offset := (page - 1) * pageSize
 
 	// Apply sorting
-	order := "created_at DESC"
+	order := "trader_fills.created_at DESC"
 	if sortOrder == "asc" || sortOrder == "ASC" {
-		order = "created_at ASC"
+		order = "trader_fills.created_at ASC"
 	}
 
-	err := query.Order(order).
+	// Build select query with join
+	selectQuery := s.db.Table("trader_fills").
+		Select("trader_fills.*, trader_orders.client_order_id").
+		Joins("LEFT JOIN trader_orders ON trader_fills.order_id = trader_orders.id")
+
+	// Apply filters to the select query (must match count query filters)
+	if exchangeID != "" {
+		selectQuery = selectQuery.Where("trader_fills.exchange_id = ?", exchangeID)
+	}
+	if traderID != "" {
+		if traderID == "unassigned" {
+			selectQuery = selectQuery.Where("trader_fills.trader_id = ''")
+		} else {
+			selectQuery = selectQuery.Where("trader_fills.trader_id = ?", traderID)
+		}
+	}
+
+	err := selectQuery.Order(order).
 		Limit(pageSize).
 		Offset(offset).
-		Find(&fills).Error
+		Scan(&fills).Error // Use Scan instead of Find for struct with gorm:"-" fields populated by join
+
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to query transactions: %w", err)
 	}
