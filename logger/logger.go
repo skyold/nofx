@@ -45,14 +45,14 @@ func (f *compactFormatter) Format(entry *logrus.Entry) ([]byte, error) {
 		}
 	}
 
-	msg := fmt.Sprintf("%s [%s] %s %s\n", timestamp, level, caller, entry.Message)
+	msg := fmt.Sprintf("[nofx-trading] %s [%s] %s %s\n", timestamp, level, caller, entry.Message)
 	return []byte(msg), nil
 }
 
 func init() {
 	// Auto-initialize default logger to ensure it works before Init is called
 	Log = logrus.New()
-	Log.SetLevel(logrus.InfoLevel)
+	Log.SetLevel(logrus.WarnLevel)
 	Log.SetFormatter(&compactFormatter{})
 	Log.SetOutput(os.Stdout)
 }
@@ -68,7 +68,7 @@ func Init(cfg *Config) error {
 
 	// Use default values if no config provided
 	if cfg == nil {
-		cfg = &Config{Level: "info"}
+		cfg = &Config{Level: "warn"}
 	}
 
 	// Set default values
@@ -77,7 +77,7 @@ func Init(cfg *Config) error {
 	// Set log level
 	level, err := logrus.ParseLevel(cfg.Level)
 	if err != nil {
-		level = logrus.InfoLevel
+		level = logrus.WarnLevel
 	}
 	Log.SetLevel(level)
 
