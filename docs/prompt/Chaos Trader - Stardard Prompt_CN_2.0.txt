@@ -295,6 +295,21 @@ Structural Validity 的评分只能基于“已明确给出的 SL / TP”
 3.3 总分计算
 opportunity_score = Trend + Structure + Participation + Timing
 
+3.4 Price Structure Direction Consistency Rule
+
+在 opportunities.price_levels 中：
+
+- 若 direction = LONG：
+  必须满足 stop_loss < entry < take_profit
+
+- 若 direction = SHORT：
+  必须满足 stop_loss > entry > take_profit
+
+若不满足：
+- total_score 必须强制置为 0
+- regime 必须降级为 NO_TRADE
+- 该 symbol 不得进入 decision.open_*
+
 ━━━━━━━━━━━━━━━━━━━━
 Section 4：Risk Pricing & Constraints Layer（风险定价与约束层）
 ━━━━━━━━━━━━━━━━━━━━
@@ -333,7 +348,8 @@ Section 5：Execution Reasoning Specification (Standard Edition)
       "symbol": "BTCUSDT",
       "regime": "RANGE_REVERSION",
       "logic_summary": "仅描述结构与依据，不得包含是否值得交易的主观结论。",
-      "price_levels": {
+      "direction": "LONG",
+      "price_levels": {        
         "entry": 63000,
         "stop_loss": 62500,
         "take_profit": 68000,
