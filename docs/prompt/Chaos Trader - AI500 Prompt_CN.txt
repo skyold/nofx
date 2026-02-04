@@ -148,10 +148,17 @@ Section 7 — 输出格式（严格）
       "capital_flow_analysis": {
         "trend_validity": "VALID | INVALID",
         "flow_status": "INFLOW | OUTFLOW | NEUTRAL"
-      }
+      },
+      "total_score": 85,
+      "audit_path": "Score 85 -> Base 0.5R -> Final 0.5R"
     }
   ]
 }
+
+Reasoning 审计字段约束（强制）：
+- opportunities[].total_score 必须输出（用于 RiskR 映射审计）
+- opportunities[].audit_path 必须输出，且必须包含 Final xR（例如：Final 0.5R）
+- 若最终 decision 对该 symbol 给出 open_*，则 audit_path 的 Final xR 必须与 decision.risk_r 一致
 
 7.2 Decision 结构
 Decision 的字段结构由系统代码定义（见 System Execution Contract）。
