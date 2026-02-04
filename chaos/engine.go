@@ -14,9 +14,8 @@ import (
 
 // ChaosEngine handles Chaos mode execution
 type ChaosEngine struct {
-	manager        *Manager
-	config         *store.StrategyConfig
-	strategyEngine *kernel.StrategyEngine // Reuse for common tasks like User Prompt building
+	manager *Manager
+	config  *store.StrategyConfig
 }
 
 // NewChaosEngine creates a new ChaosEngine
@@ -26,9 +25,8 @@ func NewChaosEngine(config *store.StrategyConfig) *ChaosEngine {
 		config = &defaultConfig
 	}
 	return &ChaosEngine{
-		manager:        NewManager(),
-		config:         config,
-		strategyEngine: kernel.NewStrategyEngine(config),
+		manager: NewManager(),
+		config:  config,
 	}
 }
 

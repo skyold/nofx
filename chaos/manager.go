@@ -343,6 +343,8 @@ func (m *Manager) ValidateDecision(
 			// Expected format: "... Final 0.5R"
 			// Simple check: does it contain the formatted RiskR string?
 			expectedStr := fmt.Sprintf("Final %.1fR", riskR)
+			expectedStr2 := fmt.Sprintf("Final %.2fR", riskR) // Also allow 2 decimal places (e.g. 0.50R)
+			
 			// Handle 0.25 case which might be formatted as 0.25R
 			if riskR == 0.25 {
 				expectedStr = "Final 0.25R"
@@ -352,14 +354,14 @@ func (m *Manager) ValidateDecision(
 
 			// If 0.5, fmt gives 0.5.
 			// Let's use flexible check or regex if needed.
-			// User example: "Final 0.5R"
-			if !strings.Contains(matchedOpp.AuditPath, expectedStr) {
+			// User example: "Final 0.5R" or "Final 0.50R"
+			if !strings.Contains(matchedOpp.AuditPath, expectedStr) && !strings.Contains(matchedOpp.AuditPath, expectedStr2) {
 				// Fallback check for integer like "Final 0R"
 				if riskR == 0 && strings.Contains(matchedOpp.AuditPath, "Final 0R") {
 					// pass
 				} else {
-					return 0, fmt.Errorf("%s: RiskR consistency check failed. Decision=%.2f, AuditPath='%s' (Expected '%s')",
-						decisionInfo(), riskR, matchedOpp.AuditPath, expectedStr)
+					return 0, fmt.Errorf("%s: RiskR consistency check failed. Decision=%.2f, AuditPath='%s' (Expected '%s' or '%s')",
+						decisionInfo(), riskR, matchedOpp.AuditPath, expectedStr, expectedStr2)
 				}
 			}
 		}

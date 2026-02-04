@@ -12,110 +12,150 @@ import (
 )
 
 // BuildUserPrompt builds User Prompt based on strategy configuration
-// Currently identical to kernel.StrategyEngine.BuildUserPrompt but independent
+// Independent implementation with component-based architecture
 func (e *ChaosEngine) BuildUserPrompt(ctx *kernel.Context) string {
 	var sb strings.Builder
 
-	// System status
+	// Add Chaos header for visibility
+	sb.WriteString("# 🌀 Chaos Mode User Prompt\n\n")
+
+	// 1. System Status & Environment
+	sb.WriteString(e.buildSystemStatus(ctx))
+
+	// 2. Account Information
+	sb.WriteString(e.buildAccountInfo(ctx))
+
+	// 3. Recent Trades
+	sb.WriteString(e.buildRecentTrades(ctx))
+
+	// 4. Historical Statistics
+	sb.WriteString(e.buildHistoricalStats(ctx))
+
+	// 5. Current Positions
+	sb.WriteString(e.buildPositions(ctx))
+
+	// 6. Candidate Coins (Market Data)
+	sb.WriteString(e.buildCandidateCoins(ctx))
+
+	// 7. Rankings (OI, Netflow, Price)
+	sb.WriteString(e.buildRankings(ctx))
+
+	sb.WriteString("---\n\n")
+
+	return sb.String()
+}
+
+func (e *ChaosEngine) buildSystemStatus(ctx *kernel.Context) string {
+	var sb strings.Builder
 	sb.WriteString(fmt.Sprintf("Time: %s | Period: #%d | Runtime: %d minutes\n\n",
 		ctx.CurrentTime, ctx.CallCount, ctx.RuntimeMinutes))
 
-	// BTC market
+	// BTC market context
 	if btcData, hasBTC := ctx.MarketDataMap["BTCUSDT"]; hasBTC {
 		sb.WriteString(fmt.Sprintf("BTC: %.2f (1h: %+.2f%%, 4h: %+.2f%%) | MACD: %.4f | RSI: %.2f\n\n",
 			btcData.CurrentPrice, btcData.PriceChange1h, btcData.PriceChange4h,
 			btcData.CurrentMACD, btcData.CurrentRSI7))
 	}
+	return sb.String()
+}
 
-	// Account information
-	sb.WriteString(fmt.Sprintf("Account: Equity %.2f | Balance %.2f (%.1f%%) | PnL %+.2f%% | Margin %.1f%% | Positions %d\n\n",
+func (e *ChaosEngine) buildAccountInfo(ctx *kernel.Context) string {
+	// Optional: check e.config to see if account info should be hidden (future feature)
+	return fmt.Sprintf("Account: Equity %.2f | Balance %.2f (%.1f%%) | PnL %+.2f%% | Margin %.1f%% | Positions %d\n\n",
 		ctx.Account.TotalEquity,
 		ctx.Account.AvailableBalance,
 		(ctx.Account.AvailableBalance/ctx.Account.TotalEquity)*100,
 		ctx.Account.TotalPnLPct,
 		ctx.Account.MarginUsedPct,
-		ctx.Account.PositionCount))
+		ctx.Account.PositionCount)
+}
 
-	// Recently completed orders (placed before positions to ensure visibility)
-	if len(ctx.RecentOrders) > 0 {
-		sb.WriteString("## Recent Completed Trades\n")
-		for i, order := range ctx.RecentOrders {
-			resultStr := "Profit"
-			if order.RealizedPnL < 0 {
-				resultStr = "Loss"
-			}
-			sb.WriteString(fmt.Sprintf("%d. %s %s | Entry %.4f Exit %.4f | %s: %+.2f USDT (%+.2f%%) | %s→%s (%s)\n",
-				i+1, order.Symbol, order.Side,
-				order.EntryPrice, order.ExitPrice,
-				resultStr, order.RealizedPnL, order.PnLPct,
-				order.EntryTime, order.ExitTime, order.HoldDuration))
+func (e *ChaosEngine) buildRecentTrades(ctx *kernel.Context) string {
+	if len(ctx.RecentOrders) == 0 {
+		return ""
+	}
+	var sb strings.Builder
+	sb.WriteString("## Recent Completed Trades\n")
+	for i, order := range ctx.RecentOrders {
+		resultStr := "Profit"
+		if order.RealizedPnL < 0 {
+			resultStr = "Loss"
 		}
-		sb.WriteString("\n")
+		sb.WriteString(fmt.Sprintf("%d. %s %s | Entry %.4f Exit %.4f | %s: %+.2f USDT (%+.2f%%) | %s→%s (%s)\n",
+			i+1, order.Symbol, order.Side,
+			order.EntryPrice, order.ExitPrice,
+			resultStr, order.RealizedPnL, order.PnLPct,
+			order.EntryTime, order.ExitTime, order.HoldDuration))
+	}
+	sb.WriteString("\n")
+	return sb.String()
+}
+
+func (e *ChaosEngine) buildHistoricalStats(ctx *kernel.Context) string {
+	if ctx.TradingStats == nil || ctx.TradingStats.TotalTrades == 0 {
+		return ""
+	}
+	var sb strings.Builder
+
+	// Default to English for Chaos mode consistency
+	lang := "en"
+
+	var winLossRatio float64
+	if ctx.TradingStats.AvgLoss > 0 {
+		winLossRatio = ctx.TradingStats.AvgWin / ctx.TradingStats.AvgLoss
 	}
 
-	// Historical trading statistics (helps AI understand past performance)
-	if ctx.TradingStats != nil && ctx.TradingStats.TotalTrades > 0 {
-		// Hardcode language to English for Chaos mode for now, or check config
-		// Chaos mode usually implies English prompts based on custom prompts seen
-		lang := "en" // Default to English for consistency
+	if lang == "zh" {
+		sb.WriteString("## 历史交易统计\n")
+		sb.WriteString(fmt.Sprintf("总交易: %d 笔 | 盈利因子: %.2f | 夏普比率: %.2f | 盈亏比: %.2f\n",
+			ctx.TradingStats.TotalTrades,
+			ctx.TradingStats.ProfitFactor,
+			ctx.TradingStats.SharpeRatio,
+			winLossRatio))
+		sb.WriteString(fmt.Sprintf("总盈亏: %+.2f USDT | 平均盈利: +%.2f | 平均亏损: -%.2f | 最大回撤: %.1f%%\n",
+			ctx.TradingStats.TotalPnL,
+			ctx.TradingStats.AvgWin,
+			ctx.TradingStats.AvgLoss,
+			ctx.TradingStats.MaxDrawdownPct))
 
-		// Win/Loss ratio
-		var winLossRatio float64
-		if ctx.TradingStats.AvgLoss > 0 {
-			winLossRatio = ctx.TradingStats.AvgWin / ctx.TradingStats.AvgLoss
-		}
-
-		if lang == "zh" {
-			sb.WriteString("## 历史交易统计\n")
-			sb.WriteString(fmt.Sprintf("总交易: %d 笔 | 盈利因子: %.2f | 夏普比率: %.2f | 盈亏比: %.2f\n",
-				ctx.TradingStats.TotalTrades,
-				ctx.TradingStats.ProfitFactor,
-				ctx.TradingStats.SharpeRatio,
-				winLossRatio))
-			sb.WriteString(fmt.Sprintf("总盈亏: %+.2f USDT | 平均盈利: +%.2f | 平均亏损: -%.2f | 最大回撤: %.1f%%\n",
-				ctx.TradingStats.TotalPnL,
-				ctx.TradingStats.AvgWin,
-				ctx.TradingStats.AvgLoss,
-				ctx.TradingStats.MaxDrawdownPct))
-
-			// Performance hints based on profit factor, sharpe, and drawdown
-			if ctx.TradingStats.ProfitFactor >= 1.5 && ctx.TradingStats.SharpeRatio >= 1 {
-				sb.WriteString("表现: 良好 - 保持当前策略\n")
-			} else if ctx.TradingStats.ProfitFactor < 1 {
-				sb.WriteString("表现: 需改进 - 提高盈亏比，优化止盈止损\n")
-			} else if ctx.TradingStats.MaxDrawdownPct > 30 {
-				sb.WriteString("表现: 风险偏高 - 减少仓位，控制回撤\n")
-			} else {
-				sb.WriteString("表现: 正常 - 有优化空间\n")
-			}
+		if ctx.TradingStats.ProfitFactor >= 1.5 && ctx.TradingStats.SharpeRatio >= 1 {
+			sb.WriteString("表现: 良好 - 保持当前策略\n")
+		} else if ctx.TradingStats.ProfitFactor < 1 {
+			sb.WriteString("表现: 需改进 - 提高盈亏比，优化止盈止损\n")
+		} else if ctx.TradingStats.MaxDrawdownPct > 30 {
+			sb.WriteString("表现: 风险偏高 - 减少仓位，控制回撤\n")
 		} else {
-			sb.WriteString("## Historical Trading Statistics\n")
-			sb.WriteString(fmt.Sprintf("Total Trades: %d | Profit Factor: %.2f | Sharpe: %.2f | Win/Loss Ratio: %.2f\n",
-				ctx.TradingStats.TotalTrades,
-				ctx.TradingStats.ProfitFactor,
-				ctx.TradingStats.SharpeRatio,
-				winLossRatio))
-			sb.WriteString(fmt.Sprintf("Total PnL: %+.2f USDT | Avg Win: +%.2f | Avg Loss: -%.2f | Max Drawdown: %.1f%%\n",
-				ctx.TradingStats.TotalPnL,
-				ctx.TradingStats.AvgWin,
-				ctx.TradingStats.AvgLoss,
-				ctx.TradingStats.MaxDrawdownPct))
-
-			// Performance hints based on profit factor, sharpe, and drawdown
-			if ctx.TradingStats.ProfitFactor >= 1.5 && ctx.TradingStats.SharpeRatio >= 1 {
-				sb.WriteString("Performance: GOOD - maintain current strategy\n")
-			} else if ctx.TradingStats.ProfitFactor < 1 {
-				sb.WriteString("Performance: NEEDS IMPROVEMENT - improve win/loss ratio, optimize TP/SL\n")
-			} else if ctx.TradingStats.MaxDrawdownPct > 30 {
-				sb.WriteString("Performance: HIGH RISK - reduce position size, control drawdown\n")
-			} else {
-				sb.WriteString("Performance: NORMAL - room for optimization\n")
-			}
+			sb.WriteString("表现: 正常 - 有优化空间\n")
 		}
-		sb.WriteString("\n")
-	}
+	} else {
+		sb.WriteString("## Historical Trading Statistics\n")
+		sb.WriteString(fmt.Sprintf("Total Trades: %d | Profit Factor: %.2f | Sharpe: %.2f | Win/Loss Ratio: %.2f\n",
+			ctx.TradingStats.TotalTrades,
+			ctx.TradingStats.ProfitFactor,
+			ctx.TradingStats.SharpeRatio,
+			winLossRatio))
+		sb.WriteString(fmt.Sprintf("Total PnL: %+.2f USDT | Avg Win: +%.2f | Avg Loss: -%.2f | Max Drawdown: %.1f%%\n",
+			ctx.TradingStats.TotalPnL,
+			ctx.TradingStats.AvgWin,
+			ctx.TradingStats.AvgLoss,
+			ctx.TradingStats.MaxDrawdownPct))
 
-	// Position information
+		if ctx.TradingStats.ProfitFactor >= 1.5 && ctx.TradingStats.SharpeRatio >= 1 {
+			sb.WriteString("Performance: GOOD - maintain current strategy\n")
+		} else if ctx.TradingStats.ProfitFactor < 1 {
+			sb.WriteString("Performance: NEEDS IMPROVEMENT - improve win/loss ratio, optimize TP/SL\n")
+		} else if ctx.TradingStats.MaxDrawdownPct > 30 {
+			sb.WriteString("Performance: HIGH RISK - reduce position size, control drawdown\n")
+		} else {
+			sb.WriteString("Performance: NORMAL - room for optimization\n")
+		}
+	}
+	sb.WriteString("\n")
+	return sb.String()
+}
+
+func (e *ChaosEngine) buildPositions(ctx *kernel.Context) string {
+	var sb strings.Builder
 	if len(ctx.Positions) > 0 {
 		sb.WriteString("## Current Positions\n")
 		for i, pos := range ctx.Positions {
@@ -124,17 +164,22 @@ func (e *ChaosEngine) BuildUserPrompt(ctx *kernel.Context) string {
 	} else {
 		sb.WriteString("Current Positions: None\n\n")
 	}
+	return sb.String()
+}
 
-	// Candidate coins (exclude coins already in positions to avoid duplicate data)
+func (e *ChaosEngine) buildCandidateCoins(ctx *kernel.Context) string {
+	var sb strings.Builder
+
+	// Identify coins already in positions to avoid duplication
 	positionSymbols := make(map[string]bool)
 	for _, pos := range ctx.Positions {
-		// Normalize symbol to handle both "ETH" and "ETHUSDT" formats
 		normalizedSymbol := market.Normalize(pos.Symbol)
 		positionSymbols[normalizedSymbol] = true
 	}
 
 	sb.WriteString(fmt.Sprintf("## Candidate Coins (%d coins)\n\n", len(ctx.MarketDataMap)))
 	displayedCount := 0
+
 	for _, coin := range ctx.CandidateCoins {
 		// Skip if this coin is already a position (data already shown in positions section)
 		normalizedCoinSymbol := market.Normalize(coin.Symbol)
@@ -160,13 +205,13 @@ func (e *ChaosEngine) BuildUserPrompt(ctx *kernel.Context) string {
 		sb.WriteString("\n")
 	}
 	sb.WriteString("\n")
+	return sb.String()
+}
 
+func (e *ChaosEngine) buildRankings(ctx *kernel.Context) string {
+	var sb strings.Builder
 	// Get language for market data formatting
 	nofxosLang := nofxos.LangEnglish
-	// Assume English for Chaos
-	// if e.GetLanguage() == LangChinese {
-	// 	nofxosLang = nofxos.LangChinese
-	// }
 
 	// OI Ranking data (market-wide open interest changes)
 	if ctx.OIRankingData != nil {
@@ -182,9 +227,6 @@ func (e *ChaosEngine) BuildUserPrompt(ctx *kernel.Context) string {
 	if ctx.PriceRankingData != nil {
 		sb.WriteString(nofxos.FormatPriceRankingForAI(ctx.PriceRankingData, nofxosLang))
 	}
-
-	sb.WriteString("---\n\n")
-
 	return sb.String()
 }
 
