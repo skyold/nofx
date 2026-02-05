@@ -109,18 +109,10 @@ func (e *ChaosEngine) BuildSystemPrompt(accountEquity float64, variant string) s
 	var riskControl store.RiskControlConfig
 	var indicators store.IndicatorConfig
 
-	if e.config != nil {
-		// Default to top-level indicators (legacy)
-		indicators = e.config.Indicators
-		if e.config.ChaosConfig != nil {
-			chaosPrompt = e.config.ChaosConfig.ChaosPrompt
-			riskControl = e.config.ChaosConfig.RiskControl
-			// If ChaosConfig has Indicators populated (check if non-zero), use them
-			// Simple check: if PrimaryTimeframe is set, assume populated
-			if e.config.ChaosConfig.Indicators.Klines.PrimaryTimeframe != "" {
-				indicators = e.config.ChaosConfig.Indicators
-			}
-		}
+	if e.config != nil && e.config.ChaosConfig != nil {
+		chaosPrompt = e.config.ChaosConfig.ChaosPrompt
+		riskControl = e.config.ChaosConfig.RiskControl
+		indicators = e.config.ChaosConfig.Indicators
 	}
 
 	ctx := &ChaosContext{
@@ -194,9 +186,7 @@ func (e *ChaosEngine) validateDecisions(decisions []Decision, reasoning *Reasoni
 		// We pass ChaosConfig.RiskControl params
 
 		// Note: Manager.ValidateDecision returns calculated position size USD
-		positionSizeUSD, err := e.manager.ValidateDecision(&d, reasoning, ctx.Account.TotalEquity,
-			riskConfig.BTCETHMaxLeverage, riskConfig.AltcoinMaxLeverage,
-			riskConfig.BTCETHMaxPositionValueRatio, riskConfig.AltcoinMaxPositionValueRatio)
+		positionSizeUSD, err := e.manager.ValidateDecision(&d, reasoning, ctx.Account.TotalEquity, riskConfig)
 
 		if err != nil {
 			return nil, fmt.Errorf("validation failed for %s: %w", d.Symbol, err)

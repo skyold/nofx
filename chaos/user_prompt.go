@@ -317,7 +317,10 @@ func (e *ChaosEngine) formatCoinSourceTag(sources []string) string {
 
 func (e *ChaosEngine) formatMarketData(data *market.Data) string {
 	var sb strings.Builder
-	indicators := e.config.Indicators
+	var indicators store.IndicatorConfig
+	if e.config != nil && e.config.ChaosConfig != nil {
+		indicators = e.config.ChaosConfig.Indicators
+	}
 
 	// 明确标注币种
 	sb.WriteString(fmt.Sprintf("=== %s Market Data ===\n\n", data.Symbol))
@@ -549,7 +552,11 @@ func (e *ChaosEngine) formatQuantData(data *kernel.QuantData) string {
 		return ""
 	}
 
-	indicators := e.config.Indicators
+	var indicators store.IndicatorConfig
+	if e.config != nil && e.config.ChaosConfig != nil {
+		indicators = e.config.ChaosConfig.Indicators
+	}
+
 	if !indicators.EnableQuantOI && !indicators.EnableQuantNetflow {
 		return ""
 	}

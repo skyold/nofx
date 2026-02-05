@@ -264,8 +264,7 @@ func (m *Manager) ValidateDecision(
 	d *Decision,
 	reasoning *Reasoning,
 	accountEquity float64,
-	btcEthLeverage, altcoinLeverage int,
-	btcEthPosRatio, altcoinPosRatio float64,
+	riskConfig store.RiskControlConfig,
 ) (float64, error) {
 	decisionInfo := func() string {
 		score := 0
@@ -492,7 +491,7 @@ func (m *Manager) ValidateDecision(
 		return 0, fmt.Errorf("%s: calculated position size invalid: %.2f", decisionInfo(), positionSizeUSD)
 	}
 
-	const minPositionSize = 100.0
+	minPositionSize := riskConfig.MinPositionSize
 	if positionSizeUSD < minPositionSize {
 		logger.Infof("⚠️  [Position Size Adjustment] %s calculated size %.2f < min %.2f, adjusting to %.2f",
 			decisionInfo(), positionSizeUSD, minPositionSize, minPositionSize)
@@ -504,12 +503,12 @@ func (m *Manager) ValidateDecision(
 	}
 
 	// 5. Symbol-based caps
-	maxLeverage := altcoinLeverage
-	maxPosValue := accountEquity * altcoinPosRatio
+	maxLeverage := riskConfig.AltcoinMaxLeverage
+	maxPosValue := accountEquity * riskConfig.AltcoinMaxPositionValueRatio
 
 	if d.Symbol == "BTCUSDT" || d.Symbol == "ETHUSDT" {
-		maxLeverage = btcEthLeverage
-		maxPosValue = accountEquity * btcEthPosRatio
+		maxLeverage = riskConfig.BTCETHMaxLeverage
+		maxPosValue = accountEquity * riskConfig.BTCETHMaxPositionValueRatio
 	}
 
 	if leverage > maxLeverage {
