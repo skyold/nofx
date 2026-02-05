@@ -11,13 +11,13 @@ import (
 	"nofx/store"
 )
 
-// BuildUserPrompt builds User Prompt based on strategy configuration
-// Independent implementation with component-based architecture
-func (e *ChaosEngine) BuildUserPrompt(ctx *kernel.Context) string {
+// BuildUserPromptFromKernel builds User Prompt based on strategy configuration using kernel.Context
+// This is used by AnalyzerEngine which still operates on kernel.Context
+func (e *ChaosEngine) BuildUserPromptFromKernel(ctx *kernel.Context) string {
 	var sb strings.Builder
 
 	// Add Chaos header for visibility
-	sb.WriteString("# 🌀 Chaos Mode User Prompt\n\n")
+	sb.WriteString("# 🌀 Chaos Mode User Prompt (Kernel Adapter)\n\n")
 
 	// 1. System Status & Environment
 	sb.WriteString(e.buildSystemStatus(ctx))

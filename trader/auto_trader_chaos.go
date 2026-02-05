@@ -1,208 +1,323 @@
 package trader
 
 import (
-	"encoding/json"
 	"fmt"
 	"nofx/chaos"
+	"nofx/kernel"
 	"nofx/logger"
+	"nofx/market"
+	"nofx/provider/nofxos"
 	"nofx/store"
-	"strings"
 	"time"
 )
 
-// RunChaosCycle runs one trading cycle using Chaos Engine (Plan B)
-// This is a standalone evolution of the trading logic specifically for Chaos mode
+// IsChaosStrategy checks if the current strategy is Chaos
+func (at *AutoTrader) IsChaosStrategy() bool {
+	if at.config.StrategyConfig == nil {
+		return false
+	}
+	return at.config.StrategyConfig.StrategyType == "chaos_trading"
+}
+
+// RunChaosCycle runs a single chaos trading cycle
 func (at *AutoTrader) RunChaosCycle() error {
-	at.callCount++
-
-	logger.Info("\n" + strings.Repeat("=", 70) + "\n")
-	logger.Infof("🌀 %s - Chaos Cycle #%d", time.Now().Format("2006-01-02 15:04:05"), at.callCount)
-	logger.Info(strings.Repeat("=", 70))
-
-	// 0. Check if trader is stopped
-	at.isRunningMutex.RLock()
-	running := at.isRunning
-	at.isRunningMutex.RUnlock()
-	if !running {
-		logger.Infof("⏹ Trader is stopped, aborting Chaos cycle #%d", at.callCount)
+	if !at.IsChaosStrategy() {
 		return nil
 	}
 
-	// Create decision record
-	record := &store.DecisionRecord{
-		ExecutionLog: []string{},
-		Success:      true,
-		TraderID:     at.id,
-		CycleNumber:  at.callCount,
-		Timestamp:    time.Now().UTC(),
-	}
+	at.cycleNumber++ // Increment cycle number
 
-	// 1. Check if trading needs to be stopped (Risk Control)
-	if time.Now().Before(at.stopUntil) {
-		remaining := at.stopUntil.Sub(time.Now())
-		logger.Infof("⏸ Risk control: Trading paused, remaining %.0f minutes", remaining.Minutes())
-		record.Success = false
-		record.ErrorMessage = fmt.Sprintf("Risk control paused, remaining %.0f minutes", remaining.Minutes())
-		at.saveDecision(record)
-		return nil
-	}
+	logger.Infof("🌀 Starting Chaos Cycle #%d...", at.cycleNumber)
 
-	// 2. Reset daily P&L
-	if time.Since(at.lastResetTime) > 24*time.Hour {
-		at.dailyPnL = 0
-		at.lastResetTime = time.Now()
-		logger.Info("📅 Daily P&L reset")
-	}
-
-	// 3. Collect trading context
-	ctx, err := at.buildTradingContext()
+	// 1. Build Chaos Context
+	ctx, err := at.buildChaosContext()
 	if err != nil {
-		record.Success = false
-		record.ErrorMessage = fmt.Sprintf("Failed to build trading context: %v", err)
-		at.saveDecision(record)
-		return fmt.Errorf("failed to build trading context: %w", err)
+		logger.Errorf("❌ Failed to build Chaos context: %v", err)
+		return err
 	}
 
-	// Skip if no candidate coins
-	if len(ctx.CandidateCoins) == 0 {
-		logger.Infof("ℹ️  No candidate coins available, skipping this cycle")
-		return nil
+	// 2. Execute Chaos Engine
+	result, err := chaos.GetDecisions(ctx, at.mcpClient)
+	if err != nil {
+		logger.Errorf("❌ Chaos Engine execution failed: %v", err)
+		return err
 	}
 
-	// Save equity snapshot
-	at.saveEquitySnapshot(ctx)
+	// 3. Process Decisions
+	at.processChaosResult(result, ctx)
 
-	// Log account status
-	logger.Infof("📊 Account equity: %.2f USDT | Available: %.2f USDT | Positions: %d",
-		ctx.Account.TotalEquity, ctx.Account.AvailableBalance, ctx.Account.PositionCount)
+	logger.Infof("✅ Chaos Cycle #%d completed", at.cycleNumber)
+	return nil
+}
 
-	// 4. Execute Chaos Engine
-	logger.Infof("🌀 Requesting Chaos AI analysis...")
-	
-	// Initialize Chaos Engine
-	chaosEngine := chaos.NewChaosEngine(at.config.StrategyConfig)
-	
-	// Execute AI Decision
-	aiDecision, err := chaosEngine.Execute(ctx, at.mcpClient)
-	
-	// Record metrics
-	if aiDecision != nil && aiDecision.AIRequestDurationMs > 0 {
-		record.AIRequestDurationMs = aiDecision.AIRequestDurationMs
-		logger.Infof("⏱️ AI call duration: %.2f seconds", float64(record.AIRequestDurationMs)/1000)
-		record.ExecutionLog = append(record.ExecutionLog,
-			fmt.Sprintf("AI call duration: %d ms", record.AIRequestDurationMs))
+func (at *AutoTrader) buildChaosContext() (*chaos.ChaosContext, error) {
+	// 1. Get Account Info (Reuse logic from auto_trader.go)
+	balance, err := at.trader.GetBalance()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get account balance: %w", err)
 	}
 
-	// Save detailed decision info
-	if aiDecision != nil {
-		record.SystemPrompt = aiDecision.SystemPrompt
-		record.InputPrompt = aiDecision.UserPrompt
-		record.CoTTrace = aiDecision.CoTTrace
-		record.RawResponse = aiDecision.RawResponse
-		
-		if aiDecision.RawDecisions != nil {
-			decisionJSON, _ := json.MarshalIndent(aiDecision.RawDecisions, "", "  ")
-			record.DecisionJSON = string(decisionJSON)
-		} else if len(aiDecision.Decisions) > 0 {
-			decisionJSON, _ := json.MarshalIndent(aiDecision.Decisions, "", "  ")
-			record.DecisionJSON = string(decisionJSON)
+	totalWalletBalance := 0.0
+	totalUnrealizedProfit := 0.0
+	availableBalance := 0.0
+	totalEquity := 0.0
+
+	if wallet, ok := balance["totalWalletBalance"].(float64); ok {
+		totalWalletBalance = wallet
+	}
+	if unrealized, ok := balance["totalUnrealizedProfit"].(float64); ok {
+		totalUnrealizedProfit = unrealized
+	}
+	if avail, ok := balance["availableBalance"].(float64); ok {
+		availableBalance = avail
+	}
+	if eq, ok := balance["totalEquity"].(float64); ok && eq > 0 {
+		totalEquity = eq
+	} else {
+		totalEquity = totalWalletBalance + totalUnrealizedProfit
+	}
+
+	// 2. Get Positions
+	positions, err := at.trader.GetPositions()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get positions: %w", err)
+	}
+
+	// Convert positions to Chaos format
+	var positionSnapshots []chaos.PositionSnapshot
+	for _, pos := range positions {
+		symbol := pos["symbol"].(string)
+		side := pos["side"].(string)
+		entryPrice := pos["entryPrice"].(float64)
+		markPrice := pos["markPrice"].(float64)
+		quantity := pos["positionAmt"].(float64)
+		if quantity < 0 {
+			quantity = -quantity
 		}
+		if quantity == 0 {
+			continue
+		}
+		// unrealizedPnl := pos["unRealizedProfit"].(float64)
+		liquidationPrice := pos["liquidationPrice"].(float64)
+
+		leverage := 10
+		if lev, ok := pos["leverage"].(float64); ok {
+			leverage = int(lev)
+		}
+
+		// Calculate PnL Pct (use same logic as auto_trader.go)
+		marginUsed := (quantity * markPrice) / float64(leverage)
+		pnlPct := 0.0
+		// Need to recalculate unrealizedPnl based on side to be safe, or use what's provided
+		unrealizedPnl := pos["unRealizedProfit"].(float64)
+		if marginUsed > 0 {
+			pnlPct = (unrealizedPnl / marginUsed) * 100
+		}
+
+		positionSnapshots = append(positionSnapshots, chaos.PositionSnapshot{
+			Symbol:           symbol,
+			Side:             side,
+			EntryPrice:       entryPrice,
+			MarkPrice:        markPrice,
+			Quantity:         quantity,
+			Leverage:         leverage,
+			UnrealizedPnLPct: pnlPct,
+			LiquidationPrice: liquidationPrice,
+			UpdateTime:       time.Now().UnixMilli(), // Approximate
+		})
 	}
 
-	// Handle AI errors
-	if err != nil {
-		record.Success = false
-		record.ErrorMessage = fmt.Sprintf("Chaos Engine failed: %v", err)
-		
-		// Debug logging for error case
-		if aiDecision != nil {
-			logger.Info("\n" + strings.Repeat("=", 70))
-			logger.Infof("📋 System prompt (error case)")
-			logger.Info(aiDecision.SystemPrompt)
-			
-			if aiDecision.CoTTrace != "" {
-				logger.Info("\n" + strings.Repeat("-", 70))
-				logger.Info("💭 AI chain of thought (error case):")
-				logger.Info(aiDecision.CoTTrace)
+	// 3. Prepare Candidate Coins
+	candidateCoins := []chaos.CandidateCoin{}
+	if at.strategyEngine != nil {
+		candidates, err := at.strategyEngine.GetCandidateCoins()
+		if err == nil {
+			for _, c := range candidates {
+				candidateCoins = append(candidateCoins, chaos.CandidateCoin{
+					Symbol:  c.Symbol,
+					Sources: c.Sources,
+				})
 			}
 		}
-		
-		at.saveDecision(record)
-		return fmt.Errorf("Chaos Engine execution failed: %w", err)
 	}
 
-	// 5. Execution Logic
-	logger.Info(strings.Repeat("-", 70))
-	
-	// Sort decisions: Close first, then Open
-	sortedDecisions := sortDecisionsByPriority(aiDecision.Decisions)
-	
-	logger.Info("🔄 Execution order: Close positions first → Open positions later")
-	for i, d := range sortedDecisions {
-		logger.Infof("  [%d] %s %s", i+1, d.Symbol, d.Action)
-	}
-	logger.Info()
+	// 4. Fetch Market Data (Chaos specific fetching)
+	marketDataMap := make(map[string]*market.Data)
 
-	// Check stopped status again
-	at.isRunningMutex.RLock()
-	running = at.isRunning
-	at.isRunningMutex.RUnlock()
-	if !running {
-		logger.Infof("⏹ Trader stopped before execution, aborting")
-		return nil
+	// Config access
+	var chaosConfig *store.ChaosStrategyConfig
+	if at.config.StrategyConfig.ChaosConfig != nil {
+		chaosConfig = at.config.StrategyConfig.ChaosConfig
+	} else {
+		// Default config if nil
+		chaosConfig = &store.ChaosStrategyConfig{}
+	}
+	indicatorsConfig := at.config.StrategyConfig.Indicators
+
+	// Using default logic if config missing
+	primaryTimeframe := "1h"
+	klineCount := 100
+	if indicatorsConfig.Klines.PrimaryTimeframe != "" {
+		primaryTimeframe = indicatorsConfig.Klines.PrimaryTimeframe
+	}
+	if indicatorsConfig.Klines.PrimaryCount > 0 {
+		klineCount = indicatorsConfig.Klines.PrimaryCount
 	}
 
-	// Execute decisions
-	for _, d := range sortedDecisions {
-		at.isRunningMutex.RLock()
-		running = at.isRunning
-		at.isRunningMutex.RUnlock()
-		if !running {
-			logger.Infof("⏹ Trader stopped during execution")
-			break
+	symbolsToFetch := make(map[string]bool)
+	for _, p := range positionSnapshots {
+		symbolsToFetch[p.Symbol] = true
+	}
+	for _, c := range candidateCoins {
+		symbolsToFetch[c.Symbol] = true
+	}
+
+	for symbol := range symbolsToFetch {
+		data, err := market.GetWithTimeframes(symbol, indicatorsConfig.Klines.SelectedTimeframes, primaryTimeframe, klineCount)
+		if err != nil {
+			logger.Warnf("Failed to fetch market data for %s: %v", symbol, err)
+			continue
+		}
+		marketDataMap[symbol] = data
+	}
+
+	// 5. Get OI Top Data
+	oiTopMap := make(map[string]*chaos.OITopData)
+	if at.config.StrategyConfig.CoinSource.UseOITop {
+		apiKey := at.config.StrategyConfig.Indicators.NofxOSAPIKey
+		if apiKey == "" {
+			apiKey = nofxos.DefaultAuthKey
+		}
+		client := nofxos.NewClient(nofxos.DefaultBaseURL, apiKey)
+		oiPositions, err := client.GetOITopPositions()
+		if err == nil {
+			for _, p := range oiPositions {
+				oiTopMap[p.Symbol] = &chaos.OITopData{
+					Rank:              p.Rank,
+					OIDeltaPercent:    p.OIDeltaPercent,
+					OIDeltaValue:      p.OIDeltaValue,
+					PriceDeltaPercent: p.PriceDeltaPercent,
+				}
+			}
+		}
+	}
+
+	// 7. Assemble Context
+	chaosCtx := &chaos.ChaosContext{
+		CurrentTime:    time.Now().Format("2006-01-02 15:04:05"),
+		RuntimeMinutes: int(time.Since(at.startTime).Minutes()),
+		CallCount:      at.cycleNumber,
+		Config: &chaos.ChaosConfig{
+			ChaosPrompt:        chaosConfig.ChaosPrompt,
+			RiskControl:        chaosConfig.RiskControl,
+			PromptVariant:      chaosConfig.PromptVariant,
+			FaultInjectionRate: chaosConfig.FaultInjectionRate,
+			DataNoiseLevel:     chaosConfig.DataNoiseLevel,
+			StressTestMode:     chaosConfig.StressTestMode,
+			Indicators:         indicatorsConfig,
+		},
+		Account: chaos.AccountSnapshot{
+			TotalEquity:      totalEquity,
+			AvailableBalance: availableBalance,
+			UnrealizedPnL:    totalUnrealizedProfit,
+			PositionCount:    len(positionSnapshots),
+		},
+		Positions:      positionSnapshots,
+		CandidateCoins: candidateCoins,
+		MarketDataMap:  marketDataMap,
+		OITopDataMap:   oiTopMap,
+	}
+
+	if totalEquity > 0 {
+		chaosCtx.Account.TotalPnLPct = (totalUnrealizedProfit / totalEquity) * 100
+		chaosCtx.Account.MarginUsedPct = ((totalEquity - availableBalance) / totalEquity) * 100
+	}
+
+	return chaosCtx, nil
+}
+
+func (at *AutoTrader) processChaosResult(result *chaos.DecisionResult, ctx *chaos.ChaosContext) {
+	logger.Infof("🤖 Chaos AI Decision: %d decisions generated", len(result.Decisions))
+
+	kernelDecisions := []kernel.Decision{}
+	for _, d := range result.Decisions {
+		kd := kernel.Decision{
+			Symbol: d.Symbol,
+			Action: d.Action,
+		}
+		if d.Leverage != nil {
+			kd.Leverage = *d.Leverage
+		}
+		if d.EntryPrice != nil {
+			kd.EntryPrice = *d.EntryPrice
+		}
+		if d.StopLoss != nil {
+			kd.StopLoss = *d.StopLoss
+		}
+		if d.TakeProfit != nil {
+			kd.TakeProfit = *d.TakeProfit
+		}
+		if d.RiskR != nil {
+			kd.RiskR = *d.RiskR
+		}
+		if d.TotalScore != nil {
+			kd.Confidence = *d.TotalScore
+		}
+		if d.Reasoning != nil {
+			kd.Reasoning = *d.Reasoning
 		}
 
+		kernelDecisions = append(kernelDecisions, kd)
+	}
+
+	// Save to DB
+	if at.store != nil {
+		record := &store.DecisionRecord{
+			TraderID:            at.id,
+			CycleNumber:         at.cycleNumber,
+			Timestamp:           result.Timestamp,
+			SystemPrompt:        result.SystemPrompt,
+			InputPrompt:         result.UserPrompt,
+			CoTTrace:            result.CoTTrace,
+			RawResponse:         result.RawResponse,
+			AIRequestDurationMs: result.AIRequestDurationMs,
+			Success:             true,
+		}
+		// Add decisions to record... (simplified for now, full detail is in RawResponse)
+		if err := at.store.Decision().LogDecision(record); err != nil {
+			logger.Errorf("Failed to save chaos decision: %v", err)
+		}
+	}
+
+	if !ctx.Config.StressTestMode {
+		at.executeChaosDecisions(kernelDecisions)
+	} else {
+		logger.Infof("🧪 Stress Test Mode: Skipping execution for %d decisions", len(kernelDecisions))
+	}
+}
+
+func (at *AutoTrader) executeChaosDecisions(decisions []kernel.Decision) {
+	// Sort decisions
+	sortedDecisions := sortDecisionsByPriority(decisions)
+
+	for _, d := range sortedDecisions {
+		// Create action record
 		actionRecord := store.DecisionAction{
 			Action:     d.Action,
 			Symbol:     d.Symbol,
-			Quantity:   0,
 			Leverage:   d.Leverage,
-			Price:      0,
 			StopLoss:   d.StopLoss,
 			TakeProfit: d.TakeProfit,
 			Confidence: d.Confidence,
 			Reasoning:  d.Reasoning,
 			Timestamp:  time.Now().UTC(),
-			Success:    false,
 		}
 
+		// Execute
 		if err := at.executeDecisionWithRecord(&d, &actionRecord); err != nil {
-			logger.Infof("❌ Failed to execute (%s %s): %v", d.Symbol, d.Action, err)
-			actionRecord.Error = err.Error()
-			record.ExecutionLog = append(record.ExecutionLog, fmt.Sprintf("❌ %s %s failed: %v", d.Symbol, d.Action, err))
+			logger.Infof("❌ Chaos execution failed (%s %s): %v", d.Symbol, d.Action, err)
 		} else {
-			actionRecord.Success = true
-			record.ExecutionLog = append(record.ExecutionLog, fmt.Sprintf("✓ %s %s succeeded", d.Symbol, d.Action))
-			time.Sleep(1 * time.Second)
+			logger.Infof("✓ Chaos execution succeeded (%s %s)", d.Symbol, d.Action)
 		}
-
-		record.Decisions = append(record.Decisions, actionRecord)
 	}
-
-	// 6. Save final record
-	if err := at.saveDecision(record); err != nil {
-		logger.Infof("⚠ Failed to save decision record: %v", err)
-	}
-
-	return nil
-}
-
-// IsChaosStrategy checks if the current configuration corresponds to a Chaos strategy
-func (at *AutoTrader) IsChaosStrategy() bool {
-	if at.config.StrategyConfig == nil {
-		return false
-	}
-	// Check prompt for Chaos signature
-	chaosManager := chaos.NewManager()
-	return chaosManager.IsChaosMode(at.config.StrategyConfig.CustomPrompt)
 }

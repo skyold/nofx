@@ -121,7 +121,7 @@ func main() {
 
 		filledAtStr := "N/A"
 		if order.FilledAt > 0 {
-			filledAtStr = time.UnixMilli(order.FilledAt).Format("01-02 15:04")
+			filledAtStr = time.UnixMilli(int64(order.FilledAt)).Format("01-02 15:04")
 		}
 
 		fmt.Printf("%-15s %-10s %-10s %-15.2f %-10s %s\n",

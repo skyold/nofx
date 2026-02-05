@@ -82,7 +82,7 @@ func (e *AnalyzerEngine) RunSentinel(ctx *kernel.Context, mcpClient mcp.AIClient
 	}
 
 	// 2. Build User Prompt (Shared)
-	userPrompt := e.chaosEngine.BuildUserPrompt(ctx)
+	userPrompt := e.chaosEngine.BuildUserPromptFromKernel(ctx)
 
 	// 3. Create Session in DB
 	sessionID := uuid.New().String()

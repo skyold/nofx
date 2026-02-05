@@ -1,8 +1,11 @@
 package chaos
 
 import (
+	"nofx/kernel"
 	"nofx/market"
+	"nofx/provider/nofxos"
 	"nofx/store"
+	"time"
 )
 
 // Decision is a copy of the essential fields from kernel.Decision
@@ -16,6 +19,19 @@ type Decision struct {
 	TakeProfit *float64 `json:"take_profit,omitempty"`
 	RiskR      *float64 `json:"risk_r,omitempty"`
 	TotalScore *int     `json:"total_score,omitempty"`
+	Reasoning  *string  `json:"reasoning,omitempty"`
+}
+
+// DecisionResult is the independent result structure for Chaos mode
+type DecisionResult struct {
+	SystemPrompt        string      `json:"system_prompt"`
+	UserPrompt          string      `json:"user_prompt"`
+	CoTTrace            string      `json:"cot_trace"`
+	Decisions           []Decision  `json:"decisions"`
+	RawDecisions        interface{} `json:"raw_decisions,omitempty"`
+	RawResponse         string      `json:"raw_response"`
+	Timestamp           time.Time   `json:"timestamp"`
+	AIRequestDurationMs int64       `json:"ai_request_duration_ms,omitempty"`
 }
 
 // ChaosContext contains all information needed for Chaos mode execution
@@ -37,6 +53,15 @@ type ChaosContext struct {
 	CandidateCoins []CandidateCoin
 	MarketDataMap  map[string]*market.Data
 	OITopDataMap   map[string]*OITopData
+	// Optional Quant Data
+	QuantDataMap map[string]*kernel.QuantData
+	
+	// Rankings
+	OIRankingData      *nofxos.OIRankingData
+	NetFlowRankingData *nofxos.NetFlowRankingData
+	PriceRankingData   *nofxos.PriceRankingData
+	TradingStats       *kernel.TradingStats
+	RecentOrders       []kernel.RecentOrder
 
 	// Chaos specific fields
 	InjectedAnomalies []string // List of anomalies injected into this context
