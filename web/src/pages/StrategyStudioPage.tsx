@@ -99,6 +99,9 @@ export function StrategyStudioPage() {
     promptSections: false,
     customPrompt: false,
     publishSettings: false,
+    chaosCoinSource: true,
+    chaosIndicators: false,
+    chaosRiskControl: false,
   })
 
   // Right panel states
@@ -173,10 +176,12 @@ export function StrategyStudioPage() {
       const active = allStrategies.find((s: Strategy) => s.is_active)
       if (active) {
         setSelectedStrategy(active)
-        setEditingConfig(active.config)
+        const config = migrateChaosConfig(active)
+        setEditingConfig(config)
       } else if (allStrategies.length > 0) {
         setSelectedStrategy(allStrategies[0])
-        setEditingConfig(allStrategies[0].config)
+        const config = migrateChaosConfig(allStrategies[0])
+        setEditingConfig(config)
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error')
@@ -355,12 +360,81 @@ export function StrategyStudioPage() {
     }
   }
 
+  // Migration Helper for Chaos Strategies
+  const migrateChaosConfig = (strategy: Strategy): StrategyConfig => {
+    const config = { ...strategy.config };
+    // Only migrate if it's intended to be a Chaos strategy
+    if (config.strategy_type !== 'chaos_trading') {
+        return config;
+    }
+
+    let migrated = false;
+
+    // Ensure chaos_config exists
+    if (!config.chaos_config) {
+        config.chaos_config = { ...defaultChaosConfig };
+        migrated = true;
+    }
+
+    // Migrate top-level CoinSource/Indicators to ChaosConfig if missing
+    if (config.chaos_config) {
+        if (!config.chaos_config.coin_source && config.coin_source) {
+            config.chaos_config.coin_source = { ...config.coin_source };
+            migrated = true;
+        }
+        if (!config.chaos_config.indicators && config.indicators) {
+            config.chaos_config.indicators = { ...config.indicators };
+            migrated = true;
+        }
+    }
+
+    // Migrate custom_prompt -> chaos_prompt
+    if (config.custom_prompt && 
+        config.custom_prompt.trim().startsWith('{') && 
+        config.custom_prompt.includes('prompt_meta') && 
+        (!config.chaos_config?.chaos_prompt || config.chaos_config?.chaos_prompt === defaultChaosConfig.chaos_prompt)) {
+        
+        if (config.chaos_config) {
+            config.chaos_config.chaos_prompt = config.custom_prompt;
+        }
+        migrated = true;
+    }
+
+    // Mark migration status
+    if (migrated) {
+        Object.defineProperty(config, '__migrated', { value: true, enumerable: false, configurable: true });
+    }
+
+    return config;
+  }
+
   // Export strategy as JSON file
   const handleExportStrategy = (strategy: Strategy) => {
+    // 只导出ChaosConfig内容，类似Grid策略只导出grid_config
+    let configToExport = strategy.config
+    if (strategy.config?.strategy_type === 'chaos_trading') {
+        const chaosConfig = strategy.config.chaos_config
+        if (!chaosConfig) {
+          setError(language === 'zh' ? '策略缺少Chaos配置' : 'Strategy missing Chaos config')
+          return
+        }
+        configToExport = {
+            strategy_type: 'chaos_trading',
+            language: strategy.config.language || 'zh',
+            chaos_config: chaosConfig
+        } as unknown as StrategyConfig
+    } else if (strategy.config?.strategy_type === 'grid_trading') {
+         // Keep existing grid export logic if it was implicit, or ensure it's clean
+         // The previous code exported the whole config, but maybe we should clean it too?
+         // For now, let's focus on Chaos as requested.
+         // Actually, let's keep it safe and consistent with ChaosStudioPage's Chaos export.
+         // For other types, we export as is (which includes shared fields).
+    }
+
     const exportData = {
       name: strategy.name,
       description: strategy.description,
-      config: strategy.config,
+      config: configToExport,
       exported_at: new Date().toISOString(),
       version: '1.0',
     }
@@ -396,6 +470,19 @@ export function StrategyStudioPage() {
         )
       }
 
+      // Pre-process config to ensure compatibility
+      let configToSave = importData.config
+      
+      // If it's a Chaos strategy, ensure it's migrated/normalized before saving
+      if (configToSave.strategy_type === 'chaos_trading' || configToSave.chaos_config) {
+          // Use the migration logic
+          // Make sure strategy_type is set for the helper to work
+          if (!configToSave.strategy_type) configToSave.strategy_type = 'chaos_trading';
+          
+          const tempStrategy = { config: configToSave } as Strategy
+          configToSave = migrateChaosConfig(tempStrategy)
+      }
+
       // Create new strategy with imported config
       const response = await fetch(`${API_BASE}/api/strategies`, {
         method: 'POST',
@@ -406,7 +493,7 @@ export function StrategyStudioPage() {
         body: JSON.stringify({
           name: `${importData.name} (${language === 'zh' ? '导入' : 'Imported'})`,
           description: importData.description || '',
-          config: importData.config,
+          config: configToSave,
         }),
       })
       if (!response.ok) throw new Error('Failed to import strategy')
@@ -655,12 +742,79 @@ export function StrategyStudioPage() {
         />
       ),
     },
-    // Chaos Config - only for chaos_trading
+    
+    // --- Chaos Trading Sections ---
+    {
+      key: 'chaosCoinSource' as const,
+      icon: Target,
+      color: '#F0B90B',
+      title: t('coinSource'),
+      forStrategyType: 'chaos_trading' as const,
+      content: editingConfig?.chaos_config?.coin_source && (
+        <CoinSourceEditor
+          config={editingConfig.chaos_config.coin_source}
+          onChange={(coinSource) => {
+              if (editingConfig.chaos_config) {
+                  updateConfig('chaos_config', {
+                      ...editingConfig.chaos_config,
+                      coin_source: coinSource
+                  })
+              }
+          }}
+          disabled={selectedStrategy?.is_default}
+          language={language}
+        />
+      ),
+    },
+    {
+      key: 'chaosIndicators' as const,
+      icon: BarChart3,
+      color: '#0ECB81',
+      title: t('indicators'),
+      forStrategyType: 'chaos_trading' as const,
+      content: editingConfig?.chaos_config?.indicators && (
+        <IndicatorEditor
+          config={editingConfig.chaos_config.indicators}
+          onChange={(indicators) => {
+              if (editingConfig.chaos_config) {
+                  updateConfig('chaos_config', {
+                      ...editingConfig.chaos_config,
+                      indicators: indicators
+                  })
+              }
+          }}
+          disabled={selectedStrategy?.is_default}
+          language={language}
+        />
+      ),
+    },
+    {
+      key: 'chaosRiskControl' as const,
+      icon: Shield,
+      color: '#F6465D',
+      title: t('riskControl'),
+      forStrategyType: 'chaos_trading' as const,
+      content: editingConfig?.chaos_config?.risk_control && (
+        <RiskControlEditor
+          config={editingConfig.chaos_config.risk_control}
+          onChange={(riskControl) => {
+              if (editingConfig.chaos_config) {
+                  updateConfig('chaos_config', {
+                      ...editingConfig.chaos_config,
+                      risk_control: riskControl
+                  })
+              }
+          }}
+          disabled={selectedStrategy?.is_default}
+          language={language}
+        />
+      ),
+    },
     {
       key: 'chaosConfig' as const,
-      icon: Dna,
+      icon: FileText,
       color: '#a855f7',
-      title: t('chaosConfig'),
+      title: t('promptSections'),
       forStrategyType: 'chaos_trading' as const,
       content: editingConfig?.chaos_config && (
         <ChaosConfigEditor
@@ -671,7 +825,8 @@ export function StrategyStudioPage() {
         />
       ),
     },
-    // AI Trading sections
+
+    // --- AI Trading Sections ---
     {
       key: 'coinSource' as const,
       icon: Target,
