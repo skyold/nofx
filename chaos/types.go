@@ -17,9 +17,10 @@ type Decision struct {
 	EntryPrice *float64 `json:"entry,omitempty"`
 	StopLoss   *float64 `json:"stop_loss,omitempty"`
 	TakeProfit *float64 `json:"take_profit,omitempty"`
-	RiskR      *float64 `json:"risk_r,omitempty"`
-	TotalScore *int     `json:"total_score,omitempty"`
-	Reasoning  *string  `json:"reasoning,omitempty"`
+	RiskR           *float64 `json:"risk_r,omitempty"`
+	TotalScore      *int     `json:"total_score,omitempty"`
+	Reasoning       *string  `json:"reasoning,omitempty"`
+	PositionSizeUSD *float64 `json:"position_size_usd,omitempty"`
 }
 
 // DecisionResult is the independent result structure for Chaos mode

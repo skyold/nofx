@@ -187,12 +187,8 @@ func (e *ChaosEngine) validateDecisions(decisions []Decision, reasoning *Reasoni
 		// Use Manager for validation which contains the core logic
 		// We pass ChaosConfig.RiskControl params
 
-		// Note: Manager.ValidateDecision returns calculated position size USD, but currently chaos.Decision doesn't hold it directly in struct
-		// (wait, kernel.Decision has PositionSizeUSD, chaos.Decision doesn't? Let's check chaos/types.go)
-		// chaos.Decision is a copy of essential fields. If we want to persist PositionSizeUSD, we might need to add it or return it.
-		// For now, we perform validation to ensure it passes.
-
-		_, err := e.manager.ValidateDecision(&d, reasoning, ctx.Account.TotalEquity,
+		// Note: Manager.ValidateDecision returns calculated position size USD
+		positionSizeUSD, err := e.manager.ValidateDecision(&d, reasoning, ctx.Account.TotalEquity,
 			riskConfig.BTCETHMaxLeverage, riskConfig.AltcoinMaxLeverage,
 			riskConfig.BTCETHMaxPositionValueRatio, riskConfig.AltcoinMaxPositionValueRatio)
 
@@ -200,6 +196,8 @@ func (e *ChaosEngine) validateDecisions(decisions []Decision, reasoning *Reasoni
 			return nil, fmt.Errorf("validation failed for %s: %w", d.Symbol, err)
 		}
 
+		// Store validated position size
+		d.PositionSizeUSD = &positionSizeUSD
 		validated = append(validated, d)
 	}
 	return validated, nil

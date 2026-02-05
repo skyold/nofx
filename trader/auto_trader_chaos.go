@@ -3,7 +3,6 @@ package trader
 import (
 	"fmt"
 	"nofx/chaos"
-	"nofx/kernel"
 	"nofx/logger"
 	"nofx/market"
 	"nofx/provider/nofxos"
@@ -239,35 +238,34 @@ func (at *AutoTrader) buildChaosContext() (*chaos.ChaosContext, error) {
 func (at *AutoTrader) processChaosResult(result *chaos.DecisionResult, ctx *chaos.ChaosContext) {
 	logger.Infof("🤖 Chaos AI Decision: %d decisions generated", len(result.Decisions))
 
-	kernelDecisions := []kernel.Decision{}
-	for _, d := range result.Decisions {
-		kd := kernel.Decision{
-			Symbol: d.Symbol,
-			Action: d.Action,
-		}
-		if d.Leverage != nil {
-			kd.Leverage = *d.Leverage
-		}
-		if d.EntryPrice != nil {
-			kd.EntryPrice = *d.EntryPrice
-		}
-		if d.StopLoss != nil {
-			kd.StopLoss = *d.StopLoss
-		}
-		if d.TakeProfit != nil {
-			kd.TakeProfit = *d.TakeProfit
-		}
-		if d.RiskR != nil {
-			kd.RiskR = *d.RiskR
-		}
-		if d.TotalScore != nil {
-			kd.Confidence = *d.TotalScore
-		}
-		if d.Reasoning != nil {
-			kd.Reasoning = *d.Reasoning
-		}
+	var executionResults []store.DecisionAction
 
-		kernelDecisions = append(kernelDecisions, kd)
+	if !ctx.Config.StressTestMode {
+		// Create Executor
+		executor := chaos.NewChaosExecutor(
+			at.trader, // AutoTrader.trader implements TraderInterface
+			at.store,
+			at.id,
+			at.exchange,
+			at.exchangeID,
+			ctx.Config,
+		)
+		executionResults = executor.Execute(result.Decisions)
+	} else {
+		logger.Infof("🧪 Stress Test Mode: Skipping execution for %d decisions", len(result.Decisions))
+		// For stress test, we can map decisions to actions without execution result
+		for _, d := range result.Decisions {
+			action := store.DecisionAction{
+				Action:    d.Action,
+				Symbol:    d.Symbol,
+				Timestamp: time.Now().UTC(),
+				Success:   true, // Assume success for stress test recording
+			}
+			if d.Reasoning != nil {
+				action.Reasoning = *d.Reasoning
+			}
+			executionResults = append(executionResults, action)
+		}
 	}
 
 	// Save to DB
@@ -282,42 +280,11 @@ func (at *AutoTrader) processChaosResult(result *chaos.DecisionResult, ctx *chao
 			RawResponse:         result.RawResponse,
 			AIRequestDurationMs: result.AIRequestDurationMs,
 			Success:             true,
+			Decisions:           executionResults,
 		}
 		// Add decisions to record... (simplified for now, full detail is in RawResponse)
 		if err := at.store.Decision().LogDecision(record); err != nil {
 			logger.Errorf("Failed to save chaos decision: %v", err)
-		}
-	}
-
-	if !ctx.Config.StressTestMode {
-		at.executeChaosDecisions(kernelDecisions)
-	} else {
-		logger.Infof("🧪 Stress Test Mode: Skipping execution for %d decisions", len(kernelDecisions))
-	}
-}
-
-func (at *AutoTrader) executeChaosDecisions(decisions []kernel.Decision) {
-	// Sort decisions
-	sortedDecisions := sortDecisionsByPriority(decisions)
-
-	for _, d := range sortedDecisions {
-		// Create action record
-		actionRecord := store.DecisionAction{
-			Action:     d.Action,
-			Symbol:     d.Symbol,
-			Leverage:   d.Leverage,
-			StopLoss:   d.StopLoss,
-			TakeProfit: d.TakeProfit,
-			Confidence: d.Confidence,
-			Reasoning:  d.Reasoning,
-			Timestamp:  time.Now().UTC(),
-		}
-
-		// Execute
-		if err := at.executeDecisionWithRecord(&d, &actionRecord); err != nil {
-			logger.Infof("❌ Chaos execution failed (%s %s): %v", d.Symbol, d.Action, err)
-		} else {
-			logger.Infof("✓ Chaos execution succeeded (%s %s)", d.Symbol, d.Action)
 		}
 	}
 }
