@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"nofx/logger"
+	"nofx/store"
 )
 
 // Manager handles Chaos trading mode specific logic
@@ -55,7 +56,7 @@ func (m *Manager) IsChaosMode(customPrompt string) bool {
 }
 
 // BuildPrompt builds the system prompt for Chaos mode
-func (m *Manager) BuildPrompt(variant string, customPrompt string, availableIndicatorsFunc func(*strings.Builder)) string {
+func (m *Manager) BuildPrompt(variant string, customPrompt string, indicators store.IndicatorConfig) string {
 	var sb strings.Builder
 
 	// BLOCK A: System Execution Contract (Code Generated)
@@ -162,7 +163,76 @@ func (m *Manager) BuildPrompt(variant string, customPrompt string, availableIndi
 	// BLOCK C: Context (Indicators)
 	// This part is injected at the end of System Prompt to provide context about available data
 	sb.WriteString("\n\n你拥有以下市场数据和指标:\n")
-	availableIndicatorsFunc(&sb)
+
+	// 1. K-line Series
+	klines := []string{}
+	if indicators.Klines.PrimaryTimeframe != "" {
+		klines = append(klines, indicators.Klines.PrimaryTimeframe)
+	}
+	if indicators.Klines.EnableMultiTimeframe {
+		for _, tf := range indicators.Klines.SelectedTimeframes {
+			// Avoid duplicates if primary is in selected
+			isDup := false
+			for _, k := range klines {
+				if k == tf {
+					isDup = true
+					break
+				}
+			}
+			if !isDup {
+				klines = append(klines, tf)
+			}
+		}
+	}
+	if len(klines) > 0 {
+		sb.WriteString(fmt.Sprintf("- %s K-line series\n", strings.Join(klines, " + ")))
+	} else {
+		sb.WriteString("- K-line series\n")
+	}
+
+	// 2. EMA
+	if indicators.EnableEMA {
+		sb.WriteString(fmt.Sprintf("- EMA indicators (periods: %v)\n", indicators.EMAPeriods))
+	}
+
+	// 3. RSI
+	if indicators.EnableRSI {
+		sb.WriteString(fmt.Sprintf("- RSI indicators (periods: %v)\n", indicators.RSIPeriods))
+	}
+
+	// 4. ATR
+	if indicators.EnableATR {
+		sb.WriteString(fmt.Sprintf("- ATR indicators (periods: %v)\n", indicators.ATRPeriods))
+	}
+
+	// 5. BOLL (if enabled, though not in user example)
+	if indicators.EnableBOLL {
+		sb.WriteString(fmt.Sprintf("- BOLL indicators (periods: %v)\n", indicators.BOLLPeriods))
+	}
+
+	// 6. Volume
+	if indicators.EnableVolume {
+		sb.WriteString("- Volume data\n")
+	}
+
+	// 7. Open Interest
+	if indicators.EnableOI {
+		sb.WriteString("- Open Interest (OI) data\n")
+	}
+
+	// 8. Funding Rate
+	if indicators.EnableFundingRate {
+		sb.WriteString("- Funding rate\n")
+	}
+
+	// 9. Filter Tags (AI500 / OI_Top) - Hardcoded for now as "if available" matches user request
+	sb.WriteString("- AI500 / OI_Top filter tags (if available)\n")
+
+	// 10. Quantitative Data
+	if indicators.EnableQuantData {
+		sb.WriteString("- Quantitative data (institutional/retail fund flow, position changes, multi-period price changes)\n")
+	}
+
 	sb.WriteString("\n\n")
 
 	return sb.String()
@@ -344,7 +414,7 @@ func (m *Manager) ValidateDecision(
 			// Simple check: does it contain the formatted RiskR string?
 			expectedStr := fmt.Sprintf("Final %.1fR", riskR)
 			expectedStr2 := fmt.Sprintf("Final %.2fR", riskR) // Also allow 2 decimal places (e.g. 0.50R)
-			
+
 			// Handle 0.25 case which might be formatted as 0.25R
 			if riskR == 0.25 {
 				expectedStr = "Final 0.25R"

@@ -464,8 +464,8 @@ export interface PromptSectionsConfig {
 }
 
 export interface StrategyConfig {
-  // Strategy type: "ai_trading" (default) or "grid_trading"
-  strategy_type?: 'ai_trading' | 'grid_trading';
+  // Strategy type: "ai_trading" (default) or "grid_trading" or "chaos_trading"
+  strategy_type?: 'ai_trading' | 'grid_trading' | 'chaos_trading';
   // Language setting: "zh" for Chinese, "en" for English
   // Determines the language used for data formatting and prompt generation
   language?: 'zh' | 'en';
@@ -477,6 +477,28 @@ export interface StrategyConfig {
   prompt_variant?: string;
   // Grid trading configuration (only used when strategy_type is 'grid_trading')
   grid_config?: GridStrategyConfig;
+  // Chaos trading configuration (only used when strategy_type is 'chaos_trading')
+  chaos_config?: ChaosStrategyConfig;
+}
+
+// Chaos trading specific configuration
+export interface ChaosStrategyConfig {
+  // Chaos specific prompt content
+  chaos_prompt: string;
+  // Independent Risk Control for Chaos Mode
+  risk_control: RiskControlConfig;
+  // Independent Coin Source for Chaos Mode
+  coin_source?: CoinSourceConfig;
+  // Independent Indicators for Chaos Mode
+  indicators?: IndicatorConfig;
+  // Prompt variant (e.g. "s1", "t1")
+  prompt_variant?: string;
+  // Fault injection rate (0.0-1.0)
+  fault_injection_rate?: number;
+  // Data noise level (0.0-1.0)
+  data_noise_level?: number;
+  // Stress test mode
+  stress_test_mode?: boolean;
 }
 
 // Grid trading specific configuration

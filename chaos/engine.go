@@ -110,10 +110,16 @@ func (e *ChaosEngine) BuildSystemPrompt(accountEquity float64, variant string) s
 	var indicators store.IndicatorConfig
 
 	if e.config != nil {
+		// Default to top-level indicators (legacy)
 		indicators = e.config.Indicators
 		if e.config.ChaosConfig != nil {
 			chaosPrompt = e.config.ChaosConfig.ChaosPrompt
 			riskControl = e.config.ChaosConfig.RiskControl
+			// If ChaosConfig has Indicators populated (check if non-zero), use them
+			// Simple check: if PrimaryTimeframe is set, assume populated
+			if e.config.ChaosConfig.Indicators.Klines.PrimaryTimeframe != "" {
+				indicators = e.config.ChaosConfig.Indicators
+			}
 		}
 	}
 
@@ -130,14 +136,14 @@ func (e *ChaosEngine) BuildSystemPrompt(accountEquity float64, variant string) s
 
 // buildSystemPromptWithContext builds the system prompt for Chaos mode using context
 func (e *ChaosEngine) buildSystemPromptWithContext(ctx *ChaosContext) string {
-	var sb strings.Builder
-
 	if ctx.Config != nil && ctx.Config.ChaosPrompt != "" {
-		sb.WriteString(ctx.Config.ChaosPrompt)
-		sb.WriteString("\n\n")
-		sb.WriteString("# Available Indicators\n")
-		e.writeAvailableIndicators(&sb, ctx.Config.Indicators)
-		return sb.String()
+		// Use manager to build the full prompt including Contract and Footer
+		// We pass indicators config for dynamic market data generation
+		return e.manager.BuildPrompt(
+			ctx.Config.PromptVariant,
+			ctx.Config.ChaosPrompt,
+			ctx.Config.Indicators,
+		)
 	}
 
 	// Fallback should ideally not happen in pure Chaos mode, but if config is missing:
@@ -201,22 +207,4 @@ func (e *ChaosEngine) validateDecisions(decisions []Decision, reasoning *Reasoni
 		validated = append(validated, d)
 	}
 	return validated, nil
-}
-
-func (e *ChaosEngine) writeAvailableIndicators(sb *strings.Builder, indicators store.IndicatorConfig) {
-	// Re-implement or reuse logic to describe indicators based on config
-	// Similar to the old writeAvailableIndicators but taking config as arg
-
-	if indicators.EnableEMA {
-		sb.WriteString("- EMA indicators\n")
-	}
-	if indicators.EnableMACD {
-		sb.WriteString("- MACD indicators\n")
-	}
-	if indicators.EnableRSI {
-		sb.WriteString("- RSI indicators\n")
-	}
-	if indicators.EnableBOLL {
-		sb.WriteString("- Bollinger Bands\n")
-	}
 }

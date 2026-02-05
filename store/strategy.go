@@ -66,6 +66,11 @@ type ChaosStrategyConfig struct {
 	// Independent Risk Control for Chaos Mode
 	RiskControl RiskControlConfig `json:"risk_control"`
 
+	// Independent Coin Source for Chaos Mode
+	CoinSource CoinSourceConfig `json:"coin_source"`
+	// Independent Indicators for Chaos Mode
+	Indicators IndicatorConfig `json:"indicators"`
+
 	// Prompt variant (e.g. "s1", "t1")
 	PromptVariant string `json:"prompt_variant,omitempty"`
 	// Fault injection rate (0.0-1.0)

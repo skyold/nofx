@@ -10,7 +10,6 @@ import {
   ChevronRight,
   BarChart3,
   Target,
-  Shield,
   Zap,
   Activity,
   Save,
@@ -29,14 +28,16 @@ import {
   Upload,
   Globe,
   Dna,
+  Shield,
+  Layers,
 } from 'lucide-react'
 import type { Strategy, StrategyConfig, AIModel } from '../types'
 import { confirmToast, notify } from '../lib/notify'
 import { CoinSourceEditor } from '../components/strategy/CoinSourceEditor'
 import { IndicatorEditor } from '../components/strategy/IndicatorEditor'
 import { RiskControlEditor } from '../components/strategy/RiskControlEditor'
-import { PromptSectionsEditor } from '../components/strategy/PromptSectionsEditor'
 import { PublishSettingsEditor } from '../components/strategy/PublishSettingsEditor'
+import { ChaosConfigEditor, defaultChaosConfig } from '../components/strategy/ChaosConfigEditor'
 import { DeepVoidBackground } from '../components/DeepVoidBackground'
 
 const API_BASE = import.meta.env.VITE_API_BASE || ''
@@ -88,11 +89,11 @@ export function ChaosStudioPage() {
 
   // Accordion states for left panel
   const [expandedSections, setExpandedSections] = useState({
+    strategyType: true,
     coinSource: false,
     indicators: false,
     riskControl: false,
-    promptSections: false,
-    customPrompt: true, // Default open for Chaos
+    chaosConfig: true,
     publishSettings: false,
   })
 
@@ -151,6 +152,7 @@ export function ChaosStudioPage() {
 
   // Helper to check if a strategy is Chaos type
   const isChaosStrategy = (strategy: Strategy): boolean => {
+    if (strategy.config?.strategy_type === 'chaos_trading') return true;
     try {
       // Check if custom_prompt contains the prompt_meta type: chaos
       if (strategy.config?.custom_prompt) {
@@ -167,6 +169,56 @@ export function ChaosStudioPage() {
     } catch (e) {
       return false;
     }
+  }
+
+  // Migration Helper
+  const migrateChaosConfig = (strategy: Strategy): StrategyConfig => {
+    const config = { ...strategy.config };
+    let migrated = false;
+
+    // 1. Ensure strategy_type
+    if (config.strategy_type !== 'chaos_trading') {
+        config.strategy_type = 'chaos_trading';
+        migrated = true;
+    }
+
+    // 2. Ensure chaos_config exists
+    if (!config.chaos_config) {
+        config.chaos_config = { ...defaultChaosConfig };
+        migrated = true;
+    }
+
+    // 2.1 Migrate top-level CoinSource/Indicators to ChaosConfig if missing
+    if (config.chaos_config) {
+        if (!config.chaos_config.coin_source && config.coin_source) {
+            config.chaos_config.coin_source = { ...config.coin_source };
+            migrated = true;
+        }
+        if (!config.chaos_config.indicators && config.indicators) {
+            config.chaos_config.indicators = { ...config.indicators };
+            migrated = true;
+        }
+    }
+
+    // 3. Migrate custom_prompt -> chaos_prompt
+    if (config.custom_prompt && 
+        config.custom_prompt.trim().startsWith('{') && 
+        config.custom_prompt.includes('prompt_meta') && 
+        (!config.chaos_config?.chaos_prompt || config.chaos_config?.chaos_prompt === defaultChaosConfig.chaos_prompt)) {
+        
+        if (config.chaos_config) {
+            config.chaos_config.chaos_prompt = config.custom_prompt;
+        }
+        migrated = true;
+    }
+
+    // Mark migration status in a temporary way (caller should handle hasChanges)
+    // We attach a hidden property to the object to signal migration occurred
+    if (migrated) {
+        Object.defineProperty(config, '__migrated', { value: true, enumerable: false, configurable: true });
+    }
+
+    return config;
   }
 
   // Fetch strategies - FILTERED for Chaos
@@ -187,19 +239,41 @@ export function ChaosStudioPage() {
       const active = chaosStrategies.find((s: Strategy) => s.is_active)
       if (active) {
         setSelectedStrategy(active)
-        setEditingConfig(active.config)
-        // Set variant from config if available, otherwise default to s1
-        if (active.config?.prompt_variant) {
-            setSelectedVariant(active.config.prompt_variant)
+        const migratedConfig = migrateChaosConfig(active);
+        setEditingConfig(migratedConfig)
+        
+        // Check migration flag
+        // @ts-ignore
+        if (migratedConfig.__migrated) {
+            setHasChanges(true);
+            notify.success(language === 'zh' ? '已自动迁移旧版配置' : 'Migrated legacy config');
+        }
+
+        // Set variant from chaos_config if available
+        if (migratedConfig.chaos_config?.prompt_variant) {
+            setSelectedVariant(migratedConfig.chaos_config.prompt_variant)
+        } else if (migratedConfig.prompt_variant) {
+            setSelectedVariant(migratedConfig.prompt_variant)
         } else {
             setSelectedVariant('s1')
         }
       } else if (chaosStrategies.length > 0) {
         setSelectedStrategy(chaosStrategies[0])
-        setEditingConfig(chaosStrategies[0].config)
-        // Set variant from config if available, otherwise default to s1
-        if (chaosStrategies[0].config?.prompt_variant) {
-            setSelectedVariant(chaosStrategies[0].config.prompt_variant)
+        const migratedConfig = migrateChaosConfig(chaosStrategies[0]);
+        setEditingConfig(migratedConfig)
+
+        // Check migration flag
+        // @ts-ignore
+        if (migratedConfig.__migrated) {
+            setHasChanges(true);
+            notify.success(language === 'zh' ? '已自动迁移旧版配置' : 'Migrated legacy config');
+        }
+
+        // Set variant from chaos_config if available
+        if (migratedConfig.chaos_config?.prompt_variant) {
+            setSelectedVariant(migratedConfig.chaos_config.prompt_variant)
+        } else if (migratedConfig.prompt_variant) {
+            setSelectedVariant(migratedConfig.prompt_variant)
         } else {
             setSelectedVariant('s1')
         }
@@ -265,23 +339,10 @@ export function ChaosStudioPage() {
       )
       const defaultConfig = await configResponse.json()
       
-      // Inject Chaos template into custom_prompt
-      const chaosTemplate = JSON.stringify({
-        prompt_meta: {
-            type: "chaos",
-            prompt_name: language === 'zh' ? '新 Chaos 策略' : 'New Chaos Strategy',
-            author: "User",
-            version: "1.0"
-        },
-        risk_r_config: {
-            mode: "standard",
-            min_risk_r: 1.5
-        }
-      }, null, 2);
-
       const chaosConfig = {
           ...defaultConfig,
-          custom_prompt: chaosTemplate
+          strategy_type: 'chaos_trading',
+          chaos_config: defaultChaosConfig,
       };
 
       const response = await fetch(`${API_BASE}/api/strategies`, {
@@ -403,10 +464,21 @@ export function ChaosStudioPage() {
 
   // Export strategy as JSON file
   const handleExportStrategy = (strategy: Strategy) => {
+    // 只导出ChaosConfig内容，类似Grid策略只导出grid_config
+    const chaosConfig = strategy.config?.chaos_config
+    if (!chaosConfig) {
+      setError(language === 'zh' ? '策略缺少Chaos配置' : 'Strategy missing Chaos config')
+      return
+    }
+    
     const exportData = {
       name: strategy.name,
       description: strategy.description,
-      config: strategy.config,
+      config: {
+        strategy_type: 'chaos_trading',
+        language: strategy.config?.language || 'zh',
+        chaos_config: chaosConfig
+      },
       exported_at: new Date().toISOString(),
       version: '1.0',
     }
@@ -442,9 +514,15 @@ export function ChaosStudioPage() {
         )
       }
 
-      // Check if it's a Chaos strategy (optional, but good for UX)
-      // We allow importing any strategy here, but maybe warn if not chaos?
-      // For now, just import.
+      // Pre-process config to ensure compatibility
+      let configToSave = importData.config
+      
+      // If it's a Chaos strategy, ensure it's migrated/normalized before saving
+      if (configToSave.strategy_type === 'chaos_trading' || configToSave.chaos_config) {
+          // Use the existing migration logic
+          const tempStrategy = { config: configToSave } as Strategy
+          configToSave = migrateChaosConfig(tempStrategy)
+      }
 
       // Create new strategy with imported config
       const response = await fetch(`${API_BASE}/api/strategies`, {
@@ -456,7 +534,7 @@ export function ChaosStudioPage() {
         body: JSON.stringify({
           name: `${importData.name} (${language === 'zh' ? '导入' : 'Imported'})`,
           description: importData.description || '',
-          config: importData.config,
+          config: configToSave,
         }),
       })
       if (!response.ok) throw new Error('Failed to import strategy')
@@ -594,6 +672,9 @@ export function ChaosStudioPage() {
       },
       strategies: { zh: 'Chaos 策略', en: 'Chaos Strategies' },
       newStrategy: { zh: '新建 Chaos', en: 'New Chaos' },
+      strategyType: { zh: '策略类型', en: 'Strategy Type' },
+      chaosTrading: { zh: 'Chaos 交易', en: 'Chaos Trading' },
+      chaosTradingDesc: { zh: '高级对抗性交易策略，支持故障注入和独立风控', en: 'Advanced adversarial strategy with fault injection' },
       coinSource: { zh: '币种来源', en: 'Coin Source' },
       indicators: { zh: '技术指标', en: 'Indicators' },
       riskControl: { zh: '风控参数', en: 'Risk Control' },
@@ -654,113 +735,124 @@ export function ChaosStudioPage() {
   }
 
   const configSections = [
-    // Highlighted Chaos Config Section
+    // 1. Strategy Type
     {
-      key: 'customPrompt' as const,
-      icon: Dna,
+      key: 'strategyType' as const,
+      icon: Layers,
       color: '#a855f7',
-      title: t('customPrompt'),
-      content: editingConfig && (
-        <div>
-          <p className="text-xs mb-2" style={{ color: '#848E9C' }}>
-            {language === 'zh'
-              ? 'Chaos 策略的核心配置文件，必须包含 prompt_meta: { type: "chaos" }'
-              : 'Core configuration for Chaos strategy. Must include prompt_meta: { type: "chaos" }'}
-          </p>
-          <div className="mb-2 flex items-center gap-2">
-            <select
-                value={selectedVariant}
-                onChange={(e) => {
-                  setSelectedVariant(e.target.value)
-                  setHasChanges(true)
-                }}
-                className="px-2 py-1.5 rounded text-xs bg-nofx-bg border border-nofx-gold/20 text-nofx-text"
-            >
-                <option value="none">{t('none')}</option>
-                <option value="s1">{t('s1')}</option>
-                <option value="t1">{t('t1')}</option>
-                <option value="d1">{t('d1')}</option>
-                <option value="r1">{t('r1')}</option>
-                <option value="x1">{t('x1')}</option>
-            </select>
-            <span className="text-xs text-nofx-text-muted">← {t('promptVariant')}</span>
-          </div>
-          <textarea
-            value={editingConfig.custom_prompt || ''}
-            onChange={(e) => updateConfig('custom_prompt', e.target.value)}
-            disabled={selectedStrategy?.is_default}
-            placeholder={
-              language === 'zh'
-                ? '输入 Chaos JSON 配置...'
-                : 'Enter Chaos JSON config...'
-            }
-            className="w-full h-64 px-3 py-2 rounded-lg resize-none font-mono text-xs"
-            style={{
-              background: '#0B0E11',
-              border: '1px solid #a855f7',
-              color: '#EAECEF',
-            }}
-          />
+      title: t('strategyType'),
+      content: (
+        <div className="grid grid-cols-1 gap-2">
+            <div className="relative group p-3 rounded-lg border transition-all cursor-default border-purple-500 bg-purple-500/10">
+                <div className="flex items-start gap-3">
+                    <div className="p-2 rounded-lg bg-purple-500/20 text-purple-500">
+                        <Dna className="w-5 h-5" />
+                    </div>
+                    <div>
+                        <div className="font-medium text-nofx-text mb-1">
+                            {t('chaosTrading')}
+                        </div>
+                        <div className="text-xs text-nofx-text-muted leading-relaxed">
+                            {t('chaosTradingDesc')}
+                        </div>
+                    </div>
+                    <div className="absolute top-3 right-3">
+                        <div className="w-2 h-2 rounded-full bg-purple-500 shadow-[0_0_8px_rgba(168,85,247,0.8)]" />
+                    </div>
+                </div>
+            </div>
         </div>
-      ),
+      )
     },
-    // Standard sections collapsed by default
+    // 2. Coin Source
     {
       key: 'coinSource' as const,
       icon: Target,
       color: '#F0B90B',
       title: t('coinSource'),
-      content: editingConfig && (
+      content: editingConfig?.chaos_config?.coin_source && (
         <CoinSourceEditor
-          config={editingConfig.coin_source}
-          onChange={(coinSource) => updateConfig('coin_source', coinSource)}
+          config={editingConfig.chaos_config.coin_source}
+          onChange={(coinSource) => {
+              if (editingConfig.chaos_config) {
+                  updateConfig('chaos_config', {
+                      ...editingConfig.chaos_config,
+                      coin_source: coinSource
+                  })
+              }
+          }}
           disabled={selectedStrategy?.is_default}
           language={language}
         />
       ),
     },
+    // 3. Indicators
     {
       key: 'indicators' as const,
       icon: BarChart3,
       color: '#0ECB81',
       title: t('indicators'),
-      content: editingConfig && (
+      content: editingConfig?.chaos_config?.indicators && (
         <IndicatorEditor
-          config={editingConfig.indicators}
-          onChange={(indicators) => updateConfig('indicators', indicators)}
+          config={editingConfig.chaos_config.indicators}
+          onChange={(indicators) => {
+              if (editingConfig.chaos_config) {
+                  updateConfig('chaos_config', {
+                      ...editingConfig.chaos_config,
+                      indicators: indicators
+                  })
+              }
+          }}
           disabled={selectedStrategy?.is_default}
           language={language}
         />
       ),
     },
+    // 4. Risk Control
     {
       key: 'riskControl' as const,
       icon: Shield,
       color: '#F6465D',
       title: t('riskControl'),
-      content: editingConfig && (
+      content: editingConfig?.chaos_config?.risk_control && (
         <RiskControlEditor
-          config={editingConfig.risk_control}
-          onChange={(riskControl) => updateConfig('risk_control', riskControl)}
+          config={editingConfig.chaos_config.risk_control}
+          onChange={(riskControl) => {
+              if (editingConfig.chaos_config) {
+                  updateConfig('chaos_config', {
+                      ...editingConfig.chaos_config,
+                      risk_control: riskControl
+                  })
+              }
+          }}
           disabled={selectedStrategy?.is_default}
           language={language}
         />
       ),
     },
+    // 5. Prompt Editor (ChaosConfigEditor)
     {
-      key: 'promptSections' as const,
+      key: 'chaosConfig' as const,
       icon: FileText,
-      color: '#60a5fa',
-      title: t('promptSections'),
-      content: editingConfig && (
-        <PromptSectionsEditor
-          config={editingConfig.prompt_sections}
-          onChange={(promptSections) =>
-            updateConfig('prompt_sections', promptSections)
-          }
+      color: '#a855f7',
+      title: t('promptSections'), 
+      content: editingConfig?.chaos_config ? (
+        <ChaosConfigEditor
+          config={editingConfig.chaos_config}
+          onChange={(chaosConfig) => updateConfig('chaos_config', chaosConfig)}
           disabled={selectedStrategy?.is_default}
           language={language}
         />
+      ) : (
+        <div className="p-4 text-center text-xs text-nofx-text-muted">
+            {language === 'zh' ? '未初始化 Chaos 配置' : 'Chaos config not initialized'}
+            <button 
+                onClick={() => updateConfig('chaos_config', defaultChaosConfig)}
+                className="block mx-auto mt-2 text-purple-500 hover:underline"
+            >
+                {language === 'zh' ? '初始化' : 'Initialize'}
+            </button>
+        </div>
       ),
     },
     {
@@ -858,14 +950,26 @@ export function ChaosStudioPage() {
                   key={strategy.id}
                   onClick={() => {
                     setSelectedStrategy(strategy)
-                    setEditingConfig(strategy.config)
+                    const migratedConfig = migrateChaosConfig(strategy);
+                    setEditingConfig(migratedConfig)
+                    
+                    // Check migration flag
+                    // @ts-ignore
+                    if (migratedConfig.__migrated) {
+                        setHasChanges(true);
+                        notify.success(language === 'zh' ? '已自动迁移旧版配置' : 'Migrated legacy config');
+                    } else {
+                        setHasChanges(false)
+                    }
+
                     // Update variant state when switching strategy
-                    if (strategy.config?.prompt_variant) {
-                        setSelectedVariant(strategy.config.prompt_variant)
+                    if (migratedConfig.chaos_config?.prompt_variant) {
+                        setSelectedVariant(migratedConfig.chaos_config.prompt_variant)
+                    } else if (migratedConfig.prompt_variant) {
+                        setSelectedVariant(migratedConfig.prompt_variant)
                     } else {
                         setSelectedVariant('s1')
                     }
-                    setHasChanges(false)
                     setPromptPreview(null)
                     setAiTestResult(null)
                   }}
@@ -1022,7 +1126,7 @@ export function ChaosStudioPage() {
                   ({ key, icon: Icon, color, title, content }) => (
                     <div
                       key={key}
-                      className={`rounded-lg overflow-hidden bg-nofx-bg-lighter border ${key === 'customPrompt' ? 'border-purple-500/40' : 'border-nofx-gold/20'}`}
+                      className={`rounded-lg overflow-hidden bg-nofx-bg-lighter border ${key === 'chaosConfig' ? 'border-purple-500/40' : 'border-nofx-gold/20'}`}
                     >
                       <button
                         onClick={() => toggleSection(key)}

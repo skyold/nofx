@@ -29,6 +29,7 @@ import {
   Download,
   Upload,
   Globe,
+  Dna,
 } from 'lucide-react'
 import type { Strategy, StrategyConfig, AIModel } from '../types'
 import { confirmToast, notify } from '../lib/notify'
@@ -38,6 +39,7 @@ import { RiskControlEditor } from '../components/strategy/RiskControlEditor'
 import { PromptSectionsEditor } from '../components/strategy/PromptSectionsEditor'
 import { PublishSettingsEditor } from '../components/strategy/PublishSettingsEditor'
 import { GridConfigEditor, defaultGridConfig } from '../components/strategy/GridConfigEditor'
+import { ChaosConfigEditor, defaultChaosConfig } from '../components/strategy/ChaosConfigEditor'
 import { DeepVoidBackground } from '../components/DeepVoidBackground'
 
 const API_BASE = import.meta.env.VITE_API_BASE || ''
@@ -90,6 +92,7 @@ export function StrategyStudioPage() {
   // Accordion states for left panel
   const [expandedSections, setExpandedSections] = useState({
     gridConfig: true,
+    chaosConfig: true,
     coinSource: true,
     indicators: false,
     riskControl: false,
@@ -152,26 +155,6 @@ export function StrategyStudioPage() {
     }
   }, [token, selectedModelId])
 
-  // Helper to check if a strategy is Chaos type
-  const isChaosStrategy = (strategy: Strategy): boolean => {
-    try {
-      // Check if custom_prompt contains the prompt_meta type: chaos
-      if (strategy.config?.custom_prompt) {
-        if (strategy.config.custom_prompt.includes('"type": "chaos"') || 
-            strategy.config.custom_prompt.includes('"type":"chaos"')) {
-          return true;
-        }
-        // Fallback for legacy check
-        if (strategy.config.custom_prompt.includes('Chaos Trader')) {
-            return true;
-        }
-      }
-      return false;
-    } catch (e) {
-      return false;
-    }
-  }
-
   // Fetch strategies
   const fetchStrategies = useCallback(async () => {
     if (!token) return
@@ -182,18 +165,18 @@ export function StrategyStudioPage() {
       if (!response.ok) throw new Error('Failed to fetch strategies')
       const data = await response.json()
       
-      // Filter out Chaos strategies (they belong in Chaos Studio)
-      const standardStrategies = (data.strategies || []).filter((s: Strategy) => !isChaosStrategy(s))
-      setStrategies(standardStrategies)
+      // We now show ALL strategies in Strategy Studio
+      const allStrategies = data.strategies || []
+      setStrategies(allStrategies)
 
       // Select active or first strategy
-      const active = standardStrategies.find((s: Strategy) => s.is_active)
+      const active = allStrategies.find((s: Strategy) => s.is_active)
       if (active) {
         setSelectedStrategy(active)
         setEditingConfig(active.config)
-      } else if (standardStrategies.length > 0) {
-        setSelectedStrategy(standardStrategies[0])
-        setEditingConfig(standardStrategies[0].config)
+      } else if (allStrategies.length > 0) {
+        setSelectedStrategy(allStrategies[0])
+        setEditingConfig(allStrategies[0].config)
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error')
@@ -477,6 +460,31 @@ export function StrategyStudioPage() {
     }
   }
 
+  // Handle strategy type change with batched updates
+  const handleStrategyTypeChange = (type: 'ai_trading' | 'grid_trading' | 'chaos_trading') => {
+    if (!editingConfig) return
+
+    const newConfig = { ...editingConfig, strategy_type: type }
+
+    if (type === 'ai_trading') {
+      newConfig.grid_config = undefined
+      newConfig.chaos_config = undefined
+    } else if (type === 'grid_trading') {
+      if (!newConfig.grid_config) {
+        newConfig.grid_config = defaultGridConfig
+      }
+      newConfig.chaos_config = undefined
+    } else if (type === 'chaos_trading') {
+      if (!newConfig.chaos_config) {
+        newConfig.chaos_config = defaultChaosConfig
+      }
+      newConfig.grid_config = undefined
+    }
+
+    setEditingConfig(newConfig)
+    setHasChanges(true)
+  }
+
   // Update config section
   const updateConfig = <K extends keyof StrategyConfig>(
     section: K,
@@ -565,7 +573,10 @@ export function StrategyStudioPage() {
       aiTradingDesc: { zh: 'AI 分析市场并自主决策买卖', en: 'AI analyzes market and makes trading decisions' },
       gridTrading: { zh: 'AI 网格交易', en: 'AI Grid Trading' },
       gridTradingDesc: { zh: 'AI 控制网格策略，在震荡市场获利', en: 'AI-controlled grid strategy for ranging markets' },
+      chaosTrading: { zh: 'Chaos 交易', en: 'Chaos Trading' },
+      chaosTradingDesc: { zh: '高级对抗性交易策略，支持故障注入和独立风控', en: 'Advanced adversarial strategy with fault injection' },
       gridConfig: { zh: '网格配置', en: 'Grid Configuration' },
+      chaosConfig: { zh: 'Chaos 配置', en: 'Chaos Configuration' },
       coinSource: { zh: '币种来源', en: 'Coin Source' },
       indicators: { zh: '技术指标', en: 'Indicators' },
       riskControl: { zh: '风控参数', en: 'Risk Control' },
@@ -639,6 +650,22 @@ export function StrategyStudioPage() {
         <GridConfigEditor
           config={editingConfig.grid_config}
           onChange={(gridConfig) => updateConfig('grid_config', gridConfig)}
+          disabled={selectedStrategy?.is_default}
+          language={language}
+        />
+      ),
+    },
+    // Chaos Config - only for chaos_trading
+    {
+      key: 'chaosConfig' as const,
+      icon: Dna,
+      color: '#a855f7',
+      title: t('chaosConfig'),
+      forStrategyType: 'chaos_trading' as const,
+      content: editingConfig?.chaos_config && (
+        <ChaosConfigEditor
+          config={editingConfig.chaos_config}
+          onChange={(chaosConfig) => updateConfig('chaos_config', chaosConfig)}
           disabled={selectedStrategy?.is_default}
           language={language}
         />
@@ -997,13 +1024,11 @@ export function StrategyStudioPage() {
                     <Zap className="w-4 h-4" style={{ color: '#F0B90B' }} />
                     <span className="text-sm font-medium text-nofx-text">{t('strategyType')}</span>
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-3 gap-3">
                     <button
                       onClick={() => {
                         if (!selectedStrategy?.is_default) {
-                          updateConfig('strategy_type', 'ai_trading')
-                          // Clear grid config when switching to AI trading
-                          updateConfig('grid_config', undefined)
+                          handleStrategyTypeChange('ai_trading')
                         }
                       }}
                       disabled={selectedStrategy?.is_default}
@@ -1022,11 +1047,7 @@ export function StrategyStudioPage() {
                     <button
                       onClick={() => {
                         if (!selectedStrategy?.is_default) {
-                          updateConfig('strategy_type', 'grid_trading')
-                          // Initialize grid config if not exists
-                          if (!editingConfig.grid_config) {
-                            updateConfig('grid_config', defaultGridConfig)
-                          }
+                          handleStrategyTypeChange('grid_trading')
                         }
                       }}
                       disabled={selectedStrategy?.is_default}
@@ -1041,6 +1062,25 @@ export function StrategyStudioPage() {
                         <span className="text-sm font-medium text-nofx-text">{t('gridTrading')}</span>
                       </div>
                       <p className="text-xs text-nofx-text-muted text-left">{t('gridTradingDesc')}</p>
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (!selectedStrategy?.is_default) {
+                          handleStrategyTypeChange('chaos_trading')
+                        }
+                      }}
+                      disabled={selectedStrategy?.is_default}
+                      className={`p-3 rounded-lg border transition-all ${
+                        editingConfig.strategy_type === 'chaos_trading'
+                          ? 'border-nofx-gold bg-nofx-gold/10'
+                          : 'border-nofx-border hover:border-nofx-gold/50'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 mb-1">
+                        <Dna className="w-4 h-4" style={{ color: '#a855f7' }} />
+                        <span className="text-sm font-medium text-nofx-text">{t('chaosTrading')}</span>
+                      </div>
+                      <p className="text-xs text-nofx-text-muted text-left">{t('chaosTradingDesc')}</p>
                     </button>
                   </div>
                 </div>

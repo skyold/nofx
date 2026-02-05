@@ -404,7 +404,13 @@ func (s *Server) handlePreviewPrompt(c *gin.Context) {
 	var engine PromptBuilder
 	chaosManager := chaos.NewManager()
 
-	if chaosManager.IsChaosMode(req.Config.CustomPrompt) {
+	// Check if it's Chaos mode
+	// Support both explicit StrategyType (new way) and prompt content detection (legacy way)
+	isChaos := req.Config.StrategyType == "chaos_trading" ||
+		(req.Config.ChaosConfig != nil && req.Config.ChaosConfig.ChaosPrompt != "") ||
+		chaosManager.IsChaosMode(req.Config.CustomPrompt)
+
+	if isChaos {
 		// Chaos Mode
 		engine = chaos.NewChaosEngine(&req.Config)
 	} else {
@@ -553,7 +559,12 @@ func (s *Server) handleStrategyTestRun(c *gin.Context) {
 	var builder PromptBuilder
 	chaosManager := chaos.NewManager()
 
-	if chaosManager.IsChaosMode(req.Config.CustomPrompt) {
+	// Check if it's Chaos mode
+	isChaos := req.Config.StrategyType == "chaos_trading" ||
+		(req.Config.ChaosConfig != nil && req.Config.ChaosConfig.ChaosPrompt != "") ||
+		chaosManager.IsChaosMode(req.Config.CustomPrompt)
+
+	if isChaos {
 		// Chaos Mode
 		builder = chaos.NewChaosEngine(&req.Config)
 	} else {
