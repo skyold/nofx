@@ -32,6 +32,19 @@ func NewChaosEngine(config *store.StrategyConfig) *ChaosEngine {
 
 // BuildSystemPrompt builds the system prompt for Chaos mode
 func (e *ChaosEngine) BuildSystemPrompt(accountEquity float64, variant string) string {
+	var sb strings.Builder
+
+	// Use ChaosConfig if available (Phase 2 refactoring will fully migrate to this)
+	// For now, if config.ChaosConfig exists, use it. Otherwise fallback to old logic.
+	if e.config.ChaosConfig != nil && e.config.ChaosConfig.ChaosPrompt != "" {
+		sb.WriteString(e.config.ChaosConfig.ChaosPrompt)
+		sb.WriteString("\n\n")
+		sb.WriteString("# Available Indicators\n")
+		e.writeAvailableIndicators(&sb)
+		return sb.String()
+	}
+
+	// Fallback to old Manager logic (will be deprecated in Phase 2)
 	return e.manager.BuildPrompt(variant, e.config.CustomPrompt, func(sb *strings.Builder) {
 		e.writeAvailableIndicators(sb)
 	})
