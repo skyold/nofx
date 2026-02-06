@@ -77,6 +77,7 @@ func (t *LighterTraderV2) SyncOrdersFromLighter(traderID string, exchangeID stri
 			ExchangeID:      exchangeID,   // UUID
 			ExchangeType:    exchangeType, // Exchange type
 			ExchangeOrderID: trade.TradeID,
+			ClientOrderID:   fmt.Sprintf("sync_%s", trade.TradeID),
 			Symbol:          symbol,
 			Side:            strings.ToUpper(side),
 			PositionSide:    positionSide,

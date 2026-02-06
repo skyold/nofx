@@ -201,6 +201,7 @@ func (t *GateTrader) SyncOrdersFromGate(traderID string, exchangeID string, exch
 			ExchangeID:      exchangeID,   // UUID
 			ExchangeType:    exchangeType, // Exchange type
 			ExchangeOrderID: trade.TradeID,
+			ClientOrderID:   func() string { if trade.OrderID != "" { return trade.OrderID } ; return fmt.Sprintf("sync_%s", trade.TradeID) }(),
 			Symbol:          symbol,
 			Side:            side,
 			PositionSide:    "BOTH", // Gate uses one-way position mode

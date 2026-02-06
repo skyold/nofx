@@ -75,6 +75,7 @@ func (t *AsterTrader) SyncOrdersFromAster(traderID string, exchangeID string, ex
 			ExchangeID:      exchangeID,   // UUID
 			ExchangeType:    exchangeType, // Exchange type
 			ExchangeOrderID: trade.TradeID,
+			ClientOrderID:   fmt.Sprintf("sync_%s", trade.TradeID),
 			Symbol:          symbol,
 			Side:            side,
 			PositionSide:    "BOTH", // Aster uses one-way position mode

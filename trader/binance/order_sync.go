@@ -220,6 +220,7 @@ func (t *FuturesTrader) SyncOrdersFromBinance(traderID string, exchangeID string
 			ExchangeID:      exchangeID,
 			ExchangeType:    exchangeType,
 			ExchangeOrderID: trade.TradeID,
+			ClientOrderID:   fmt.Sprintf("sync_%s", trade.TradeID),
 			Symbol:          symbol,
 			Side:            side,
 			PositionSide:    positionSide,

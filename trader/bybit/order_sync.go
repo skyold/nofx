@@ -230,6 +230,7 @@ func (t *BybitTrader) SyncOrdersFromBybit(traderID string, exchangeID string, ex
 			ExchangeID:      exchangeID,   // UUID
 			ExchangeType:    exchangeType, // Exchange type
 			ExchangeOrderID: trade.ExecID, // Use ExecID as unique identifier
+			ClientOrderID:   func() string { if trade.OrderID != "" { return trade.OrderID } ; return fmt.Sprintf("sync_%s", trade.ExecID) }(),
 			Symbol:          symbol,
 			Side:            side,
 			PositionSide:    "BOTH", // Bybit uses one-way position mode

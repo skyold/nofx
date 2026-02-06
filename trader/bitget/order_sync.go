@@ -210,6 +210,7 @@ func (t *BitgetTrader) SyncOrdersFromBitget(traderID string, exchangeID string, 
 			ExchangeID:      exchangeID,   // UUID
 			ExchangeType:    exchangeType, // Exchange type
 			ExchangeOrderID: trade.TradeID,
+			ClientOrderID:   func() string { if trade.OrderID != "" { return trade.OrderID } ; return fmt.Sprintf("sync_%s", trade.TradeID) }(),
 			Symbol:          symbol,
 			Side:            side,
 			PositionSide:    "BOTH", // Bitget uses one-way position mode

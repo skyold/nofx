@@ -159,6 +159,15 @@ func (s *OrderStore) CreateOrder(order *TraderOrder) error {
 		return fmt.Errorf("failed to check existing order: %w", err)
 	}
 	if existing != nil {
+		// If existing record has empty ClientOrderID but incoming has one, update it
+		if existing.ClientOrderID == "" && order.ClientOrderID != "" {
+			if err := s.db.Model(&TraderOrder{}).
+				Where("id = ?", existing.ID).
+				Update("client_order_id", order.ClientOrderID).Error; err != nil {
+				return fmt.Errorf("failed to update client_order_id: %w", err)
+			}
+			existing.ClientOrderID = order.ClientOrderID
+		}
 		order.ID = existing.ID
 		order.CreatedAt = existing.CreatedAt
 		order.UpdatedAt = existing.UpdatedAt

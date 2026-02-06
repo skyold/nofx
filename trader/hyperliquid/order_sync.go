@@ -68,6 +68,7 @@ func (t *HyperliquidTrader) SyncOrdersFromHyperliquid(traderID string, exchangeI
 				ExchangeID:      exchangeID,   // UUID
 				ExchangeType:    exchangeType, // Exchange type
 				ExchangeOrderID: trade.TradeID,
+				ClientOrderID:   fmt.Sprintf("sync_%s", trade.TradeID),
 				Symbol:          symbol,
 				Side:            trade.Side,
 				PositionSide:    "BOTH", // Hyperliquid uses one-way position mode
