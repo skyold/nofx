@@ -120,7 +120,10 @@ func (at *AutoTrader) buildChaosContext() (*chaos.ChaosContext, error) {
 			MarkPrice:        markPrice,
 			Quantity:         quantity,
 			Leverage:         leverage,
+			UnrealizedPnL:    unrealizedPnl,
 			UnrealizedPnLPct: pnlPct,
+			PeakPnLPct:       pnlPct, // Approximate as current PnL for now
+			MarginUsed:       marginUsed,
 			LiquidationPrice: liquidationPrice,
 			UpdateTime:       time.Now().UnixMilli(), // Approximate
 		})

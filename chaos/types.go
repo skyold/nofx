@@ -97,7 +97,10 @@ type PositionSnapshot struct {
 	MarkPrice        float64 `json:"mark_price"`
 	Quantity         float64 `json:"quantity"`
 	Leverage         int     `json:"leverage"`
+	UnrealizedPnL    float64 `json:"unrealized_pnl"`
 	UnrealizedPnLPct float64 `json:"unrealized_pnl_pct"`
+	PeakPnLPct       float64 `json:"peak_pnl_pct"`
+	MarginUsed       float64 `json:"margin_used"`
 	LiquidationPrice float64 `json:"liquidation_price"`
 	UpdateTime       int64   `json:"update_time"`
 }

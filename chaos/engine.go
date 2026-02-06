@@ -5,7 +5,6 @@ import (
 	"nofx/kernel"
 	"nofx/mcp"
 	"nofx/store"
-	"strings"
 	"time"
 )
 
@@ -53,7 +52,7 @@ func GetDecisions(ctx *ChaosContext, mcpClient mcp.AIClient) (*DecisionResult, e
 func (e *ChaosEngine) Execute(ctx *ChaosContext, mcpClient mcp.AIClient) (*DecisionResult, error) {
 	// 1. Build Prompts
 	systemPrompt := e.buildSystemPromptWithContext(ctx)
-	userPrompt := e.buildUserPromptWithContext(ctx)
+	userPrompt := e.BuildUserPromptFromChaosContext(ctx)
 
 	// 2. Call AI
 	aiCallStart := time.Now()
@@ -145,33 +144,6 @@ func (e *ChaosEngine) buildSystemPromptWithContext(ctx *ChaosContext) string {
 // BuildUserPrompt implements PromptBuilder interface for API compatibility
 func (e *ChaosEngine) BuildUserPrompt(ctx *kernel.Context) string {
 	return e.BuildUserPromptFromKernel(ctx)
-}
-
-// buildUserPromptWithContext builds the user prompt using ChaosContext
-func (e *ChaosEngine) buildUserPromptWithContext(ctx *ChaosContext) string {
-	// This should be implemented similar to BuildGridUserPrompt or kernel.BuildUserPrompt
-	// But using ChaosContext data
-	// For now, let's implement a basic version that includes market data
-
-	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("Time: %s | Cycle: #%d\n\n", ctx.CurrentTime, ctx.CallCount))
-
-	// Account info
-	sb.WriteString(fmt.Sprintf("Account: Equity %.2f | Available %.2f | PnL %+.2f%%\n\n",
-		ctx.Account.TotalEquity, ctx.Account.AvailableBalance, ctx.Account.TotalPnLPct))
-
-	// Market Data
-	sb.WriteString("## Market Data\n\n")
-	for _, coin := range ctx.CandidateCoins {
-		if data, ok := ctx.MarketDataMap[coin.Symbol]; ok {
-			sb.WriteString(fmt.Sprintf("### %s\n", coin.Symbol))
-			sb.WriteString(fmt.Sprintf("Price: %.4f\n", data.CurrentPrice))
-			// Add more indicators...
-			sb.WriteString("\n")
-		}
-	}
-
-	return sb.String()
 }
 
 func (e *ChaosEngine) validateDecisions(decisions []Decision, reasoning *Reasoning, ctx *ChaosContext) ([]Decision, error) {
