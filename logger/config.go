@@ -8,6 +8,6 @@ type Config struct {
 // SetDefaults sets default values
 func (c *Config) SetDefaults() {
 	if c.Level == "" {
-		c.Level = "warn"
+		c.Level = "info"
 	}
 }

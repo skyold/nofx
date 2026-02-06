@@ -32,9 +32,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/sirupsen/logrus"
 )
 
 // Server HTTP API server
@@ -55,7 +55,15 @@ func NewServer(traderManager *manager.TraderManager, st *store.Store, cryptoServ
 	// Set to Release mode (reduce log output)
 	gin.SetMode(gin.ReleaseMode)
 
-	router := gin.Default()
+	// Use gin.New() instead of gin.Default() to control middleware
+	router := gin.New()
+	router.Use(gin.Recovery())
+
+	// Only enable Gin logger if global log level is INFO or DEBUG
+	// This prevents noisy access logs when running in default WARN mode
+	if logger.Log.Level >= logrus.InfoLevel {
+		router.Use(gin.Logger())
+	}
 
 	// Enable CORS
 	router.Use(corsMiddleware())

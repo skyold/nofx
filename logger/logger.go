@@ -68,7 +68,7 @@ func Init(cfg *Config) error {
 
 	// Use default values if no config provided
 	if cfg == nil {
-		cfg = &Config{Level: "warn"}
+		cfg = &Config{Level: "info"}
 	}
 
 	// Set default values
@@ -77,7 +77,7 @@ func Init(cfg *Config) error {
 	// Set log level
 	level, err := logrus.ParseLevel(cfg.Level)
 	if err != nil {
-		level = logrus.WarnLevel
+		level = logrus.InfoLevel
 	}
 	Log.SetLevel(level)
 
