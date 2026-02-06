@@ -24,14 +24,14 @@ var (
 
 // RawDecision represents the structure expected from AI JSON
 type RawDecision struct {
-	Symbol     string   `json:"symbol"`
-	Action     string   `json:"action"`
-	Leverage   *int     `json:"leverage"`
-	EntryPrice *float64 `json:"entry"`
-	StopLoss   *float64 `json:"stop_loss"`
-	TakeProfit *float64 `json:"take_profit"`
-	RiskR      *float64 `json:"risk_r"`
-	TotalScore *float64 `json:"total_score"`
+	Symbol     string      `json:"symbol"`
+	Action     string      `json:"action"`
+	Leverage   interface{} `json:"leverage"`    // Support int or string (e.g., "10x")
+	EntryPrice interface{} `json:"entry"`       // Support float or string
+	StopLoss   interface{} `json:"stop_loss"`   // Support float or string
+	TakeProfit interface{} `json:"take_profit"` // Support float or string
+	RiskR      interface{} `json:"risk_r"`      // Support float or string
+	TotalScore interface{} `json:"total_score"` // Support float or string
 }
 
 // Reasoning represents the structured reasoning output from AI
@@ -175,23 +175,88 @@ func convertDecisions(raw []RawDecision) []Decision {
 	decisions := make([]Decision, len(raw))
 	for i, r := range raw {
 		d := Decision{
-			Symbol:     r.Symbol,
-			Action:     r.Action,
-			Leverage:   r.Leverage,
-			EntryPrice: r.EntryPrice,
-			StopLoss:   r.StopLoss,
-			TakeProfit: r.TakeProfit,
-			RiskR:      r.RiskR,
+			Symbol: r.Symbol,
+			Action: r.Action,
+		}
+
+		if r.Leverage != nil {
+			if val, ok := toInt(r.Leverage); ok {
+				d.Leverage = &val
+			}
+		}
+
+		if r.EntryPrice != nil {
+			if val, ok := toFloat(r.EntryPrice); ok {
+				d.EntryPrice = &val
+			}
+		}
+
+		if r.StopLoss != nil {
+			if val, ok := toFloat(r.StopLoss); ok {
+				d.StopLoss = &val
+			}
+		}
+
+		if r.TakeProfit != nil {
+			if val, ok := toFloat(r.TakeProfit); ok {
+				d.TakeProfit = &val
+			}
+		}
+
+		if r.RiskR != nil {
+			if val, ok := toFloat(r.RiskR); ok {
+				d.RiskR = &val
+			}
 		}
 
 		if r.TotalScore != nil {
-			score := int(math.Round(*r.TotalScore))
-			d.TotalScore = &score
+			if val, ok := toFloat(r.TotalScore); ok {
+				score := int(math.Round(val))
+				d.TotalScore = &score
+			}
 		}
 
 		decisions[i] = d
 	}
 	return decisions
+}
+
+// Helper functions for type conversion
+func toFloat(v interface{}) (float64, bool) {
+	switch val := v.(type) {
+	case float64:
+		return val, true
+	case int:
+		return float64(val), true
+	case string:
+		// Try to parse string as float
+		// Remove quotes if present (though JSON unmarshal usually handles this)
+		// Remove non-numeric characters except dot and minus
+		// For simplicity, let's use a basic regex or just simple parsing
+		// Here we assume standard number format in string
+		var f float64
+		if _, err := fmt.Sscanf(val, "%f", &f); err == nil {
+			return f, true
+		}
+	}
+	return 0, false
+}
+
+func toInt(v interface{}) (int, bool) {
+	switch val := v.(type) {
+	case float64:
+		return int(val), true
+	case int:
+		return val, true
+	case string:
+		// Handle "10x" or "10"
+		s := strings.TrimSuffix(strings.ToLower(val), "x")
+		var i int
+		if _, err := fmt.Sscanf(s, "%d", &i); err == nil {
+			return i, true
+		}
+	}
+	return 0, false
 }
 
 func fixMissingQuotes(jsonStr string) string {
@@ -221,17 +286,22 @@ func fixMissingQuotes(jsonStr string) string {
 func validateJSONFormat(jsonStr string) error {
 	trimmed := strings.TrimSpace(jsonStr)
 
-	if !reArrayHead.MatchString(trimmed) {
-		if strings.HasPrefix(trimmed, "[") && !strings.Contains(trimmed[:min(20, len(trimmed))], "{") {
-			return fmt.Errorf("not a valid decision array (must contain objects {}), actual content: %s", trimmed[:min(50, len(trimmed))])
-		}
-		return fmt.Errorf("JSON must start with [{ (whitespace allowed), actual: %s", trimmed[:min(20, len(trimmed))])
+	// Allow JSON that starts with [ but check for basic validity
+	if !strings.HasPrefix(trimmed, "[") {
+		return fmt.Errorf("JSON must start with [, actual: %s", trimmed[:min(20, len(trimmed))])
+	}
+
+	// Basic check for object start
+	if !strings.Contains(trimmed, "{") {
+		return fmt.Errorf("JSON array must contain objects {}, actual content: %s", trimmed[:min(50, len(trimmed))])
 	}
 
 	if strings.Contains(jsonStr, "~") {
 		return fmt.Errorf("JSON cannot contain range symbol ~, all numbers must be precise single values")
 	}
 
+	// Relaxed thousand separator check: only if surrounded by digits
+	// Regex would be better but keeping simple loop for now
 	for i := 0; i < len(jsonStr)-4; i++ {
 		if jsonStr[i] >= '0' && jsonStr[i] <= '9' &&
 			jsonStr[i+1] == ',' &&
