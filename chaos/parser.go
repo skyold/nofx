@@ -48,7 +48,7 @@ type Opportunity struct {
 	AuditPath string
 }
 
-func extractDecisions(response string) ([]Decision, error) {
+func extractDecisions(response string) ([]Decision, string, error) {
 	s := removeInvisibleRunes(response)
 	s = strings.TrimSpace(s)
 	s = fixMissingQuotes(s)
@@ -78,22 +78,24 @@ func extractDecisions(response string) ([]Decision, error) {
 			Symbol: "ALL",
 			Action: "wait",
 		}
-		return []Decision{fallbackDecision}, nil
+		// Create a synthetic JSON for the record
+		fallbackJSON := `[{"symbol":"ALL","action":"wait","reasoning":"AI output parsing failed (no JSON found), fallback to WAIT"}]`
+		return []Decision{fallbackDecision}, fallbackJSON, nil
 	}
 
 	jsonContent = compactArrayOpen(jsonContent)
 	jsonContent = fixMissingQuotes(jsonContent)
 
 	if err := validateJSONFormat(jsonContent); err != nil {
-		return nil, fmt.Errorf("JSON format validation failed: %w\nJSON content: %s\nFull response:\n%s", err, jsonContent, response)
+		return nil, jsonContent, fmt.Errorf("JSON format validation failed: %w\nJSON content: %s\nFull response:\n%s", err, jsonContent, response)
 	}
 
 	var rawDecisions []RawDecision
 	if err := json.Unmarshal([]byte(jsonContent), &rawDecisions); err != nil {
-		return nil, fmt.Errorf("JSON parsing failed: %w\nJSON content: %s", err, jsonContent)
+		return nil, jsonContent, fmt.Errorf("JSON parsing failed: %w\nJSON content: %s", err, jsonContent)
 	}
 
-	return convertDecisions(rawDecisions), nil
+	return convertDecisions(rawDecisions), jsonContent, nil
 }
 
 func extractReasoningJSON(response string) (*Reasoning, error) {

@@ -63,13 +63,14 @@ func (e *ChaosEngine) Execute(ctx *ChaosContext, mcpClient mcp.AIClient) (*Decis
 	}
 
 	// 3. Parse & Validate
-	decisions, err := extractDecisions(aiResponse)
+	decisions, decisionJSON, err := extractDecisions(aiResponse)
 
 	// Create result structure
 	result := &DecisionResult{
 		SystemPrompt:        systemPrompt,
 		UserPrompt:          userPrompt,
 		CoTTrace:            e.manager.ExtractReasoning(aiResponse),
+		DecisionJSON:        decisionJSON,
 		RawResponse:         aiResponse,
 		Timestamp:           time.Now(),
 		AIRequestDurationMs: aiCallDuration.Milliseconds(),

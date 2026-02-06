@@ -280,6 +280,7 @@ func (at *AutoTrader) processChaosResult(result *chaos.DecisionResult, ctx *chao
 			SystemPrompt:        result.SystemPrompt,
 			InputPrompt:         result.UserPrompt,
 			CoTTrace:            result.CoTTrace,
+			DecisionJSON:        result.DecisionJSON,
 			RawResponse:         result.RawResponse,
 			AIRequestDurationMs: result.AIRequestDurationMs,
 			Success:             true,

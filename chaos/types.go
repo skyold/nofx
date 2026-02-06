@@ -11,12 +11,12 @@ import (
 // Decision is a copy of the essential fields from kernel.Decision
 // defined here to avoid circular dependencies and allow independent evolution
 type Decision struct {
-	Symbol     string   `json:"symbol"`
-	Action     string   `json:"action"`
-	Leverage   *int     `json:"leverage,omitempty"`
-	EntryPrice *float64 `json:"entry,omitempty"`
-	StopLoss   *float64 `json:"stop_loss,omitempty"`
-	TakeProfit *float64 `json:"take_profit,omitempty"`
+	Symbol          string   `json:"symbol"`
+	Action          string   `json:"action"`
+	Leverage        *int     `json:"leverage,omitempty"`
+	EntryPrice      *float64 `json:"entry,omitempty"`
+	StopLoss        *float64 `json:"stop_loss,omitempty"`
+	TakeProfit      *float64 `json:"take_profit,omitempty"`
 	RiskR           *float64 `json:"risk_r,omitempty"`
 	TotalScore      *int     `json:"total_score,omitempty"`
 	Reasoning       *string  `json:"reasoning,omitempty"`
@@ -30,6 +30,7 @@ type DecisionResult struct {
 	CoTTrace            string      `json:"cot_trace"`
 	Decisions           []Decision  `json:"decisions"`
 	RawDecisions        interface{} `json:"raw_decisions,omitempty"`
+	DecisionJSON        string      `json:"decision_json"`
 	RawResponse         string      `json:"raw_response"`
 	Timestamp           time.Time   `json:"timestamp"`
 	AIRequestDurationMs int64       `json:"ai_request_duration_ms,omitempty"`
@@ -56,7 +57,7 @@ type ChaosContext struct {
 	OITopDataMap   map[string]*OITopData
 	// Optional Quant Data
 	QuantDataMap map[string]*kernel.QuantData
-	
+
 	// Rankings
 	OIRankingData      *nofxos.OIRankingData
 	NetFlowRankingData *nofxos.NetFlowRankingData
