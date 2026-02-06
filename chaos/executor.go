@@ -74,9 +74,6 @@ func (e *ChaosExecutor) Execute(decisions []Decision) []store.DecisionAction {
 		if d.TotalScore != nil {
 			actionRecord.Confidence = *d.TotalScore
 		}
-		if d.Reasoning != nil {
-			actionRecord.Reasoning = *d.Reasoning
-		}
 
 		if err := e.executeSingle(&d, &actionRecord); err != nil {
 			logger.Errorf("❌ Chaos execution failed (%s %s): %v", d.Symbol, d.Action, err)
@@ -86,7 +83,7 @@ func (e *ChaosExecutor) Execute(decisions []Decision) []store.DecisionAction {
 			logger.Infof("✓ Chaos execution succeeded (%s %s)", d.Symbol, d.Action)
 			actionRecord.Success = true
 		}
-		
+
 		results = append(results, actionRecord)
 	}
 	return results
@@ -152,7 +149,7 @@ func (e *ChaosExecutor) executeOpen(d *Decision, side string, record *store.Deci
 	if d.PositionSizeUSD != nil && *d.PositionSizeUSD > 0 {
 		positionSizeUSD = *d.PositionSizeUSD
 	}
-	
+
 	quantity := positionSizeUSD / price
 	record.Quantity = quantity
 
@@ -161,7 +158,7 @@ func (e *ChaosExecutor) executeOpen(d *Decision, side string, record *store.Deci
 	if d.Leverage != nil {
 		leverage = *d.Leverage
 	}
-	
+
 	// 4. Execute Open
 	var order map[string]interface{}
 	if side == "LONG" {
@@ -169,15 +166,15 @@ func (e *ChaosExecutor) executeOpen(d *Decision, side string, record *store.Deci
 	} else {
 		order, err = e.trader.OpenShort(d.Symbol, quantity, leverage)
 	}
-	
+
 	if err != nil {
 		return err
 	}
-	
+
 	// 5. Record Order
 	if orderID, ok := order["orderId"]; ok {
 		e.recordOrder(orderID, d.Symbol, d.Action, quantity, price, leverage)
-		
+
 		// Save orderID to record
 		switch v := orderID.(type) {
 		case int64:
@@ -210,7 +207,7 @@ func (e *ChaosExecutor) executeClose(d *Decision, side string, record *store.Dec
 	// 2. Determine Quantity (Close All)
 	// In Chaos, we might want to support partial closes, but for now Close All is safe
 	quantity := 0.0 // 0 means close all
-	
+
 	// 3. Execute Close
 	var order map[string]interface{}
 	if side == "LONG" {
@@ -218,11 +215,11 @@ func (e *ChaosExecutor) executeClose(d *Decision, side string, record *store.Dec
 	} else {
 		order, err = e.trader.CloseShort(d.Symbol, quantity)
 	}
-	
+
 	if err != nil {
 		return err
 	}
-	
+
 	// 4. Record Order
 	if orderID, ok := order["orderId"]; ok {
 		// Try to find quantity if 0 passed
@@ -233,7 +230,7 @@ func (e *ChaosExecutor) executeClose(d *Decision, side string, record *store.Dec
 			actualQty = 0 // Will be updated by sync
 		}
 		e.recordOrder(orderID, d.Symbol, d.Action, actualQty, price, 0)
-		
+
 		switch v := orderID.(type) {
 		case int64:
 			record.OrderID = v
@@ -241,7 +238,7 @@ func (e *ChaosExecutor) executeClose(d *Decision, side string, record *store.Dec
 			record.OrderID = int64(v)
 		}
 	}
-	
+
 	return nil
 }
 
@@ -249,7 +246,7 @@ func (e *ChaosExecutor) recordOrder(orderID interface{}, symbol, action string, 
 	if e.store == nil {
 		return
 	}
-	
+
 	// Format ID
 	var oidStr string
 	switch v := orderID.(type) {
@@ -264,20 +261,20 @@ func (e *ChaosExecutor) recordOrder(orderID interface{}, symbol, action string, 
 	}
 
 	clientOrderID := fmt.Sprintf("chaos_%d", time.Now().UnixNano())
-	
+
 	// Map action to side
 	side := "BUY"
 	if action == "open_short" || action == "close_long" {
 		side = "SELL"
 	}
-	
+
 	positionSide := "LONG"
 	if action == "open_short" || action == "close_short" {
 		positionSide = "SHORT"
 	}
-	
+
 	reduceOnly := strings.HasPrefix(action, "close")
-	
+
 	order := &store.TraderOrder{
 		TraderID:        e.traderID,
 		ExchangeID:      e.exchangeID,
@@ -299,6 +296,6 @@ func (e *ChaosExecutor) recordOrder(orderID interface{}, symbol, action string, 
 		CreatedAt:       store.UnixTime(time.Now().UTC().UnixMilli()),
 		UpdatedAt:       store.UnixTime(time.Now().UTC().UnixMilli()),
 	}
-	
+
 	e.store.Order().CreateOrder(order)
 }
