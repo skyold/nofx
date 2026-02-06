@@ -151,7 +151,7 @@ func (at *AutoTrader) buildChaosContext() (*chaos.ChaosContext, error) {
 		// Default config if nil
 		chaosConfig = &store.ChaosStrategyConfig{}
 	}
-	indicatorsConfig := at.config.StrategyConfig.Indicators
+	indicatorsConfig := chaosConfig.Indicators
 
 	// Using default logic if config missing
 	primaryTimeframe := "1h"
@@ -182,8 +182,8 @@ func (at *AutoTrader) buildChaosContext() (*chaos.ChaosContext, error) {
 
 	// 5. Get OI Top Data
 	oiTopMap := make(map[string]*chaos.OITopData)
-	if at.config.StrategyConfig.CoinSource.UseOITop {
-		apiKey := at.config.StrategyConfig.Indicators.NofxOSAPIKey
+	if chaosConfig.CoinSource.UseOITop {
+		apiKey := chaosConfig.Indicators.NofxOSAPIKey
 		if apiKey == "" {
 			apiKey = nofxos.DefaultAuthKey
 		}
