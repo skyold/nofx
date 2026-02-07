@@ -242,6 +242,7 @@ func (at *AutoTrader) processChaosResult(result *chaos.DecisionResult, ctx *chao
 	logger.Infof("🤖 Chaos AI Decision: %d decisions generated", len(result.Decisions))
 
 	var executionResults []store.DecisionAction
+	var executionLogs []string
 
 	if !ctx.Config.StressTestMode {
 		// Create Executor
@@ -253,7 +254,7 @@ func (at *AutoTrader) processChaosResult(result *chaos.DecisionResult, ctx *chao
 			at.exchangeID,
 			ctx.Config,
 		)
-		executionResults = executor.Execute(result.Decisions)
+		executionResults, executionLogs = executor.Execute(result.Decisions)
 	} else {
 		logger.Infof("🧪 Stress Test Mode: Skipping execution for %d decisions", len(result.Decisions))
 		// For stress test, we can map decisions to actions without execution result
@@ -264,11 +265,10 @@ func (at *AutoTrader) processChaosResult(result *chaos.DecisionResult, ctx *chao
 				Timestamp: time.Now().UTC(),
 				Success:   true, // Assume success for stress test recording
 			}
-			if d.Reasoning != nil {
-				action.Reasoning = *d.Reasoning
-			}
+
 			executionResults = append(executionResults, action)
 		}
+		executionLogs = append(executionLogs, "Stress Test Mode: Execution skipped")
 	}
 
 	// Save to DB
@@ -285,6 +285,7 @@ func (at *AutoTrader) processChaosResult(result *chaos.DecisionResult, ctx *chao
 			AIRequestDurationMs: result.AIRequestDurationMs,
 			Success:             true,
 			Decisions:           executionResults,
+			ExecutionLog:        executionLogs,
 		}
 		// Add decisions to record... (simplified for now, full detail is in RawResponse)
 		if err := at.store.Decision().LogDecision(record); err != nil {

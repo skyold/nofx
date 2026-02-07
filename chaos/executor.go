@@ -48,12 +48,15 @@ func NewChaosExecutor(trader TraderInterface, store *store.Store, traderID, exch
 }
 
 // Execute executes a list of decisions
-func (e *ChaosExecutor) Execute(decisions []Decision) []store.DecisionAction {
+func (e *ChaosExecutor) Execute(decisions []Decision) ([]store.DecisionAction, []string) {
 	// Sort decisions (close first)
 	sorted := e.sortDecisions(decisions)
 	var results []store.DecisionAction
+	var logs []string
 
-	logger.Infof("⚡ ChaosExecutor executing %d decisions...", len(sorted))
+	msg := fmt.Sprintf("⚡ ChaosExecutor executing %d decisions...", len(sorted))
+	logger.Info(msg)
+	logs = append(logs, msg)
 
 	for _, d := range sorted {
 		// Create action record
@@ -76,17 +79,21 @@ func (e *ChaosExecutor) Execute(decisions []Decision) []store.DecisionAction {
 		}
 
 		if err := e.executeSingle(&d, &actionRecord); err != nil {
-			logger.Errorf("❌ Chaos execution failed (%s %s): %v", d.Symbol, d.Action, err)
+			errMsg := fmt.Sprintf("❌ Chaos execution failed (%s %s): %v", d.Symbol, d.Action, err)
+			logger.Error(errMsg)
+			logs = append(logs, errMsg)
 			actionRecord.Success = false
 			actionRecord.Error = err.Error()
 		} else {
-			logger.Infof("✓ Chaos execution succeeded (%s %s)", d.Symbol, d.Action)
+			successMsg := fmt.Sprintf("✓ Chaos execution succeeded (%s %s)", d.Symbol, d.Action)
+			logger.Info(successMsg)
+			logs = append(logs, successMsg)
 			actionRecord.Success = true
 		}
 
 		results = append(results, actionRecord)
 	}
-	return results
+	return results, logs
 }
 
 func (e *ChaosExecutor) sortDecisions(decisions []Decision) []Decision {

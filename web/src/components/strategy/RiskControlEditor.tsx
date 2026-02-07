@@ -35,6 +35,8 @@ export function RiskControlEditor({
       riskParameters: { zh: '风险参数', en: 'Risk Parameters' },
       minRiskReward: { zh: '最小风险回报比', en: 'Min Risk/Reward Ratio' },
       minRiskRewardDesc: { zh: '开仓要求的最低盈亏比', en: 'Minimum profit ratio for opening' },
+      baseRiskPercent: { zh: '基础风险比例 (1R)', en: 'Base Risk Percent (1R)' },
+      baseRiskPercentDesc: { zh: '每单位 RiskR 对应的账户权益风险比例', en: 'Risk percentage of equity per unit of RiskR' },
       maxMarginUsage: { zh: '最大保证金使用率（代码强制）', en: 'Max Margin Usage (CODE ENFORCED)' },
       maxMarginUsageDesc: { zh: '保证金使用率上限，由代码强制执行', en: 'Maximum margin utilization, enforced by code' },
       entryRequirements: { zh: '开仓要求', en: 'Entry Requirements' },
@@ -281,6 +283,35 @@ export function RiskControlEditor({
                   color: '#EAECEF',
                 }}
               />
+            </div>
+          </div>
+
+          <div
+            className="p-4 rounded-lg"
+            style={{ background: '#0B0E11', border: '1px solid #2B3139' }}
+          >
+            <label className="block text-sm mb-1" style={{ color: '#EAECEF' }}>
+              {t('baseRiskPercent')}
+            </label>
+            <p className="text-xs mb-2" style={{ color: '#848E9C' }}>
+              {t('baseRiskPercentDesc')}
+            </p>
+            <div className="flex items-center gap-2">
+              <input
+                type="range"
+                value={(config.base_risk_percent ?? 0.01) * 100}
+                onChange={(e) =>
+                  updateField('base_risk_percent', parseFloat(e.target.value) / 100)
+                }
+                disabled={disabled}
+                min={0.5}
+                max={3}
+                step={0.5}
+                className="flex-1 accent-yellow-500"
+              />
+              <span className="w-16 text-center font-mono" style={{ color: '#F0B90B' }}>
+                {((config.base_risk_percent ?? 0.01) * 100).toFixed(1)}%
+              </span>
             </div>
           </div>
 

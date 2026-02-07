@@ -336,8 +336,8 @@ func GetDefaultStrategyConfig(lang string) StrategyConfig {
 			MaxMarginUsage:               0.9,  // Max 90% margin usage (CODE ENFORCED)
 			MinPositionSize:              12,   // Min 12 USDT per position (CODE ENFORCED)
 			MinRiskRewardRatio:           3.0,  // Min 3:1 profit/loss ratio (AI guided)
+			BaseRiskPercent:              0.01, // Base risk 1% per RiskR (default)
 			MinConfidence:                75,   // Min 75% confidence (AI guided)
-			BaseRiskPercent:              0.01, // Default 1%
 		},
 	}
 
