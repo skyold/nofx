@@ -246,6 +246,8 @@ type RiskControlConfig struct {
 
 	// Min take_profit / stop_loss ratio (AI guided)
 	MinRiskRewardRatio float64 `json:"min_risk_reward_ratio"`
+	// Base risk percentage per unit of RiskR (default: 0.01 = 1%)
+	BaseRiskPercent float64 `json:"base_risk_percent,omitempty"`
 	// Min AI confidence to open position (AI guided)
 	MinConfidence int `json:"min_confidence"`
 }
@@ -326,15 +328,16 @@ func GetDefaultStrategyConfig(lang string) StrategyConfig {
 			PriceRankingLimit:    10,
 		},
 		RiskControl: RiskControlConfig{
-			MaxPositions:                 3,   // Max 3 coins simultaneously (CODE ENFORCED)
-			BTCETHMaxLeverage:            5,   // BTC/ETH exchange leverage (AI guided)
-			AltcoinMaxLeverage:           5,   // Altcoin exchange leverage (AI guided)
-			BTCETHMaxPositionValueRatio:  5.0, // BTC/ETH: max position = 5x equity (CODE ENFORCED)
-			AltcoinMaxPositionValueRatio: 1.0, // Altcoin: max position = 1x equity (CODE ENFORCED)
-			MaxMarginUsage:               0.9, // Max 90% margin usage (CODE ENFORCED)
-			MinPositionSize:              12,  // Min 12 USDT per position (CODE ENFORCED)
-			MinRiskRewardRatio:           3.0, // Min 3:1 profit/loss ratio (AI guided)
-			MinConfidence:                75,  // Min 75% confidence (AI guided)
+			MaxPositions:                 3,    // Max 3 coins simultaneously (CODE ENFORCED)
+			BTCETHMaxLeverage:            5,    // BTC/ETH exchange leverage (AI guided)
+			AltcoinMaxLeverage:           5,    // Altcoin exchange leverage (AI guided)
+			BTCETHMaxPositionValueRatio:  5.0,  // BTC/ETH: max position = 5x equity (CODE ENFORCED)
+			AltcoinMaxPositionValueRatio: 1.0,  // Altcoin: max position = 1x equity (CODE ENFORCED)
+			MaxMarginUsage:               0.9,  // Max 90% margin usage (CODE ENFORCED)
+			MinPositionSize:              12,   // Min 12 USDT per position (CODE ENFORCED)
+			MinRiskRewardRatio:           3.0,  // Min 3:1 profit/loss ratio (AI guided)
+			MinConfidence:                75,   // Min 75% confidence (AI guided)
+			BaseRiskPercent:              0.01, // Default 1%
 		},
 	}
 

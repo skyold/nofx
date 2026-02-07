@@ -375,7 +375,12 @@ func (m *Manager) ValidateDecision(
 
 	// 1. RiskR hard constraints
 	const MaxRiskR = 1.5
-	const baseRiskPercent = 0.01 // 1R = 1% equity
+
+	// Determine base risk percent (default 1%)
+	baseRiskPercent := riskConfig.BaseRiskPercent
+	if baseRiskPercent <= 0 {
+		baseRiskPercent = 0.01
+	}
 
 	// Float comparison with small epsilon
 	isValidRiskR := false
