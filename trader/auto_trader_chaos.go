@@ -42,8 +42,8 @@ func (at *AutoTrader) RunChaosCycle() error {
 		return err
 	}
 
-	// 3. Process Decisions
-	at.processChaosResult(result, ctx)
+	// 3. Execute Decisions
+	at.executeChaosDecision(result, ctx)
 
 	logger.Infof("✅ Chaos Cycle #%d completed", at.cycleNumber)
 	return nil
@@ -238,7 +238,7 @@ func (at *AutoTrader) buildChaosContext() (*chaos.ChaosContext, error) {
 	return chaosCtx, nil
 }
 
-func (at *AutoTrader) processChaosResult(result *chaos.DecisionResult, ctx *chaos.ChaosContext) {
+func (at *AutoTrader) executeChaosDecision(result *chaos.DecisionResult, ctx *chaos.ChaosContext) {
 	logger.Infof("🤖 Chaos AI Decision: %d decisions generated", len(result.Decisions))
 
 	var executionResults []store.DecisionAction
