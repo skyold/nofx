@@ -53,6 +53,8 @@ export function ChaosConfigEditor({
       // Prompt Variant
       promptVariant: { zh: 'Prompt 变体', en: 'Prompt Variant' },
       promptVariantDesc: { zh: '选择 Chaos 交易的风格变体', en: 'Select trading style variant' },
+      default: { zh: 'Default (默认)', en: 'Default' },
+      none: { zh: 'None (无/自定义)', en: 'None (Custom)' },
       s1: { zh: 'S1 (主力/基线)', en: 'S1 (SWING_CORE)' },
       t1: { zh: 'T1 (慢趋势)', en: 'T1 (TREND_FOLLOW_SLOW)' },
       d1: { zh: 'D1 (日内波段)', en: 'D1 (INTRADAY_SWING)' },
@@ -121,6 +123,8 @@ export function ChaosConfigEditor({
             className="w-full px-3 py-2 rounded"
             style={inputStyle}
           >
+            <option value="default">{t('default')}</option>
+            <option value="none">{t('none')}</option>
             <option value="s1">{t('s1')}</option>
             <option value="t1">{t('t1')}</option>
             <option value="d1">{t('d1')}</option>

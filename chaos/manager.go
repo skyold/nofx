@@ -126,7 +126,7 @@ func (m *Manager) BuildPrompt(variant string, customPrompt string, indicators st
 		params["PROFILE_NAME"] = "X1 — SCALP_EXPERIMENT"
 		params["PROFILE_DESC"] = "微结构研究 | 不稳定 | Token消耗高"
 
-	case "none", "":
+	case "none", "default", "":
 		// No injection, parameters remain as defaults or placeholders
 		// This allows for pure custom prompts without forced parameter injection
 	}
@@ -140,7 +140,7 @@ func (m *Manager) BuildPrompt(variant string, customPrompt string, indicators st
 	}
 
 	// 4. Append Profile Header (Optional, for transparency if not in "none" mode)
-	if v != "none" && v != "" {
+	if v != "none" && v != "default" && v != "" {
 		hasPlaceholders := strings.Contains(customPrompt, "{PRIMARY_TIMEFRAME}")
 
 		if !hasPlaceholders {
