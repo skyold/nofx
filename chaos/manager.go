@@ -478,9 +478,16 @@ func (m *Manager) ValidateDecision(
 	}
 
 	riskRewardRatio := reward / risk
-	if riskRewardRatio < 1 {
-		return 0, fmt.Errorf("%s: Chaos decision requires R:R ≥ 1 (got %.4f). Params: Entry=%.4f, SL=%.4f, TP=%.4f, Risk=%.4f, Reward=%.4f",
-			decisionInfo(), riskRewardRatio, entryPrice, stopLoss, takeProfit, risk, reward)
+
+	// Use configured min risk/reward ratio, default to 1.0 if not set or invalid
+	minRR := riskConfig.MinRiskRewardRatio
+	if minRR <= 0 {
+		minRR = 1.0
+	}
+
+	if riskRewardRatio < minRR {
+		return 0, fmt.Errorf("%s: Chaos decision requires R:R ≥ %.2f (got %.4f). Params: Entry=%.4f, SL=%.4f, TP=%.4f, Risk=%.4f, Reward=%.4f",
+			decisionInfo(), minRR, riskRewardRatio, entryPrice, stopLoss, takeProfit, risk, reward)
 	}
 
 	// 4. Position sizing via RiskR
