@@ -24,28 +24,82 @@ func (at *AutoTrader) RunChaosCycle() error {
 		return nil
 	}
 
-	at.cycleNumber++ // Increment cycle number
+	at.callCount++ // Increment call count for logging consistency
 
-	logger.Infof("🌀 Starting Chaos Cycle #%d...", at.cycleNumber)
+	logger.Infof("🌀 Starting Chaos Cycle #%d...", at.callCount)
+
+	// Create decision record
+	record := &store.DecisionRecord{
+		ExecutionLog: []string{},
+		Success:      true,
+	}
 
 	// 1. Build Chaos Context
 	ctx, err := at.buildChaosContext()
 	if err != nil {
 		logger.Errorf("❌ Failed to build Chaos context: %v", err)
+		record.Success = false
+		record.ErrorMessage = fmt.Sprintf("Failed to build Chaos context: %v", err)
+		record.ExecutionLog = append(record.ExecutionLog, fmt.Sprintf("❌ Error: %v", err))
+		if saveErr := at.saveDecision(record); saveErr != nil {
+			logger.Errorf("Failed to save error decision: %v", saveErr)
+		}
 		return err
 	}
 
-	// 2. Execute Chaos Engine
+	// 1.5 Check if the context is empty (e.g., no candidate coins)
+	if ctx == nil {
+		logger.Infof("ℹ️  No candidate coins available, skipping Chaos context building to save resources")
+		record.Success = true
+		record.ExecutionLog = append(record.ExecutionLog, "No candidate coins available, Chaos cycle skipped (fail-fast)")
+		if saveErr := at.saveDecision(record); saveErr != nil {
+			logger.Errorf("Failed to save skipped chaos decision: %v", saveErr)
+		}
+		return nil
+	}
+
+	// Save account snapshot to record
+	record.AccountState = store.AccountSnapshot{
+		TotalBalance:          ctx.Account.TotalEquity,
+		AvailableBalance:      ctx.Account.AvailableBalance,
+		TotalUnrealizedProfit: ctx.Account.UnrealizedPnL,
+		PositionCount:         ctx.Account.PositionCount,
+	}
+
+	// 2. Execute Chaos Engine (LLM call)
 	result, err := chaos.GetDecisions(ctx, at.mcpClient)
 	if err != nil {
 		logger.Errorf("❌ Chaos Engine execution failed: %v", err)
+		record.Success = false
+		record.ErrorMessage = fmt.Sprintf("Chaos Engine execution failed: %v", err)
+		record.ExecutionLog = append(record.ExecutionLog, fmt.Sprintf("❌ Engine Error: %v", err))
+		if saveErr := at.saveDecision(record); saveErr != nil {
+			logger.Errorf("Failed to save error decision: %v", saveErr)
+		}
 		return err
 	}
 
 	// 3. Execute Decisions
-	at.executeChaosDecision(result, ctx)
+	executionResults, executionLogs, _ := at.executeChaosDecision(result, ctx)
 
-	logger.Infof("✅ Chaos Cycle #%d completed", at.cycleNumber)
+	// Update record with execution results and AI response details
+	record.Timestamp = result.Timestamp
+	record.SystemPrompt = result.SystemPrompt
+	record.InputPrompt = result.UserPrompt
+	record.CoTTrace = result.CoTTrace
+	record.DecisionJSON = result.DecisionJSON
+	record.RawResponse = result.RawResponse
+	record.AIRequestDurationMs = result.AIRequestDurationMs
+	record.Success = true
+	record.Decisions = executionResults
+	record.ExecutionLog = append(record.ExecutionLog, executionLogs...)
+
+	// Save to DB using centralized saveDecision method
+	if err := at.saveDecision(record); err != nil {
+		logger.Errorf("Failed to save chaos decision: %v", err)
+	}
+
+	logger.Infof("✅ Chaos Cycle #%d completed", at.callCount)
 	return nil
 }
 
@@ -143,6 +197,24 @@ func (at *AutoTrader) buildChaosContext() (*chaos.ChaosContext, error) {
 		}
 	}
 
+	// 3.5 Fail Fast: If no candidate coins, skip further processing to save system resources
+	if len(candidateCoins) == 0 {
+		logger.Infof("ℹ️  No candidate coins available, skipping Chaos context building to save resources")
+		if at.store != nil {
+			record := &store.DecisionRecord{
+				TraderID:     at.id,
+				CycleNumber:  at.cycleNumber,
+				Timestamp:    time.Now().UTC(),
+				Success:      true,
+				ExecutionLog: []string{"No candidate coins available, Chaos cycle skipped (fail-fast)"},
+			}
+			if err := at.store.Decision().LogDecision(record); err != nil {
+				logger.Errorf("Failed to save skipped chaos decision: %v", err)
+			}
+		}
+		return nil, nil
+	}
+
 	// 4. Fetch Market Data (Chaos specific fetching)
 	marketDataMap := make(map[string]*market.Data)
 
@@ -238,7 +310,7 @@ func (at *AutoTrader) buildChaosContext() (*chaos.ChaosContext, error) {
 	return chaosCtx, nil
 }
 
-func (at *AutoTrader) executeChaosDecision(result *chaos.DecisionResult, ctx *chaos.ChaosContext) {
+func (at *AutoTrader) executeChaosDecision(result *chaos.DecisionResult, ctx *chaos.ChaosContext) ([]store.DecisionAction, []string, error) {
 	logger.Infof("🤖 Chaos AI Decision: %d decisions generated", len(result.Decisions))
 
 	var executionResults []store.DecisionAction
@@ -271,25 +343,5 @@ func (at *AutoTrader) executeChaosDecision(result *chaos.DecisionResult, ctx *ch
 		executionLogs = append(executionLogs, "Stress Test Mode: Execution skipped")
 	}
 
-	// Save to DB
-	if at.store != nil {
-		record := &store.DecisionRecord{
-			TraderID:            at.id,
-			CycleNumber:         at.cycleNumber,
-			Timestamp:           result.Timestamp,
-			SystemPrompt:        result.SystemPrompt,
-			InputPrompt:         result.UserPrompt,
-			CoTTrace:            result.CoTTrace,
-			DecisionJSON:        result.DecisionJSON,
-			RawResponse:         result.RawResponse,
-			AIRequestDurationMs: result.AIRequestDurationMs,
-			Success:             true,
-			Decisions:           executionResults,
-			ExecutionLog:        executionLogs,
-		}
-		// Add decisions to record... (simplified for now, full detail is in RawResponse)
-		if err := at.store.Decision().LogDecision(record); err != nil {
-			logger.Errorf("Failed to save chaos decision: %v", err)
-		}
-	}
+	return executionResults, executionLogs, nil
 }
