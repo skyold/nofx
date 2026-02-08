@@ -185,6 +185,9 @@ func (at *AutoTrader) buildChaosContext() (*chaos.ChaosContext, error) {
 
 	// 3. Prepare Candidate Coins
 	candidateCoins := []chaos.CandidateCoin{}
+	existingCandidateMap := make(map[string]bool)
+
+	// 3.1 Fetch candidates from strategy
 	if at.strategyEngine != nil {
 		candidates, err := at.strategyEngine.GetCandidateCoins()
 		if err == nil {
@@ -193,25 +196,26 @@ func (at *AutoTrader) buildChaosContext() (*chaos.ChaosContext, error) {
 					Symbol:  c.Symbol,
 					Sources: c.Sources,
 				})
+				existingCandidateMap[c.Symbol] = true
 			}
 		}
 	}
 
-	// 3.5 Fail Fast: If no candidate coins, skip further processing to save system resources
-	if len(candidateCoins) == 0 {
-		logger.Infof("ℹ️  No candidate coins available, skipping Chaos context building to save resources")
-		if at.store != nil {
-			record := &store.DecisionRecord{
-				TraderID:     at.id,
-				CycleNumber:  at.cycleNumber,
-				Timestamp:    time.Now().UTC(),
-				Success:      true,
-				ExecutionLog: []string{"No candidate coins available, Chaos cycle skipped (fail-fast)"},
-			}
-			if err := at.store.Decision().LogDecision(record); err != nil {
-				logger.Errorf("Failed to save skipped chaos decision: %v", err)
-			}
+	// 3.2 Merge existing positions into candidate coins
+	// If we hold a position, we MUST treat it as a candidate to allow the AI to manage it (close/adjust)
+	for _, pos := range positionSnapshots {
+		if !existingCandidateMap[pos.Symbol] {
+			logger.Infof("➕ Merging held position %s into candidate coins for management", pos.Symbol)
+			candidateCoins = append(candidateCoins, chaos.CandidateCoin{
+				Symbol:  pos.Symbol,
+				Sources: []string{"Existing Position"},
+			})
+			existingCandidateMap[pos.Symbol] = true
 		}
+	}
+
+	// 3.5 Fail Fast: If no candidate coins (and no positions), skip further processing to save system resources
+	if len(candidateCoins) == 0 {
 		return nil, nil
 	}
 
