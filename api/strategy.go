@@ -550,30 +550,57 @@ func (s *Server) handleStrategyTestRun(c *gin.Context) {
 		PriceRankingData:   priceRankingData,
 	}
 
-	// Build Prompts (System & User)
-	type PromptBuilder interface {
-		BuildSystemPrompt(accountEquity float64, variant string) string
-		BuildUserPrompt(ctx *kernel.Context) string
-	}
-
-	var builder PromptBuilder
-	chaosManager := chaos.NewManager()
-
 	// Check if it's Chaos mode
 	isChaos := req.Config.StrategyType == "chaos_trading" ||
 		(req.Config.ChaosConfig != nil && req.Config.ChaosConfig.ChaosPrompt != "") ||
-		chaosManager.IsChaosMode(req.Config.CustomPrompt)
+		chaos.NewManager().IsChaosMode(req.Config.CustomPrompt)
+
+	var systemPrompt, userPrompt string
 
 	if isChaos {
-		// Chaos Mode
-		builder = chaos.NewChaosEngine(&req.Config)
-	} else {
-		// Standard Mode
-		builder = engine
-	}
+		// 🌀 Chaos Mode Dedicated Path
+		chaosEngine := chaos.NewChaosEngine(&req.Config)
 
-	systemPrompt := builder.BuildSystemPrompt(1000.0, req.PromptVariant)
-	userPrompt := builder.BuildUserPrompt(testContext)
+		// 1. Build Chaos Context natively
+		var chaosCandidates []chaos.CandidateCoin
+		for _, c := range candidates {
+			chaosCandidates = append(chaosCandidates, chaos.CandidateCoin{
+				Symbol:  c.Symbol,
+				Sources: c.Sources,
+			})
+		}
+
+		chaosCtx := &chaos.ChaosContext{
+			CurrentTime:    testContext.CurrentTime,
+			RuntimeMinutes: 0,
+			CallCount:      1,
+			Config: &chaos.ChaosConfig{
+				ChaosPrompt:   req.Config.ChaosConfig.ChaosPrompt,
+				RiskControl:   req.Config.ChaosConfig.RiskControl,
+				PromptVariant: req.PromptVariant,
+				Indicators:    req.Config.Indicators,
+			},
+			Account: chaos.AccountSnapshot{
+				TotalEquity:      1000.0,
+				AvailableBalance: 1000.0,
+			},
+			Positions:          []chaos.PositionSnapshot{},
+			CandidateCoins:     chaosCandidates,
+			MarketDataMap:      marketDataMap,
+			QuantDataMap:       quantDataMap,
+			OIRankingData:      oiRankingData,
+			NetFlowRankingData: netFlowRankingData,
+			PriceRankingData:   priceRankingData,
+		}
+
+		// 2. Generate prompts using Chaos native methods
+		systemPrompt = chaosEngine.BuildSystemPrompt(1000.0, req.PromptVariant)
+		userPrompt = chaosEngine.BuildUserPromptFromChaosContext(chaosCtx)
+	} else {
+		// 🛠️ Standard Mode Path
+		systemPrompt = engine.BuildSystemPrompt(1000.0, req.PromptVariant)
+		userPrompt = engine.BuildUserPrompt(testContext)
+	}
 
 	// If requesting real AI call
 	if req.RunRealAI && req.AIModelID != "" {

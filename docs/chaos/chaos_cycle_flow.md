@@ -10,7 +10,7 @@
 
 - **作用**: Chaos 策略的周期入口函数。
 - **流程**:
-    1. **调用 `at.buildChaosContext()` 构建数据上下文**。
+    1. **调用 `at.buildChaosContext()` 构建数据上下文 (内部会初始化 DecisionRecord)**。
     2. **调用 `chaos.GetDecisions()` 获取 AI 决策**。
     3. **调用 `at.processChaosResult()` 处理结果（执行与记录）**。
 

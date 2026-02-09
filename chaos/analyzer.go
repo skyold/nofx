@@ -3,7 +3,6 @@ package chaos
 import (
 	"encoding/json"
 	"fmt"
-	"nofx/kernel"
 	"nofx/logger"
 	"nofx/market"
 	"nofx/mcp"
@@ -51,7 +50,7 @@ func NewAnalyzerEngine(s *store.Store, config *store.StrategyConfig) *AnalyzerEn
 }
 
 // RunSentinel runs a single analyst in sentinel mode
-func (e *AnalyzerEngine) RunSentinel(ctx *kernel.Context, mcpClient mcp.AIClient, profile AnalystProfile) (*store.AnalysisSession, error) {
+func (e *AnalyzerEngine) RunSentinel(ctx *ChaosContext, mcpClient mcp.AIClient, profile AnalystProfile) (*store.AnalysisSession, error) {
 	// 1. Fetch Market Data (if missing)
 	if len(ctx.MarketDataMap) == 0 {
 		if err := e.fetchMarketData(ctx); err != nil {
@@ -61,7 +60,7 @@ func (e *AnalyzerEngine) RunSentinel(ctx *kernel.Context, mcpClient mcp.AIClient
 
 	// Ensure OITopDataMap is initialized (reusing logic from ChaosEngine)
 	if ctx.OITopDataMap == nil {
-		ctx.OITopDataMap = make(map[string]*kernel.OITopData)
+		ctx.OITopDataMap = make(map[string]*OITopData)
 		apiKey := e.config.Indicators.NofxOSAPIKey
 		if apiKey == "" {
 			apiKey = nofxos.DefaultAuthKey
@@ -71,7 +70,7 @@ func (e *AnalyzerEngine) RunSentinel(ctx *kernel.Context, mcpClient mcp.AIClient
 		oiPositions, err := client.GetOITopPositions()
 		if err == nil {
 			for _, pos := range oiPositions {
-				ctx.OITopDataMap[pos.Symbol] = &kernel.OITopData{
+				ctx.OITopDataMap[pos.Symbol] = &OITopData{
 					Rank:              pos.Rank,
 					OIDeltaPercent:    pos.OIDeltaPercent,
 					OIDeltaValue:      pos.OIDeltaValue,
@@ -82,7 +81,7 @@ func (e *AnalyzerEngine) RunSentinel(ctx *kernel.Context, mcpClient mcp.AIClient
 	}
 
 	// 2. Build User Prompt (Shared)
-	userPrompt := e.chaosEngine.BuildUserPromptFromKernel(ctx)
+	userPrompt := e.chaosEngine.BuildUserPromptFromChaosContext(ctx)
 
 	// 3. Create Session in DB
 	sessionID := uuid.New().String()
@@ -152,7 +151,7 @@ func (e *AnalyzerEngine) RunSentinel(ctx *kernel.Context, mcpClient mcp.AIClient
 }
 
 // fetchMarketData fetches market data for the context (Duplicated from ChaosEngine for now)
-func (e *AnalyzerEngine) fetchMarketData(ctx *kernel.Context) error {
+func (e *AnalyzerEngine) fetchMarketData(ctx *ChaosContext) error {
 	ctx.MarketDataMap = make(map[string]*market.Data)
 
 	timeframes := e.config.Indicators.Klines.SelectedTimeframes

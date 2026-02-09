@@ -2,7 +2,6 @@ package chaos
 
 import (
 	"fmt"
-	"nofx/kernel"
 	"nofx/mcp"
 	"nofx/store"
 	"time"
@@ -27,7 +26,7 @@ func NewChaosEngine(config *store.StrategyConfig) *ChaosEngine {
 }
 
 // GetDecisions gets the decisions for Chaos mode
-func GetDecisions(ctx *ChaosContext, mcpClient mcp.AIClient) (*DecisionResult, error) {
+func GetChaosDecisions(ctx *ChaosContext, mcpClient mcp.AIClient) (*DecisionResult, error) {
 	// Create engine with context config
 	// The config is already in the context, but NewChaosEngine expects *store.StrategyConfig
 	// We need to refactor NewChaosEngine or create a temporary config adapter
@@ -99,52 +98,12 @@ func (e *ChaosEngine) Execute(ctx *ChaosContext, mcpClient mcp.AIClient) (*Decis
 	}
 
 	result.Decisions = validatedDecisions
+
+
+
+	
+
 	return result, nil
-}
-
-// BuildSystemPrompt implements PromptBuilder interface for API compatibility
-func (e *ChaosEngine) BuildSystemPrompt(accountEquity float64, variant string) string {
-	// Construct a temporary context for preview
-	var chaosPrompt string
-	var riskControl store.RiskControlConfig
-	var indicators store.IndicatorConfig
-
-	if e.config != nil && e.config.ChaosConfig != nil {
-		chaosPrompt = e.config.ChaosConfig.ChaosPrompt
-		riskControl = e.config.ChaosConfig.RiskControl
-		indicators = e.config.ChaosConfig.Indicators
-	}
-
-	ctx := &ChaosContext{
-		Config: &ChaosConfig{
-			ChaosPrompt:   chaosPrompt,
-			RiskControl:   riskControl,
-			PromptVariant: variant,
-			Indicators:    indicators,
-		},
-	}
-	return e.buildSystemPromptWithContext(ctx)
-}
-
-// buildSystemPromptWithContext builds the system prompt for Chaos mode using context
-func (e *ChaosEngine) buildSystemPromptWithContext(ctx *ChaosContext) string {
-	if ctx.Config != nil && ctx.Config.ChaosPrompt != "" {
-		// Use manager to build the full prompt including Contract and Footer
-		// We pass indicators config for dynamic market data generation
-		return e.manager.BuildPrompt(
-			ctx.Config.PromptVariant,
-			ctx.Config.ChaosPrompt,
-			ctx.Config.Indicators,
-		)
-	}
-
-	// Fallback should ideally not happen in pure Chaos mode, but if config is missing:
-	return "# Chaos Mode (Missing Configuration)\n\nPlease provide trading decisions based on market data."
-}
-
-// BuildUserPrompt implements PromptBuilder interface for API compatibility
-func (e *ChaosEngine) BuildUserPrompt(ctx *kernel.Context) string {
-	return e.BuildUserPromptFromKernel(ctx)
 }
 
 func (e *ChaosEngine) validateDecisions(decisions []Decision, reasoning *Reasoning, ctx *ChaosContext) ([]Decision, error) {

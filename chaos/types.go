@@ -65,8 +65,7 @@ type ChaosContext struct {
 	TradingStats       *kernel.TradingStats
 	RecentOrders       []kernel.RecentOrder
 
-	// Chaos specific fields
-	InjectedAnomalies []string // List of anomalies injected into this context
+	
 }
 
 // ChaosConfig mirrors the store.ChaosStrategyConfig but can be extended
@@ -74,9 +73,6 @@ type ChaosConfig struct {
 	ChaosPrompt        string
 	RiskControl        store.RiskControlConfig
 	PromptVariant      string
-	FaultInjectionRate float64
-	DataNoiseLevel     float64
-	StressTestMode     bool
 	Indicators         store.IndicatorConfig
 }
 

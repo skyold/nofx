@@ -24,15 +24,15 @@ func (at *AutoTrader) RunChaosCycle() error {
 		return nil
 	}
 
-	at.callCount++ // Increment call count for logging consistency
-
-	logger.Infof("🌀 Starting Chaos Cycle #%d...", at.callCount)
+	at.callCount++
 
 	// Create decision record
 	record := &store.DecisionRecord{
 		ExecutionLog: []string{},
 		Success:      true,
 	}
+
+	logger.Infof("🌀 Starting Chaos Cycle #%d...", at.callCount)
 
 	// 1. Build Chaos Context
 	ctx, err := at.buildChaosContext()
@@ -47,27 +47,8 @@ func (at *AutoTrader) RunChaosCycle() error {
 		return err
 	}
 
-	// 1.5 Check if the context is empty (e.g., no candidate coins)
-	if ctx == nil {
-		logger.Infof("ℹ️  No candidate coins available, skipping Chaos context building to save resources")
-		record.Success = true
-		record.ExecutionLog = append(record.ExecutionLog, "No candidate coins available, Chaos cycle skipped (fail-fast)")
-		if saveErr := at.saveDecision(record); saveErr != nil {
-			logger.Errorf("Failed to save skipped chaos decision: %v", saveErr)
-		}
-		return nil
-	}
-
-	// Save account snapshot to record
-	record.AccountState = store.AccountSnapshot{
-		TotalBalance:          ctx.Account.TotalEquity,
-		AvailableBalance:      ctx.Account.AvailableBalance,
-		TotalUnrealizedProfit: ctx.Account.UnrealizedPnL,
-		PositionCount:         ctx.Account.PositionCount,
-	}
-
 	// 2. Execute Chaos Engine (LLM call)
-	result, err := chaos.GetDecisions(ctx, at.mcpClient)
+	chaosDecision, err := chaos.GetChaosDecisions(ctx, at.mcpClient)
 	if err != nil {
 		logger.Errorf("❌ Chaos Engine execution failed: %v", err)
 		record.Success = false
@@ -79,24 +60,22 @@ func (at *AutoTrader) RunChaosCycle() error {
 		return err
 	}
 
-	// 3. Execute Decisions
-	executionResults, executionLogs, _ := at.executeChaosDecision(result, ctx)
+	// Fill record with AI decision results
+	record.SystemPrompt = chaosDecision.SystemPrompt
+	record.InputPrompt = chaosDecision.UserPrompt
+	record.CoTTrace = chaosDecision.CoTTrace
+	record.RawResponse = chaosDecision.RawResponse
+	record.AIRequestDurationMs = chaosDecision.AIRequestDurationMs
+	record.DecisionJSON = chaosDecision.DecisionJSON
 
-	// Update record with execution results and AI response details
-	record.Timestamp = result.Timestamp
-	record.SystemPrompt = result.SystemPrompt
-	record.InputPrompt = result.UserPrompt
-	record.CoTTrace = result.CoTTrace
-	record.DecisionJSON = result.DecisionJSON
-	record.RawResponse = result.RawResponse
-	record.AIRequestDurationMs = result.AIRequestDurationMs
-	record.Success = true
-	record.Decisions = executionResults
+	// 3. Execute Decisions
+	actionRecord, executionLogs := at.executeChaosDecision(chaosDecision, ctx)
+	record.Decisions = actionRecord
 	record.ExecutionLog = append(record.ExecutionLog, executionLogs...)
 
-	// Save to DB using centralized saveDecision method
+	// Save final decision record
 	if err := at.saveDecision(record); err != nil {
-		logger.Errorf("Failed to save chaos decision: %v", err)
+		logger.Errorf("Failed to save final decision record: %v", err)
 	}
 
 	logger.Infof("✅ Chaos Cycle #%d completed", at.callCount)
@@ -104,6 +83,7 @@ func (at *AutoTrader) RunChaosCycle() error {
 }
 
 func (at *AutoTrader) buildChaosContext() (*chaos.ChaosContext, error) {
+
 	// 1. Get Account Info (Reuse logic from auto_trader.go)
 	balance, err := at.trader.GetBalance()
 	if err != nil {
@@ -214,11 +194,6 @@ func (at *AutoTrader) buildChaosContext() (*chaos.ChaosContext, error) {
 		}
 	}
 
-	// 3.5 Fail Fast: If no candidate coins (and no positions), skip further processing to save system resources
-	if len(candidateCoins) == 0 {
-		return nil, nil
-	}
-
 	// 4. Fetch Market Data (Chaos specific fetching)
 	marketDataMap := make(map[string]*market.Data)
 
@@ -284,15 +259,12 @@ func (at *AutoTrader) buildChaosContext() (*chaos.ChaosContext, error) {
 	chaosCtx := &chaos.ChaosContext{
 		CurrentTime:    time.Now().Format("2006-01-02 15:04:05"),
 		RuntimeMinutes: int(time.Since(at.startTime).Minutes()),
-		CallCount:      at.cycleNumber,
+		CallCount:      at.callCount,
 		Config: &chaos.ChaosConfig{
-			ChaosPrompt:        chaosConfig.ChaosPrompt,
-			RiskControl:        chaosConfig.RiskControl,
-			PromptVariant:      chaosConfig.PromptVariant,
-			FaultInjectionRate: chaosConfig.FaultInjectionRate,
-			DataNoiseLevel:     chaosConfig.DataNoiseLevel,
-			StressTestMode:     chaosConfig.StressTestMode,
-			Indicators:         indicatorsConfig,
+			ChaosPrompt:   chaosConfig.ChaosPrompt,
+			RiskControl:   chaosConfig.RiskControl,
+			PromptVariant: chaosConfig.PromptVariant,
+			Indicators:    indicatorsConfig,
 		},
 		Account: chaos.AccountSnapshot{
 			TotalEquity:      totalEquity,
@@ -314,38 +286,23 @@ func (at *AutoTrader) buildChaosContext() (*chaos.ChaosContext, error) {
 	return chaosCtx, nil
 }
 
-func (at *AutoTrader) executeChaosDecision(result *chaos.DecisionResult, ctx *chaos.ChaosContext) ([]store.DecisionAction, []string, error) {
+func (at *AutoTrader) executeChaosDecision(result *chaos.DecisionResult, ctx *chaos.ChaosContext) ([]store.DecisionAction, []string) {
+
 	logger.Infof("🤖 Chaos AI Decision: %d decisions generated", len(result.Decisions))
 
-	var executionResults []store.DecisionAction
+	var actionRecord []store.DecisionAction
 	var executionLogs []string
 
-	if !ctx.Config.StressTestMode {
-		// Create Executor
-		executor := chaos.NewChaosExecutor(
-			at.trader, // AutoTrader.trader implements TraderInterface
-			at.store,
-			at.id,
-			at.exchange,
-			at.exchangeID,
-			ctx.Config,
-		)
-		executionResults, executionLogs = executor.Execute(result.Decisions)
-	} else {
-		logger.Infof("🧪 Stress Test Mode: Skipping execution for %d decisions", len(result.Decisions))
-		// For stress test, we can map decisions to actions without execution result
-		for _, d := range result.Decisions {
-			action := store.DecisionAction{
-				Action:    d.Action,
-				Symbol:    d.Symbol,
-				Timestamp: time.Now().UTC(),
-				Success:   true, // Assume success for stress test recording
-			}
+	// Create Executor
+	executor := chaos.NewChaosExecutor(
+		at.trader, // AutoTrader.trader implements TraderInterface
+		at.store,
+		at.id,
+		at.exchange,
+		at.exchangeID,
+		ctx.Config,
+	)
+	actionRecord, executionLogs = executor.Execute(result.Decisions)
 
-			executionResults = append(executionResults, action)
-		}
-		executionLogs = append(executionLogs, "Stress Test Mode: Execution skipped")
-	}
-
-	return executionResults, executionLogs, nil
+	return actionRecord, executionLogs
 }

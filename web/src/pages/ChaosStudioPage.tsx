@@ -1217,13 +1217,21 @@ export function ChaosStudioPage() {
 
                 {promptPreview ? (
                   <>
-                    {/* Config Summary */}
-                    <div className="p-2 rounded-lg bg-nofx-bg border border-nofx-gold/20">
-                      <div className="flex items-center gap-1.5 mb-2">
-                        <Code className="w-3 h-3 text-purple-500" />
-                        <span className="text-xs font-medium text-purple-500">
-                          Config
-                        </span>
+                    {/* Config Summary & Chaos Status */}
+                    <div className="p-2 rounded-lg bg-nofx-bg border border-purple-500/30">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-1.5">
+                          <Code className="w-3 h-3 text-purple-500" />
+                          <span className="text-xs font-medium text-purple-500">
+                            Chaos Context
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-purple-500/10 border border-purple-500/20">
+                          <Zap className="w-2.5 h-2.5 text-purple-500" />
+                          <span className="text-[10px] text-purple-500 font-bold uppercase tracking-wider">
+                            Chaos Active
+                          </span>
+                        </div>
                       </div>
                       <div className="grid grid-cols-3 gap-2 text-xs">
                         {Object.entries(promptPreview.config_summary || {}).map(
@@ -1250,18 +1258,47 @@ export function ChaosStudioPage() {
                             {t('systemPrompt')}
                           </span>
                         </div>
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-nofx-bg-lighter text-nofx-text-muted">
-                          {promptPreview.system_prompt.length.toLocaleString()}{' '}
-                          chars
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] text-purple-500/70 italic">
+                            🌀 Chaos Native
+                          </span>
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-nofx-bg-lighter text-nofx-text-muted">
+                            {promptPreview.system_prompt.length.toLocaleString()}{' '}
+                            chars
+                          </span>
+                        </div>
                       </div>
                       <pre
-                        className="p-2 rounded-lg text-[11px] font-mono overflow-auto bg-nofx-bg border border-nofx-gold/20 text-nofx-text"
+                        className="p-2 rounded-lg text-[11px] font-mono overflow-auto bg-nofx-bg border border-purple-500/20 text-nofx-text"
                         style={{ maxHeight: '400px' }}
                       >
                         {promptPreview.system_prompt}
                       </pre>
                     </div>
+
+                    {/* User Prompt (Chaos Specific) */}
+                    {promptPreview.user_prompt && (
+                      <div>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <div className="flex items-center gap-1.5">
+                            <Terminal className="w-3 h-3 text-purple-500" />
+                            <span className="text-xs font-medium text-nofx-text">
+                              {t('userPrompt')}
+                            </span>
+                          </div>
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-nofx-bg-lighter text-nofx-text-muted">
+                            {promptPreview.user_prompt.length.toLocaleString()}{' '}
+                            chars
+                          </span>
+                        </div>
+                        <pre
+                          className="p-2 rounded-lg text-[11px] font-mono overflow-auto bg-nofx-bg border border-purple-500/20 text-nofx-text"
+                          style={{ maxHeight: '400px' }}
+                        >
+                          {promptPreview.user_prompt}
+                        </pre>
+                      </div>
+                    )}
                   </>
                 ) : (
                   <div className="flex flex-col items-center justify-center py-12 text-nofx-text-muted">

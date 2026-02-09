@@ -3,10 +3,11 @@ package analyzer
 import (
 	"fmt"
 	"sync"
+	"time"
 
 	"nofx/chaos"
-	"nofx/kernel"
 	"nofx/logger"
+	"nofx/market"
 	"nofx/mcp"
 	"nofx/store"
 
@@ -116,17 +117,21 @@ func (s *Scheduler) runJob(profile *store.AnalystProfile) {
 	// In a real scenario, we need to construct a proper context similar to AutoTrader
 	// For now, we create a minimal context.
 	// We might need to inject the StrategyConfig from somewhere if it's not in AnalyzerEngine
-	// AnalyzerEngine has config, but we need to create a kernel.Context
+	// AnalyzerEngine has config, but we need to create a chaos.ChaosContext
 
 	// TODO: Retrieve real account state if needed, or just use empty for pure market analysis
 	// Chaos mode relies on account balance for risk control, but Analyzer might just need market data.
 	// However, BuildUserPrompt uses account info.
 	// Let's create a dummy context for now, assuming fetchMarketData will populate it.
 
-	ctx := &kernel.Context{
-		// Account: ... (Optional for pure analysis?)
-		// Positions: ... (Need to fetch from DB if we want to analyze current positions)
-		CandidateCoins: []kernel.CandidateCoin{}, // AnalyzerEngine logic needs to be robust to empty
+	ctx := &chaos.ChaosContext{
+		CurrentTime:    time.Now().UTC().Format("2006-01-02 15:04:05 UTC"),
+		CandidateCoins: []chaos.CandidateCoin{},
+		MarketDataMap:  make(map[string]*market.Data),
+		Account: chaos.AccountSnapshot{
+			TotalEquity:      10000, // Dummy equity for analysis
+			AvailableBalance: 10000,
+		},
 	}
 
 	// Fetch positions from DB to populate context
