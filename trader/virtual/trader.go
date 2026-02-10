@@ -300,33 +300,6 @@ func (t *VirtualTrader) executeOrder(symbol, side, positionSide string, quantity
 
 	t.state.Balance -= commission // Deduct fee immediately
 
-	// 5. Create Order Record in Store
-	var dbOrderID int64
-	if t.store != nil {
-		dbOrder := &store.TraderOrder{
-			TraderID:        t.traderID,
-			ExchangeOrderID: orderID,
-			Symbol:          symbol,
-			Side:            side,
-			PositionSide:    positionSide,
-			Type:            "MARKET",
-			Quantity:        quantity,
-			Price:           price,
-			Status:          "FILLED",
-			FilledQuantity:  quantity,
-			AvgFillPrice:    price,
-			Commission:      commission,
-			Leverage:        leverage,
-			CreatedAt:       store.UnixTime(time.Now().UnixMilli()),
-			FilledAt:        store.UnixTime(time.Now().UnixMilli()),
-		}
-		if err := t.store.Order().CreateOrder(dbOrder); err != nil {
-			logger.Errorf("Failed to save virtual order to store: %v", err)
-		} else {
-			dbOrderID = dbOrder.ID
-		}
-	}
-
 	// 6. Update Position Logic
 	posKey := symbol + "_" + strings.ToLower(positionSide)
 
@@ -343,27 +316,6 @@ func (t *VirtualTrader) executeOrder(symbol, side, positionSide string, quantity
 				Leverage:   leverage,
 			}
 			t.state.Positions[posKey] = newPos
-
-			// Save to Store
-			if t.store != nil {
-				dbPos := &store.TraderPosition{
-					TraderID:     t.traderID,
-					Symbol:       symbol,
-					Side:         strings.ToLower(positionSide),
-					Quantity:     quantity,
-					EntryPrice:   price,
-					Leverage:     leverage,
-					EntryOrderID: orderID,
-					EntryTime:    store.UnixTime(time.Now().UnixMilli()),
-					Status:       "OPEN",
-					Source:       "virtual",
-				}
-				if err := t.store.Position().Create(dbPos); err != nil {
-					logger.Errorf("Failed to save virtual position to store: %v", err)
-				} else {
-					newPos.StorePositionID = dbPos.ID
-				}
-			}
 		} else {
 			// Average Entry Price
 			totalValue := pos.EntryPrice*pos.Quantity + price*quantity
@@ -371,13 +323,6 @@ func (t *VirtualTrader) executeOrder(symbol, side, positionSide string, quantity
 			pos.EntryPrice = totalValue / totalQty
 			pos.Quantity = totalQty
 			pos.Leverage = leverage // Update leverage to latest
-
-			// Update Store
-			if t.store != nil && pos.StorePositionID > 0 {
-				if err := t.store.Position().UpdatePositionQuantityAndPrice(pos.StorePositionID, quantity, price, 0); err != nil {
-					logger.Errorf("Failed to update virtual position in store: %v", err)
-				}
-			}
 		}
 	} else {
 		// Closing/Reducing position
@@ -399,47 +344,10 @@ func (t *VirtualTrader) executeOrder(symbol, side, positionSide string, quantity
 		// Update balance with realized PnL
 		t.state.Balance += pnl
 
-		// Update Store
-		if t.store != nil && pos.StorePositionID > 0 {
-			if isFullClose {
-				// Full close
-				if err := t.store.Position().ClosePosition(pos.StorePositionID, price, orderID, pnl, 0, "market_close"); err != nil {
-					logger.Errorf("Failed to close virtual position in store: %v", err)
-				}
-			} else {
-				// Partial close
-				if err := t.store.Position().ReducePositionQuantity(pos.StorePositionID, quantity, price, 0, pnl); err != nil {
-					logger.Errorf("Failed to reduce virtual position in store: %v", err)
-				}
-			}
-		}
-
 		// Update position in state
 		pos.Quantity -= quantity
 		if isFullClose {
 			delete(t.state.Positions, posKey)
-		}
-	}
-
-	// 7. Create Fill Record in Store
-	if t.store != nil && dbOrderID > 0 {
-		dbFill := &store.TraderFill{
-			TraderID:        t.traderID,
-			OrderID:         dbOrderID,
-			ExchangeOrderID: orderID,
-			ExchangeTradeID: orderID + "_fill",
-			Symbol:          symbol,
-			Side:            side,
-			Price:           price,
-			Quantity:        quantity,
-			QuoteQuantity:   quantity * price,
-			Commission:      commission,
-			CommissionAsset: "USDT",
-			RealizedPnL:     pnl,
-			CreatedAt:       store.UnixTime(time.Now().UnixMilli()),
-		}
-		if err := t.store.Order().CreateFill(dbFill); err != nil {
-			logger.Errorf("Failed to save virtual fill to store: %v", err)
 		}
 	}
 
