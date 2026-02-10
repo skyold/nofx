@@ -3,24 +3,28 @@ package virtual
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"nofx/logger"
 	"nofx/market"
+	"nofx/store"
 	"nofx/trader/types"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 )
 
 // VirtualPosition represents a position in the virtual exchange
 type VirtualPosition struct {
-	Symbol        string  `json:"symbol"`
-	Side          string  `json:"side"` // "long" or "short"
-	EntryPrice    float64 `json:"entry_price"`
-	Quantity      float64 `json:"quantity"`
-	Leverage      int     `json:"leverage"`
-	UnrealizedPnL float64 `json:"-"` // Calculated runtime, not stored
-	Margin        float64 `json:"-"` // Calculated runtime, not stored
+	Symbol          string  `json:"symbol"`
+	Side            string  `json:"side"` // "long" or "short"
+	EntryPrice      float64 `json:"entry_price"`
+	Quantity        float64 `json:"quantity"`
+	Leverage        int     `json:"leverage"`
+	UnrealizedPnL   float64 `json:"-"`                 // Calculated runtime, not stored
+	Margin          float64 `json:"-"`                 // Calculated runtime, not stored
+	StorePositionID int64   `json:"store_position_id"` // ID in database
 }
 
 // VirtualOrder represents an order in the virtual exchange
@@ -48,6 +52,8 @@ type VirtualExchangeState struct {
 // VirtualTrader implements the Trader interface for simulation
 type VirtualTrader struct {
 	userID         string
+	traderID       string
+	store          *store.Store
 	state          *VirtualExchangeState
 	apiClient      *market.APIClient
 	statePath      string
@@ -56,17 +62,19 @@ type VirtualTrader struct {
 }
 
 // NewVirtualTrader creates a new virtual trader
-func NewVirtualTrader(userID string, initialBalance float64) *VirtualTrader {
+func NewVirtualTrader(userID string, traderID string, st *store.Store, initialBalance float64) *VirtualTrader {
 	// Ensure data directory exists
 	dataDir := "data/virtual_exchange"
 	if err := os.MkdirAll(dataDir, 0755); err != nil {
 		logger.Errorf("Failed to create virtual exchange data directory: %v", err)
 	}
 
-	statePath := filepath.Join(dataDir, fmt.Sprintf("%s.json", userID))
+	statePath := filepath.Join(dataDir, fmt.Sprintf("%s.json", traderID))
 
 	trader := &VirtualTrader{
 		userID:         userID,
+		traderID:       traderID,
+		store:          st,
 		apiClient:      market.NewAPIClient(),
 		statePath:      statePath,
 		initialBalance: initialBalance,
@@ -144,7 +152,7 @@ func (t *VirtualTrader) GetBalance() (map[string]interface{}, error) {
 	}
 
 	totalEquity := t.state.Balance + totalUnrealizedPnL
-	availableBalance := t.state.Balance - totalMarginUsed // Simplified margin logic
+	availableBalance := totalEquity - totalMarginUsed
 
 	return map[string]interface{}{
 		"totalWalletBalance":    t.state.Balance,
@@ -259,22 +267,102 @@ func (t *VirtualTrader) executeOrder(symbol, side, positionSide string, quantity
 	// 3. Calculate Fee (0.05% taker fee)
 	feeRate := 0.0005
 	commission := quantity * price * feeRate
+
+	var pnl float64
+
+	// 4. Margin Check (for opening)
+	isOpening := (side == "BUY" && positionSide == "LONG") || (side == "SELL" && positionSide == "SHORT")
+	if isOpening {
+		requiredMargin := (quantity * price) / float64(leverage)
+		totalUnrealizedPnL := 0.0
+		totalMarginUsed := 0.0
+		for _, pos := range t.state.Positions {
+			currentPrice, _ := t.getRobustPrice(pos.Symbol)
+			if currentPrice == 0 {
+				currentPrice = pos.EntryPrice
+			}
+			var pnl float64
+			if pos.Side == "long" {
+				pnl = (currentPrice - pos.EntryPrice) * pos.Quantity
+			} else {
+				pnl = (pos.EntryPrice - currentPrice) * pos.Quantity
+			}
+			totalUnrealizedPnL += pnl
+			totalMarginUsed += (pos.Quantity * currentPrice) / float64(pos.Leverage)
+		}
+		equity := t.state.Balance + totalUnrealizedPnL
+		available := equity - totalMarginUsed
+		if available < requiredMargin+commission {
+			return nil, fmt.Errorf("insufficient balance: available %.2f, required %.2f (margin %.2f + fee %.2f)",
+				available, requiredMargin+commission, requiredMargin, commission)
+		}
+	}
+
 	t.state.Balance -= commission // Deduct fee immediately
 
-	// 4. Update Position Logic
-	posKey := symbol + "_" + stringsToLowerCase(positionSide)
+	// 5. Create Order Record in Store
+	var dbOrderID int64
+	if t.store != nil {
+		dbOrder := &store.TraderOrder{
+			TraderID:        t.traderID,
+			ExchangeOrderID: orderID,
+			Symbol:          symbol,
+			Side:            side,
+			PositionSide:    positionSide,
+			Type:            "MARKET",
+			Quantity:        quantity,
+			Price:           price,
+			Status:          "FILLED",
+			FilledQuantity:  quantity,
+			AvgFillPrice:    price,
+			Commission:      commission,
+			Leverage:        leverage,
+			CreatedAt:       store.UnixTime(time.Now().UnixMilli()),
+			FilledAt:        store.UnixTime(time.Now().UnixMilli()),
+		}
+		if err := t.store.Order().CreateOrder(dbOrder); err != nil {
+			logger.Errorf("Failed to save virtual order to store: %v", err)
+		} else {
+			dbOrderID = dbOrder.ID
+		}
+	}
+
+	// 6. Update Position Logic
+	posKey := symbol + "_" + strings.ToLower(positionSide)
 
 	// Handle Open Position
-	if (side == "BUY" && positionSide == "LONG") || (side == "SELL" && positionSide == "SHORT") {
+	if isOpening {
 		// Opening/Adding to position
 		pos, exists := t.state.Positions[posKey]
 		if !exists {
-			t.state.Positions[posKey] = &VirtualPosition{
+			newPos := &VirtualPosition{
 				Symbol:     symbol,
-				Side:       stringsToLowerCase(positionSide),
+				Side:       strings.ToLower(positionSide),
 				EntryPrice: price,
 				Quantity:   quantity,
 				Leverage:   leverage,
+			}
+			t.state.Positions[posKey] = newPos
+
+			// Save to Store
+			if t.store != nil {
+				dbPos := &store.TraderPosition{
+					TraderID:     t.traderID,
+					Symbol:       symbol,
+					Side:         strings.ToLower(positionSide),
+					Quantity:     quantity,
+					EntryPrice:   price,
+					Leverage:     leverage,
+					EntryOrderID: orderID,
+					EntryTime:    store.UnixTime(time.Now().UnixMilli()),
+					Status:       "OPEN",
+					Source:       "virtual",
+				}
+				if err := t.store.Position().Create(dbPos); err != nil {
+					logger.Errorf("Failed to save virtual position to store: %v", err)
+				} else {
+					newPos.StorePositionID = dbPos.ID
+				}
 			}
 		} else {
 			// Average Entry Price
@@ -283,33 +371,79 @@ func (t *VirtualTrader) executeOrder(symbol, side, positionSide string, quantity
 			pos.EntryPrice = totalValue / totalQty
 			pos.Quantity = totalQty
 			pos.Leverage = leverage // Update leverage to latest
+
+			// Update Store
+			if t.store != nil && pos.StorePositionID > 0 {
+				if err := t.store.Position().UpdatePositionQuantityAndPrice(pos.StorePositionID, quantity, price, 0); err != nil {
+					logger.Errorf("Failed to update virtual position in store: %v", err)
+				}
+			}
 		}
 	} else {
 		// Closing/Reducing position
 		pos, exists := t.state.Positions[posKey]
 		if !exists {
-			// Trying to close non-existent position, treat as error or ignore
-			// For simulation, let's error to be safe
 			return nil, fmt.Errorf("no position found to close for %s %s", symbol, positionSide)
 		}
 
 		// Calculate PnL
-		var pnl float64
 		if positionSide == "LONG" {
 			pnl = (price - pos.EntryPrice) * quantity
 		} else {
 			pnl = (pos.EntryPrice - price) * quantity
 		}
-		t.state.Balance += pnl // Add realized PnL
 
-		// Update position
+		// Check if it's a full close or partial close
+		isFullClose := math.Abs(pos.Quantity-quantity) < 0.00000001
+
+		// Update balance with realized PnL
+		t.state.Balance += pnl
+
+		// Update Store
+		if t.store != nil && pos.StorePositionID > 0 {
+			if isFullClose {
+				// Full close
+				if err := t.store.Position().ClosePosition(pos.StorePositionID, price, orderID, pnl, 0, "market_close"); err != nil {
+					logger.Errorf("Failed to close virtual position in store: %v", err)
+				}
+			} else {
+				// Partial close
+				if err := t.store.Position().ReducePositionQuantity(pos.StorePositionID, quantity, price, 0, pnl); err != nil {
+					logger.Errorf("Failed to reduce virtual position in store: %v", err)
+				}
+			}
+		}
+
+		// Update position in state
 		pos.Quantity -= quantity
-		if pos.Quantity <= 0.00000001 { // Float epsilon
+		if isFullClose {
 			delete(t.state.Positions, posKey)
 		}
 	}
 
-	// 5. Create Order Record
+	// 7. Create Fill Record in Store
+	if t.store != nil && dbOrderID > 0 {
+		dbFill := &store.TraderFill{
+			TraderID:        t.traderID,
+			OrderID:         dbOrderID,
+			ExchangeOrderID: orderID,
+			ExchangeTradeID: orderID + "_fill",
+			Symbol:          symbol,
+			Side:            side,
+			Price:           price,
+			Quantity:        quantity,
+			QuoteQuantity:   quantity * price,
+			Commission:      commission,
+			CommissionAsset: "USDT",
+			RealizedPnL:     pnl,
+			CreatedAt:       store.UnixTime(time.Now().UnixMilli()),
+		}
+		if err := t.store.Order().CreateFill(dbFill); err != nil {
+			logger.Errorf("Failed to save virtual fill to store: %v", err)
+		}
+	}
+
+	// 8. Create Order Record in State
 	order := &VirtualOrder{
 		OrderID:      orderID,
 		Symbol:       symbol,
@@ -324,7 +458,7 @@ func (t *VirtualTrader) executeOrder(symbol, side, positionSide string, quantity
 	}
 	t.state.Orders[orderID] = order
 
-	// 6. Save State
+	// 9. Save State
 	if err := t.saveState(); err != nil {
 		logger.Errorf("Failed to save virtual exchange state: %v", err)
 	}
@@ -465,4 +599,16 @@ func (t *VirtualTrader) getRobustPrice(symbol string) (float64, error) {
 		return 0, fmt.Errorf("failed to get market price: %v (HL: %v, fallback: %v)", err, errHL, err2)
 	}
 	return price, nil
+}
+
+// CleanupVirtualData deletes virtual exchange data for a specific trader
+func CleanupVirtualData(traderID string) error {
+	dataDir := "data/virtual_exchange"
+	statePath := filepath.Join(dataDir, fmt.Sprintf("%s.json", traderID))
+
+	if _, err := os.Stat(statePath); err == nil {
+		logger.Infof("🧹 Cleaning up virtual exchange data for trader %s", traderID)
+		return os.Remove(statePath)
+	}
+	return nil
 }

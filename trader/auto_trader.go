@@ -295,7 +295,7 @@ func NewAutoTrader(config AutoTraderConfig, st *store.Store, userID string) (*Au
 		logger.Infof("✓ LIGHTER trader initialized successfully")
 	case "virtual":
 		logger.Infof("🎮 [%s] Using Virtual Exchange (Simulation)", config.Name)
-		trader = virtual.NewVirtualTrader(userID, config.InitialBalance)
+		trader = virtual.NewVirtualTrader(userID, config.ID, st, config.InitialBalance)
 	default:
 		return nil, fmt.Errorf("unsupported trading platform: %s", config.Exchange)
 	}

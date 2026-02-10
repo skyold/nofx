@@ -679,7 +679,7 @@ func (s *Server) handleCreateTrader(c *gin.Context) {
 				createErr = fmt.Errorf("Lighter requires wallet address and API Key private key")
 			}
 		case "virtual":
-			tempTrader = virtual.NewVirtualTrader(userID, req.InitialBalance)
+			tempTrader = virtual.NewVirtualTrader(userID, traderID, s.store, req.InitialBalance)
 		default:
 			logger.Infof("⚠️ Unsupported exchange type: %s, using user input for initial balance", exchangeCfg.ExchangeType)
 		}
@@ -950,6 +950,11 @@ func (s *Server) handleDeleteTrader(c *gin.Context) {
 
 	// Remove trader from memory
 	s.traderManager.RemoveTrader(traderID)
+
+	// Cleanup virtual exchange data if it exists
+	if err := virtual.CleanupVirtualData(traderID); err != nil {
+		logger.Warnf("Failed to cleanup virtual exchange data for %s: %v", traderID, err)
+	}
 
 	logger.Infof("✓ Trader deleted: %s", traderID)
 	c.JSON(http.StatusOK, gin.H{"message": "Trader deleted"})
@@ -1250,7 +1255,7 @@ func (s *Server) handleSyncBalance(c *gin.Context) {
 			createErr = fmt.Errorf("Lighter requires wallet address and API Key private key")
 		}
 	case "virtual":
-		tempTrader = virtual.NewVirtualTrader(userID, traderConfig.InitialBalance)
+		tempTrader = virtual.NewVirtualTrader(userID, traderID, s.store, traderConfig.InitialBalance)
 	default:
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Unsupported exchange type"})
 		return
@@ -1415,7 +1420,7 @@ func (s *Server) handleClosePosition(c *gin.Context) {
 			createErr = fmt.Errorf("Lighter requires wallet address and API Key private key")
 		}
 	case "virtual":
-		tempTrader = virtual.NewVirtualTrader(userID, fullConfig.Trader.InitialBalance)
+		tempTrader = virtual.NewVirtualTrader(userID, traderID, s.store, fullConfig.Trader.InitialBalance)
 	default:
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Unsupported exchange type"})
 		return
