@@ -19,6 +19,7 @@ import (
 	"nofx/trader/kucoin"
 	"nofx/trader/lighter"
 	"nofx/trader/okx"
+	"nofx/trader/virtual"
 	"strings"
 	"sync"
 	"time"
@@ -58,8 +59,8 @@ type AutoTraderConfig struct {
 	GateSecretKey string
 
 	// KuCoin API configuration
-	KuCoinAPIKey    string
-	KuCoinSecretKey string
+	KuCoinAPIKey     string
+	KuCoinSecretKey  string
 	KuCoinPassphrase string
 
 	// Hyperliquid configuration
@@ -288,6 +289,9 @@ func NewAutoTrader(config AutoTraderConfig, st *store.Store, userID string) (*Au
 			return nil, fmt.Errorf("failed to initialize LIGHTER trader: %w", err)
 		}
 		logger.Infof("✓ LIGHTER trader initialized successfully")
+	case "virtual":
+		logger.Infof("🎮 [%s] Using Virtual Exchange (Simulation)", config.Name)
+		trader = virtual.NewVirtualTrader(userID, config.InitialBalance)
 	default:
 		return nil, fmt.Errorf("unsupported trading platform: %s", config.Exchange)
 	}

@@ -30,9 +30,11 @@ import (
 	"nofx/trader/kucoin"
 	"nofx/trader/lighter"
 	"nofx/trader/okx"
+	"nofx/trader/virtual"
 	"strconv"
 	"strings"
 	"time"
+
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
@@ -676,6 +678,8 @@ func (s *Server) handleCreateTrader(c *gin.Context) {
 			} else {
 				createErr = fmt.Errorf("Lighter requires wallet address and API Key private key")
 			}
+		case "virtual":
+			tempTrader = virtual.NewVirtualTrader(userID, req.InitialBalance)
 		default:
 			logger.Infof("⚠️ Unsupported exchange type: %s, using user input for initial balance", exchangeCfg.ExchangeType)
 		}
@@ -1245,6 +1249,8 @@ func (s *Server) handleSyncBalance(c *gin.Context) {
 		} else {
 			createErr = fmt.Errorf("Lighter requires wallet address and API Key private key")
 		}
+	case "virtual":
+		tempTrader = virtual.NewVirtualTrader(userID, traderConfig.InitialBalance)
 	default:
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Unsupported exchange type"})
 		return
@@ -1408,6 +1414,8 @@ func (s *Server) handleClosePosition(c *gin.Context) {
 		} else {
 			createErr = fmt.Errorf("Lighter requires wallet address and API Key private key")
 		}
+	case "virtual":
+		tempTrader = virtual.NewVirtualTrader(userID, fullConfig.Trader.InitialBalance)
 	default:
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Unsupported exchange type"})
 		return
@@ -1902,6 +1910,7 @@ func (s *Server) handleCreateExchange(c *gin.Context) {
 	validTypes := map[string]bool{
 		"binance": true, "bybit": true, "okx": true, "bitget": true,
 		"hyperliquid": true, "aster": true, "lighter": true, "gate": true, "kucoin": true,
+		"virtual": true,
 	}
 	if !validTypes[req.ExchangeType] {
 		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Invalid exchange type: %s", req.ExchangeType)})
@@ -3330,6 +3339,7 @@ func (s *Server) handleGetSupportedExchanges(c *gin.Context) {
 		{ExchangeType: "alpaca", Name: "Alpaca (US Stocks)", Type: "stock"},
 		{ExchangeType: "forex", Name: "Forex (TwelveData)", Type: "forex"},
 		{ExchangeType: "metals", Name: "Metals (TwelveData)", Type: "metals"},
+		{ExchangeType: "virtual", Name: "Virtual Exchange", Type: "sim"},
 	}
 
 	c.JSON(http.StatusOK, supportedExchanges)

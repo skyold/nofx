@@ -30,6 +30,7 @@ const SUPPORTED_EXCHANGE_TEMPLATES = [
   { exchange_type: 'hyperliquid', name: 'Hyperliquid', type: 'dex' as const },
   { exchange_type: 'aster', name: 'Aster DEX', type: 'dex' as const },
   { exchange_type: 'lighter', name: 'Lighter', type: 'dex' as const },
+  { exchange_type: 'virtual', name: 'Virtual Exchange', type: 'sim' as const },
 ]
 
 interface ExchangeConfigModalProps {
@@ -132,8 +133,8 @@ function ExchangeCard({
       <span
         className="text-xs px-2 py-0.5 rounded-full"
         style={{
-          background: template.type === 'cex' ? 'rgba(240, 185, 11, 0.2)' : 'rgba(139, 92, 246, 0.2)',
-          color: template.type === 'cex' ? '#F0B90B' : '#A78BFA',
+          background: template.type === 'cex' ? 'rgba(240, 185, 11, 0.2)' : template.type === 'dex' ? 'rgba(139, 92, 246, 0.2)' : 'rgba(16, 185, 129, 0.2)',
+          color: template.type === 'cex' ? '#F0B90B' : template.type === 'dex' ? '#A78BFA' : '#10B981',
         }}
       >
         {template.type.toUpperCase()}
@@ -327,6 +328,9 @@ export function ExchangeConfigModal({
       } else if (currentExchangeType === 'lighter') {
         if (!lighterWalletAddr.trim() || !lighterApiKeyPrivateKey.trim()) return
         await onSave(exchangeId, exchangeType, trimmedAccountName, '', '', '', testnet, undefined, undefined, undefined, undefined, lighterWalletAddr.trim(), '', lighterApiKeyPrivateKey.trim(), lighterApiKeyIndex)
+      } else if (currentExchangeType === 'virtual') {
+        // Virtual exchange doesn't need API keys
+        await onSave(exchangeId, exchangeType, trimmedAccountName, '', '', '', false)
       } else {
         if (!apiKey.trim() || !secretKey.trim()) return
         await onSave(exchangeId, exchangeType, trimmedAccountName, apiKey.trim(), secretKey.trim(), '', testnet)
@@ -339,6 +343,7 @@ export function ExchangeConfigModal({
   const stepLabels = language === 'zh' ? ['选择交易所', '配置账户'] : ['Select Exchange', 'Configure']
   const cexExchanges = SUPPORTED_EXCHANGE_TEMPLATES.filter(t => t.type === 'cex')
   const dexExchanges = SUPPORTED_EXCHANGE_TEMPLATES.filter(t => t.type === 'dex')
+  const simExchanges = SUPPORTED_EXCHANGE_TEMPLATES.filter(t => t.type === 'sim')
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 overflow-y-auto backdrop-blur-sm">
@@ -448,6 +453,24 @@ export function ExchangeConfigModal({
                     ))}
                   </div>
                 </div>
+
+                {/* Simulation */}
+                <div className="space-y-3">
+                  <div className="text-xs font-medium uppercase tracking-wide" style={{ color: '#10B981' }}>
+                    {language === 'zh' ? '模拟交易' : 'Simulation'}
+                  </div>
+                  <div className="grid grid-cols-3 sm:grid-cols-5 gap-3">
+                    {simExchanges.map((template) => (
+                      <ExchangeCard
+                        key={template.exchange_type}
+                        template={template}
+                        selected={selectedExchangeType === template.exchange_type}
+                        onClick={() => handleSelectExchange(template.exchange_type)}
+                        disabled={webCryptoStatus !== 'secure' && webCryptoStatus !== 'disabled'}
+                      />
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -501,6 +524,25 @@ export function ExchangeConfigModal({
                   required
                 />
               </div>
+
+              {/* Virtual Exchange Info */}
+              {currentExchangeType === 'virtual' && (
+                <div className="p-4 rounded-xl" style={{ background: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.3)' }}>
+                  <div className="flex items-start gap-2">
+                    <span style={{ fontSize: '16px' }}>🎮</span>
+                    <div>
+                      <div className="text-sm font-semibold mb-1" style={{ color: '#10B981' }}>
+                        {language === 'zh' ? '模拟交易模式' : 'Simulation Mode'}
+                      </div>
+                      <div className="text-xs" style={{ color: '#848E9C' }}>
+                        {language === 'zh' 
+                          ? '使用真实市场数据进行模拟交易。无需 API Key，资金为虚拟资金。' 
+                          : 'Simulate trading with real market data. No API Key required, funds are virtual.'}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* CEX Fields */}
               {(currentExchangeType === 'binance' || currentExchangeType === 'bybit' || currentExchangeType === 'okx' || currentExchangeType === 'bitget' || currentExchangeType === 'gate' || currentExchangeType === 'kucoin') && (
