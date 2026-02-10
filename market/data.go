@@ -102,7 +102,15 @@ func getKlinesFromCoinAnk(symbol, interval, exchange string, limit int) ([]Kline
 	// Use "To" side to search backward from current time (get historical klines)
 	coinankKlines, err := coinank_api.Kline(ctx, symbol, coinankExchange, ts, coinank_enum.To, limit, coinankInterval)
 	if err != nil {
-		// If exchange-specific data fails, fallback to Binance
+		logger.Warnf("⚠️ CoinAnk %s data failed, falling back to Hyperliquid: %v", exchange, err)
+		// Secondary fallback: Try Hyperliquid even for non-XYZ assets if CoinAnk fails
+		// This helps when Binance data via CoinAnk is restricted or unavailable
+		hlKlines, hlErr := getKlinesFromHyperliquid(symbol, interval, limit)
+		if hlErr == nil && len(hlKlines) > 0 {
+			return hlKlines, nil
+		}
+
+		// If exchange-specific data fails, fallback to Binance via CoinAnk
 		if coinankExchange != coinank_enum.Binance {
 			logger.Warnf("⚠️ CoinAnk %s data failed, falling back to Binance: %v", exchange, err)
 			coinankKlines, err = coinank_api.Kline(ctx, symbol, coinank_enum.Binance, ts, coinank_enum.To, limit, coinankInterval)
@@ -226,10 +234,10 @@ func GetWithExchange(symbol, exchange string) (*Data, error) {
 
 	// Check if data is empty
 	if len(klines3m) == 0 {
-		return nil, fmt.Errorf("3-minute K-line data is empty")
+		return nil, fmt.Errorf("3-minute K-line data is empty (API fallback failed)")
 	}
 	if len(klines4h) == 0 {
-		return nil, fmt.Errorf("4-hour K-line data is empty")
+		return nil, fmt.Errorf("4-hour K-line data is empty (API fallback failed)")
 	}
 
 	// Calculate current indicators (based on 3-minute latest data)
@@ -388,7 +396,7 @@ func GetWithTimeframes(symbol string, timeframes []string, primaryTimeframe stri
 	currentRSI7 := calculateRSI(primaryKlines, 7)
 
 	// Calculate price changes
-	priceChange1h := calculatePriceChangeByBars(primaryKlines, primaryTimeframe, 60) // 1 hour
+	priceChange1h := calculatePriceChangeByBars(primaryKlines, primaryTimeframe, 60)  // 1 hour
 	priceChange4h := calculatePriceChangeByBars(primaryKlines, primaryTimeframe, 240) // 4 hours
 
 	localSupport, localSupportTime, _ := CalculateLocalSupport(primaryKlines, count)

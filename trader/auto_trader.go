@@ -210,6 +210,10 @@ func NewAutoTrader(config AutoTraderConfig, st *store.Store, userID string) (*Au
 		mcpClient.SetAPIKey(config.CustomAPIKey, config.CustomAPIURL, config.CustomModelName)
 		logger.Infof("🤖 [%s] Using custom AI API: %s (model: %s)", config.Name, config.CustomAPIURL, config.CustomModelName)
 
+	case "virtual":
+		mcpClient = mcp.NewMockClient()
+		logger.Infof("🎮 [%s] Using Virtual LLM (Mock)", config.Name)
+
 	default: // deepseek or empty
 		mcpClient = mcp.NewDeepSeekClient()
 		apiKey := config.DeepSeekKey

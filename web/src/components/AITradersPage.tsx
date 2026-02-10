@@ -12,7 +12,7 @@ import { useLanguage } from '../contexts/LanguageContext'
 import { t, type Language } from '../i18n/translations'
 import { useAuth } from '../contexts/AuthContext'
 import { getExchangeIcon } from './ExchangeIcons'
-import { getModelIcon } from './ModelIcons'
+import { getModelIcon, MODEL_COLORS } from './ModelIcons'
 import { TraderConfigModal } from './TraderConfigModal'
 import { DeepVoidBackground } from './DeepVoidBackground'
 import { ExchangeConfigModal } from './traders/ExchangeConfigModal'
@@ -44,6 +44,16 @@ function getModelDisplayName(modelId: string): string {
       return 'Qwen'
     case 'claude':
       return 'Claude'
+    case 'openai':
+      return 'OpenAI'
+    case 'gemini':
+      return 'Gemini'
+    case 'grok':
+      return 'Grok'
+    case 'kimi':
+      return 'Kimi'
+    case 'virtual':
+      return 'Virtual'
     default:
       return modelId.toUpperCase()
   }
@@ -95,6 +105,11 @@ const AI_PROVIDER_CONFIG: Record<string, {
     defaultModel: 'moonshot-v1-auto',
     apiUrl: 'https://platform.moonshot.ai/console/api-keys',
     apiName: 'Moonshot',
+  },
+  virtual: {
+    defaultModel: 'virtual-model',
+    apiUrl: '',
+    apiName: 'Virtual',
   },
 }
 
@@ -1098,9 +1113,7 @@ export function AITradersPage({ onTraderSelect }: AITradersPageProps) {
                       <div
                         className="text-xs md:text-sm truncate"
                         style={{
-                          color: trader.ai_model.includes('deepseek')
-                            ? '#60a5fa'
-                            : '#c084fc',
+                          color: MODEL_COLORS[trader.ai_model.split('_').pop() || ''] || '#c084fc',
                         }}
                       >
                         {getModelDisplayName(
@@ -1534,7 +1547,8 @@ function ModelConfigModal({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!selectedModelId || !apiKey.trim()) return
+    // 虚拟模型不需要 API Key
+    if (!selectedModelId || (selectedModelId !== 'virtual' && !apiKey.trim())) return
     onSave(selectedModelId, apiKey.trim(), baseUrl.trim() || undefined, modelName.trim() || undefined)
   }
 
@@ -1663,16 +1677,16 @@ function ModelConfigModal({
                   <svg className="w-4 h-4" style={{ color: '#A78BFA' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
                   </svg>
-                  API Key *
+                  API Key {selectedModelId !== 'virtual' && '*'}
                 </label>
                 <input
                   type="password"
                   value={apiKey}
                   onChange={(e) => setApiKey(e.target.value)}
-                  placeholder={t('enterAPIKey', language)}
+                  placeholder={selectedModelId === 'virtual' ? (language === 'zh' ? '虚拟模型无需 API Key' : 'No API Key required for Virtual LLM') : t('enterAPIKey', language)}
                   className="w-full px-4 py-3 rounded-xl"
                   style={{ background: '#0B0E11', border: '1px solid #2B3139', color: '#EAECEF' }}
-                  required
+                  required={selectedModelId !== 'virtual'}
                 />
               </div>
 

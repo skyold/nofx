@@ -125,7 +125,7 @@ func (t *VirtualTrader) GetBalance() (map[string]interface{}, error) {
 	// We need to fetch current prices for all open positions
 	// Note: This might be slow if there are many positions, but fine for simulation
 	for _, pos := range t.state.Positions {
-		currentPrice, err := t.apiClient.GetCurrentPrice(pos.Symbol)
+		currentPrice, err := t.getRobustPrice(pos.Symbol)
 		if err != nil {
 			logger.Warnf("Failed to get price for %s in simulation: %v", pos.Symbol, err)
 			continue
@@ -162,7 +162,7 @@ func (t *VirtualTrader) GetPositions() ([]map[string]interface{}, error) {
 	var result []map[string]interface{}
 
 	for _, pos := range t.state.Positions {
-		currentPrice, err := t.apiClient.GetCurrentPrice(pos.Symbol)
+		currentPrice, err := t.getRobustPrice(pos.Symbol)
 		if err != nil {
 			logger.Warnf("Failed to get price for %s in simulation: %v", pos.Symbol, err)
 			currentPrice = pos.EntryPrice // Fallback
@@ -248,9 +248,9 @@ func (t *VirtualTrader) executeOrder(symbol, side, positionSide string, quantity
 	defer t.mu.Unlock()
 
 	// 1. Get current price
-	price, err := t.apiClient.GetCurrentPrice(symbol)
+	price, err := t.getRobustPrice(symbol)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get market price: %w", err)
+		return nil, err
 	}
 
 	// 2. Generate Order ID
@@ -364,7 +364,7 @@ func (t *VirtualTrader) GetOrderStatus(symbol string, orderID string) (map[strin
 
 // GetMarketPrice gets market price
 func (t *VirtualTrader) GetMarketPrice(symbol string) (float64, error) {
-	return t.apiClient.GetCurrentPrice(symbol)
+	return t.getRobustPrice(symbol)
 }
 
 // Implement other interface methods (simplified)
@@ -425,4 +425,44 @@ func stringsToLowerCase(s string) string {
 		return "short"
 	}
 	return s
+}
+
+func (t *VirtualTrader) getRobustPrice(symbol string) (float64, error) {
+	// Try robust market.Get first
+	marketData, err := market.Get(symbol)
+	if err == nil {
+		return marketData.CurrentPrice, nil
+	}
+
+	// If market.Get failed (likely due to restriction), try Hyperliquid directly here
+	// This keeps the fallback logic localized to the virtual trader
+	logger.Warnf("VirtualTrader: market.Get failed for %s, trying Hyperliquid fallback...", symbol)
+
+	// Use Hyperliquid client directly
+	// Note: We need to import the provider package if we want to use it directly,
+	// but market.Get should have already tried it if configured.
+	// Since we want to enforce it here without affecting global market.Get:
+
+	// Create a temporary client/request to Hyperliquid public API
+	// Or better, assume market.GetWithExchange might work if we explicitly ask for it
+	// But market.Get already tries.
+
+	// Let's use the API client fallback as a last resort, but maybe we can try
+	// a different method or just log the failure more clearly.
+
+	// Actually, the user asked to put the fix HERE.
+	// So let's implement the Hyperliquid fetch here directly or via a specific call
+	// We can use market.GetWithExchange(symbol, "hyperliquid")
+
+	marketDataHL, errHL := market.GetWithExchange(symbol, "hyperliquid")
+	if errHL == nil {
+		return marketDataHL.CurrentPrice, nil
+	}
+
+	// Fallback to direct API client
+	price, err2 := t.apiClient.GetCurrentPrice(symbol)
+	if err2 != nil {
+		return 0, fmt.Errorf("failed to get market price: %v (HL: %v, fallback: %v)", err, errHL, err2)
+	}
+	return price, nil
 }

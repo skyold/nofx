@@ -1587,6 +1587,7 @@ func (s *Server) handleGetModelConfigs(c *gin.Context) {
 			{ID: "gemini", Name: "Gemini AI", Provider: "gemini", Enabled: false},
 			{ID: "grok", Name: "Grok AI", Provider: "grok", Enabled: false},
 			{ID: "kimi", Name: "Kimi AI", Provider: "kimi", Enabled: false},
+			{ID: "virtual", Name: "Virtual LLM", Provider: "virtual", Enabled: false},
 		}
 		c.JSON(http.StatusOK, defaultModels)
 		return
@@ -3318,6 +3319,7 @@ func (s *Server) handleGetSupportedModels(c *gin.Context) {
 		{"id": "gemini", "name": "Google Gemini", "provider": "gemini", "defaultModel": "gemini-3-pro-preview"},
 		{"id": "grok", "name": "Grok (xAI)", "provider": "grok", "defaultModel": "grok-3-latest"},
 		{"id": "kimi", "name": "Kimi (Moonshot)", "provider": "kimi", "defaultModel": "moonshot-v1-auto"},
+		{"id": "virtual", "name": "Virtual LLM", "provider": "virtual", "defaultModel": "virtual-model"},
 	}
 
 	c.JSON(http.StatusOK, supportedModels)
@@ -3336,6 +3338,7 @@ func (s *Server) handleGetSupportedExchanges(c *gin.Context) {
 		{ExchangeType: "hyperliquid", Name: "Hyperliquid", Type: "dex"},
 		{ExchangeType: "aster", Name: "Aster DEX", Type: "dex"},
 		{ExchangeType: "lighter", Name: "LIGHTER DEX", Type: "dex"},
+		{ExchangeType: "virtual", Name: "Virtual Exchange (Sim)", Type: "virtual"},
 		{ExchangeType: "alpaca", Name: "Alpaca (US Stocks)", Type: "stock"},
 		{ExchangeType: "forex", Name: "Forex (TwelveData)", Type: "forex"},
 		{ExchangeType: "metals", Name: "Metals (TwelveData)", Type: "metals"},

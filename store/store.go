@@ -173,12 +173,6 @@ func (s *Store) initTables() error {
 
 // initDefaultData initializes default data
 func (s *Store) initDefaultData() error {
-	if err := s.AIModel().initDefaultData(); err != nil {
-		return err
-	}
-	if err := s.Exchange().initDefaultData(); err != nil {
-		return err
-	}
 	if err := s.Strategy().initDefaultData(); err != nil {
 		return err
 	}

@@ -31,6 +31,16 @@ function getModelDisplayName(modelId: string): string {
             return 'Qwen'
         case 'claude':
             return 'Claude'
+        case 'openai':
+            return 'OpenAI'
+        case 'gemini':
+            return 'Gemini'
+        case 'grok':
+            return 'Grok'
+        case 'kimi':
+            return 'Kimi'
+        case 'virtual':
+            return 'Virtual'
         default:
             return modelId.toUpperCase()
     }

@@ -106,25 +106,25 @@ type RecentOrder struct {
 
 // Context trading context (complete information passed to AI)
 type Context struct {
-	CurrentTime     string                             `json:"current_time"`
-	RuntimeMinutes  int                                `json:"runtime_minutes"`
-	CallCount       int                                `json:"call_count"`
-	Account         AccountInfo                        `json:"account"`
-	Positions       []PositionInfo                     `json:"positions"`
-	CandidateCoins  []CandidateCoin                    `json:"candidate_coins"`
-	PromptVariant   string                             `json:"prompt_variant,omitempty"`
-	TradingStats    *TradingStats                      `json:"trading_stats,omitempty"`
-	RecentOrders    []RecentOrder                      `json:"recent_orders,omitempty"`
-	MarketDataMap   map[string]*market.Data            `json:"-"`
-	MultiTFMarket   map[string]map[string]*market.Data `json:"-"`
-	OITopDataMap    map[string]*OITopData              `json:"-"`
-	QuantDataMap    map[string]*QuantData              `json:"-"`
-	OIRankingData      *nofxos.OIRankingData      `json:"-"` // Market-wide OI ranking data
-	NetFlowRankingData *nofxos.NetFlowRankingData `json:"-"` // Market-wide fund flow ranking data
-	PriceRankingData   *nofxos.PriceRankingData   `json:"-"` // Market-wide price gainers/losers
-	BTCETHLeverage     int                          `json:"-"`
-	AltcoinLeverage int                                `json:"-"`
-	Timeframes      []string                           `json:"-"`
+	CurrentTime        string                             `json:"current_time"`
+	RuntimeMinutes     int                                `json:"runtime_minutes"`
+	CallCount          int                                `json:"call_count"`
+	Account            AccountInfo                        `json:"account"`
+	Positions          []PositionInfo                     `json:"positions"`
+	CandidateCoins     []CandidateCoin                    `json:"candidate_coins"`
+	PromptVariant      string                             `json:"prompt_variant,omitempty"`
+	TradingStats       *TradingStats                      `json:"trading_stats,omitempty"`
+	RecentOrders       []RecentOrder                      `json:"recent_orders,omitempty"`
+	MarketDataMap      map[string]*market.Data            `json:"-"`
+	MultiTFMarket      map[string]map[string]*market.Data `json:"-"`
+	OITopDataMap       map[string]*OITopData              `json:"-"`
+	QuantDataMap       map[string]*QuantData              `json:"-"`
+	OIRankingData      *nofxos.OIRankingData              `json:"-"` // Market-wide OI ranking data
+	NetFlowRankingData *nofxos.NetFlowRankingData         `json:"-"` // Market-wide fund flow ranking data
+	PriceRankingData   *nofxos.PriceRankingData           `json:"-"` // Market-wide price gainers/losers
+	BTCETHLeverage     int                                `json:"-"`
+	AltcoinLeverage    int                                `json:"-"`
+	Timeframes         []string                           `json:"-"`
 }
 
 // Decision AI trading decision
@@ -148,11 +148,8 @@ type Decision struct {
 	// Common parameters
 	Confidence int     `json:"confidence,omitempty"` // Confidence level (0-100)
 	RiskUSD    float64 `json:"risk_usd,omitempty"`   // Maximum USD risk
-	Reasoning  string  `json:"reasoning,omitempty"`
-
-	// Chaos 策略新加的参数，但保持 decision 结构体的兼容性所以不移除原因的元素
-	EntryPrice float64 `json:"entry,omitempty"`  // Entry price for risk calculation (json tag "entry" to match prompt example)
-	RiskR      float64 `json:"risk_r,omitempty"` // Risk factor (0.0-1.0)
+	RiskR      float64 `json:"risk_r,omitempty"`     // Risk-Reward Ratio (for Chaos mode)
+	Reasoning  string  `json:"reasoning"`
 }
 
 // FullDecision AI's complete decision (including chain of thought)
@@ -306,7 +303,7 @@ func GetFullDecisionWithStrategy(ctx *Context, mcpClient mcp.AIClient, engine *S
 	}
 
 	// 5. Parse AI response
-	decision, err := engine.parseFullDecisionResponse(
+	decision, err := parseFullDecisionResponse(
 		aiResponse,
 		ctx.Account.TotalEquity,
 		riskConfig.BTCETHMaxLeverage,
@@ -1795,7 +1792,7 @@ func formatFloatSlice(values []float64) string {
 // AI Response Parsing
 // ============================================================================
 
-func (e *StrategyEngine) parseFullDecisionResponse(aiResponse string, accountEquity float64, btcEthLeverage, altcoinLeverage int, btcEthPosRatio, altcoinPosRatio float64) (*FullDecision, error) {
+func parseFullDecisionResponse(aiResponse string, accountEquity float64, btcEthLeverage, altcoinLeverage int, btcEthPosRatio, altcoinPosRatio float64) (*FullDecision, error) {
 	cotTrace := extractCoTTrace(aiResponse)
 
 	decisions, err := extractDecisions(aiResponse)
@@ -1806,7 +1803,7 @@ func (e *StrategyEngine) parseFullDecisionResponse(aiResponse string, accountEqu
 		}, fmt.Errorf("failed to extract decisions: %w", err)
 	}
 
-	if err := e.validateDecisions(decisions, accountEquity, btcEthLeverage, altcoinLeverage, btcEthPosRatio, altcoinPosRatio); err != nil {
+	if err := validateDecisions(decisions, accountEquity, btcEthLeverage, altcoinLeverage, btcEthPosRatio, altcoinPosRatio); err != nil {
 		return &FullDecision{
 			CoTTrace:  cotTrace,
 			Decisions: decisions,
@@ -1972,16 +1969,16 @@ func compactArrayOpen(s string) string {
 // Decision Validation
 // ============================================================================
 
-func (e *StrategyEngine) validateDecisions(decisions []Decision, accountEquity float64, btcEthLeverage, altcoinLeverage int, btcEthPosRatio, altcoinPosRatio float64) error {
+func validateDecisions(decisions []Decision, accountEquity float64, btcEthLeverage, altcoinLeverage int, btcEthPosRatio, altcoinPosRatio float64) error {
 	for i := range decisions {
-		if err := e.validateDecision(&decisions[i], accountEquity, btcEthLeverage, altcoinLeverage, btcEthPosRatio, altcoinPosRatio); err != nil {
+		if err := validateDecision(&decisions[i], accountEquity, btcEthLeverage, altcoinLeverage, btcEthPosRatio, altcoinPosRatio); err != nil {
 			return fmt.Errorf("decision #%d validation failed: %w", i+1, err)
 		}
 	}
 	return nil
 }
 
-func (e *StrategyEngine) validateDecision(d *Decision, accountEquity float64, btcEthLeverage, altcoinLeverage int, btcEthPosRatio, altcoinPosRatio float64) error {
+func validateDecision(d *Decision, accountEquity float64, btcEthLeverage, altcoinLeverage int, btcEthPosRatio, altcoinPosRatio float64) error {
 	validActions := map[string]bool{
 		"open_long":   true,
 		"open_short":  true,

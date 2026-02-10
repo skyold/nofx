@@ -71,6 +71,22 @@ export function TraderConfigModal({
   const [isFetchingBalance, setIsFetchingBalance] = useState(false)
   const [balanceFetchError, setBalanceFetchError] = useState<string>('')
 
+  // 当可用列表加载后，设置默认值
+  useEffect(() => {
+    if (!isEditMode) {
+      if (!formData.ai_model && availableModels.length > 0) {
+        // 优先选择虚拟模型作为默认
+        const virtualModel = availableModels.find(m => m.id === 'virtual')
+        setFormData(prev => ({ ...prev, ai_model: virtualModel?.id || availableModels[0].id }))
+      }
+      if (!formData.exchange_id && availableExchanges.length > 0) {
+        // 优先选择虚拟交易所作为默认
+        const virtualExchange = availableExchanges.find(e => e.exchange_type === 'virtual')
+        setFormData(prev => ({ ...prev, exchange_id: virtualExchange?.id || availableExchanges[0].id }))
+      }
+    }
+  }, [availableModels, availableExchanges, isEditMode, formData.ai_model, formData.exchange_id])
+
   // 获取用户的策略列表
   useEffect(() => {
     const fetchStrategies = async () => {
@@ -120,6 +136,30 @@ export function TraderConfigModal({
   if (!isOpen) return null
 
   const handleInputChange = (field: keyof FormState, value: any) => {
+    // Virtual LLM Logic: Auto-select Virtual Exchange and warn user
+    if (field === 'ai_model' && value === 'virtual') {
+      const virtualExchange = availableExchanges.find(
+        (e) => e.exchange_type === 'virtual' || e.id === 'virtual'
+      )
+      
+      if (virtualExchange) {
+        setFormData((prev) => ({
+          ...prev,
+          [field]: value,
+          exchange_id: virtualExchange.id,
+        }))
+
+        // Show warning
+        const warningMsg = language === 'zh'
+          ? '⚠️ 警告：虚拟 LLM 将生成随机交易信号用于测试。\n\n为了防止资金损失，系统已自动切换至【虚拟交易所】。\n\n请勿将虚拟 LLM 用于真实交易所！'
+          : '⚠️ WARNING: Virtual LLM generates RANDOM signals for testing.\n\nTo prevent financial loss, the system has automatically switched to [Virtual Exchange].\n\nDO NOT use Virtual LLM with real exchanges!'
+        
+        // Use a slight delay to ensure UI updates first, or just alert immediately
+        setTimeout(() => alert(warningMsg), 100)
+        return
+      }
+    }
+
     setFormData((prev) => ({ ...prev, [field]: value }))
   }
 
@@ -336,9 +376,9 @@ export function TraderConfigModal({
                   <option value="">{t('noStrategyManual', language)}</option>
                   {strategies.map((strategy) => (
                     <option key={strategy.id} value={strategy.id}>
-                      {selectedStrategy.name}
-                      {selectedStrategy.is_active ? t('active', language) : ''}
-                      {selectedStrategy.is_default ? t('default', language) : ''}
+                      {strategy.name}
+                      {strategy.is_active ? t('strategyActive', language) : ''}
+                      {strategy.is_default ? t('default', language) : ''}
                     </option>
                   ))}
                 </select>

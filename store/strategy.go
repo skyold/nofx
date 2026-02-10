@@ -447,7 +447,7 @@ func (s *StrategyStore) ListPublic() ([]*Strategy, error) {
 // Get get a single strategy
 func (s *StrategyStore) Get(userID, id string) (*Strategy, error) {
 	var st Strategy
-	err := s.db.Where("id = ? AND (user_id = ? OR is_default = ?)", id, userID, true).
+	err := s.db.Where("id = ? AND user_id = ?", id, userID).
 		First(&st).Error
 	if err != nil {
 		return nil, err
@@ -459,10 +459,6 @@ func (s *StrategyStore) Get(userID, id string) (*Strategy, error) {
 func (s *StrategyStore) GetActive(userID string) (*Strategy, error) {
 	var st Strategy
 	err := s.db.Where("user_id = ? AND is_active = ?", userID, true).First(&st).Error
-	if err == gorm.ErrRecordNotFound {
-		// no active strategy, return system default strategy
-		return s.GetDefault()
-	}
 	if err != nil {
 		return nil, err
 	}

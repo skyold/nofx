@@ -5,7 +5,7 @@ interface IconProps {
 }
 
 // AI model colors for fallback display
-const MODEL_COLORS: Record<string, string> = {
+export const MODEL_COLORS: Record<string, string> = {
   deepseek: '#4A90E2',
   qwen: '#9B59B6',
   claude: '#D97757',
@@ -13,6 +13,7 @@ const MODEL_COLORS: Record<string, string> = {
   gemini: '#4285F4',
   grok: '#000000',
   openai: '#10A37F',
+  virtual: '#94A3B8',
 }
 
 // 获取AI模型图标的函数
@@ -43,6 +44,9 @@ export const getModelIcon = (modelType: string, props: IconProps = {}) => {
       break
     case 'openai':
       iconPath = '/icons/openai.svg'
+      break
+    case 'virtual':
+      iconPath = '/icons/virtual.svg'
       break
     default:
       return null

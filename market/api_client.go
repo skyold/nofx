@@ -145,6 +145,10 @@ func (c *APIClient) GetCurrentPrice(symbol string) (float64, error) {
 		return 0, err
 	}
 
+	if resp.StatusCode != http.StatusOK {
+		return 0, fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(body))
+	}
+
 	var ticker PriceTicker
 	err = json.Unmarshal(body, &ticker)
 	if err != nil {
