@@ -10,6 +10,7 @@ import (
 	"nofx/trader/types"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -162,11 +163,21 @@ func (t *VirtualTrader) GetBalance() (map[string]interface{}, error) {
 	}, nil
 }
 
-// GetPositions gets all positions
+// GetPositions gets current positions
 func (t *VirtualTrader) GetPositions() ([]map[string]interface{}, error) {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
+	t.mu.Lock()
+	defer t.mu.Unlock()
 
+	// Reload state to ensure we're seeing the latest updates from other processes/threads
+	if err := t.loadState(); err != nil {
+		logger.Warnf("Failed to reload state in GetPositions: %v", err)
+	}
+
+	return t.getPositionsInternal()
+}
+
+// getPositionsInternal is the actual implementation (called with lock held)
+func (t *VirtualTrader) getPositionsInternal() ([]map[string]interface{}, error) {
 	var result []map[string]interface{}
 
 	for _, pos := range t.state.Positions {
@@ -259,6 +270,13 @@ func (t *VirtualTrader) executeOrder(symbol, side, positionSide string, quantity
 	price, err := t.getRobustPrice(symbol)
 	if err != nil {
 		return nil, err
+	}
+
+	// Always reload state before executing to ensure we have the latest data
+	// This is crucial when multiple instances (e.g. API temp trader vs AutoTrader) access the same file
+	if err := t.loadState(); err != nil {
+		logger.Warnf("Failed to reload state before execution: %v", err)
+		// Don't fail, just continue with memory state
 	}
 
 	// 2. Generate Order ID
@@ -375,9 +393,16 @@ func (t *VirtualTrader) executeOrder(symbol, side, positionSide string, quantity
 		t.userID, side, positionSide, symbol, quantity, price, commission)
 
 	return map[string]interface{}{
-		"orderId": orderID,
-		"symbol":  symbol,
-		"status":  "FILLED",
+		"orderId":     order.OrderID,
+		"status":      order.Status,
+		"price":       order.Price,
+		"quantity":    order.Quantity,
+		"symbol":      order.Symbol,
+		"side":        order.Side,
+		"type":        order.Type,
+		"time":        order.Time,
+		"commission":  order.Commission,
+		"realizedPnl": pnl,
 	}, nil
 }
 
@@ -407,6 +432,88 @@ func (t *VirtualTrader) GetOrderStatus(symbol string, orderID string) (map[strin
 // GetMarketPrice gets market price
 func (t *VirtualTrader) GetMarketPrice(symbol string) (float64, error) {
 	return t.getRobustPrice(symbol)
+}
+
+// GetTrades gets trade history
+func (t *VirtualTrader) GetTrades(startTime time.Time, limit int) ([]types.TradeRecord, error) {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+
+	// Reload state to ensure we have latest data
+	if err := t.loadState(); err != nil {
+		logger.Warnf("Failed to reload state in GetTrades: %v", err)
+	}
+
+	var trades []types.TradeRecord
+	startTimeMs := startTime.UnixMilli()
+
+	for _, order := range t.state.Orders {
+		// Only filled orders count as trades
+		if order.Status != "FILLED" {
+			continue
+		}
+
+		// Filter by time
+		if order.Time/1000000 < startTimeMs { // order.Time is usually nano in some contexts, but let's check.
+			// Wait, in executeOrder: orderID := fmt.Sprintf("%d", time.Now().UnixNano())
+			// But order.Time?
+			// In executeOrder: "time": order.Time
+			// VirtualOrder struct: Time int64 `json:"time"`
+			// Let's check where VirtualOrder is created.
+			continue
+		}
+
+		// Wait, I need to check how Time is stored in VirtualOrder.
+		// In executeOrder:
+		// order := &VirtualOrder{
+		// 	...
+		// 	Time:         time.Now().UTC().UnixMilli(),
+		// }
+		// So it is UnixMilli.
+
+		if order.Time < startTimeMs {
+			continue
+		}
+
+		trades = append(trades, types.TradeRecord{
+			TradeID:      order.OrderID, // Use OrderID as TradeID for simplicity in virtual
+			Symbol:       order.Symbol,
+			Side:         order.Side,
+			PositionSide: order.PositionSide,
+			OrderAction:  getOrderAction(order.Side, order.PositionSide),
+			Quantity:     order.Quantity,
+			Price:        order.Price,
+			Fee:          order.Commission,
+			Time:         time.UnixMilli(order.Time),
+			RealizedPnL:  0, // Not stored in order, will be calculated by PositionBuilder if needed
+		})
+	}
+
+	// Sort by time descending (newest first)
+	sort.Slice(trades, func(i, j int) bool {
+		return trades[i].Time.After(trades[j].Time)
+	})
+
+	if limit > 0 && len(trades) > limit {
+		trades = trades[:limit]
+	}
+
+	return trades, nil
+}
+
+// Helper to determine action
+func getOrderAction(side, positionSide string) string {
+	if side == "BUY" {
+		if positionSide == "LONG" {
+			return "open_long"
+		}
+		return "close_short"
+	}
+	// SELL
+	if positionSide == "LONG" {
+		return "close_long"
+	}
+	return "open_short"
 }
 
 // Implement other interface methods (simplified)

@@ -465,6 +465,14 @@ func (at *AutoTrader) Run() error {
 		}
 	}
 
+	// Start Virtual order sync if using Virtual exchange
+	if at.exchange == "virtual" {
+		if virtualTrader, ok := at.trader.(*virtual.VirtualTrader); ok && at.store != nil {
+			virtualTrader.StartOrderSync(at.id, at.exchangeID, at.exchange, at.store, 5*time.Second) // Faster sync for virtual
+			logger.Infof("🔄 [%s] Virtual order+position sync enabled (every 5s)", at.name)
+		}
+	}
+
 	ticker := time.NewTicker(at.config.ScanInterval)
 	defer ticker.Stop()
 
