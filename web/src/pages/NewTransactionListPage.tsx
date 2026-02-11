@@ -13,9 +13,26 @@ export function NewTransactionListPage() {
   const [activeTab, setActiveTab] = useState<'positions' | 'transactions'>('positions')
   const [selectedTraderId, setSelectedTraderId] = useState<string>('')
   
-  // Fetch lists for filters
-  const { data: traders } = useSWR<TraderInfo[]>('traders', api.getTraders)
-  const { data: exchanges } = useSWR<Exchange[]>('exchanges', api.getExchangeConfigs)
+  // Fetch traders list with higher priority - use suspense-like approach
+  const { data: traders, error: tradersError, isLoading: isTradersLoading } = useSWR<TraderInfo[]>(
+    'traders', 
+    api.getTraders,
+    {
+      revalidateOnFocus: false,
+      revalidateOnReconnect: false,
+      refreshInterval: 30000, // Refresh every 30 seconds
+    }
+  )
+  
+  // Fetch exchanges separately - lower priority
+  const { data: exchanges } = useSWR<Exchange[]>(
+    'exchanges', 
+    api.getExchangeConfigs,
+    {
+      revalidateOnFocus: false,
+      revalidateOnReconnect: false,
+    }
+  )
 
   // Get selected trader name for display
   const selectedTrader = traders?.find(t => t.trader_id === selectedTraderId)
@@ -62,28 +79,54 @@ export function NewTransactionListPage() {
                 {language === 'zh' ? '交易员' : 'Traders'}
               </h2>
             </div>
-            <div className="space-y-1">
-              {traders?.map(trader => (
-                <button
-                  key={trader.trader_id}
-                  onClick={() => setSelectedTraderId(trader.trader_id)}
-                  className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-all group ${
-                    selectedTraderId === trader.trader_id
-                      ? 'ring-1 ring-purple-500/50 bg-purple-500/10 shadow-[0_0_15px_rgba(168,85,247,0.1)]'
-                      : 'hover:bg-nofx-bg-lighter/60 hover:ring-1 hover:ring-purple-500/20 bg-transparent'
-                  }`}
-                >
-                  <div className="flex items-center gap-2">
-                    <div className={`w-2 h-2 rounded-full ${selectedTraderId === trader.trader_id ? 'bg-purple-500' : 'bg-nofx-text-muted/30'}`}></div>
-                    <span className={selectedTraderId === trader.trader_id ? 'text-nofx-text' : 'text-nofx-text-muted'}>
-                      {trader.trader_name}
-                    </span>
-                  </div>
-                </button>
-              ))}
-            </div>
             
-            {traders && traders.length === 0 && (
+            {/* Loading State for Traders */}
+            {isTradersLoading && (
+              <div className="space-y-2">
+                {[1, 2, 3].map(i => (
+                  <div key={i} className="px-3 py-2 rounded-lg bg-nofx-bg/50 animate-pulse">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 rounded-full bg-nofx-text-muted/30"></div>
+                      <div className="h-4 bg-nofx-text-muted/30 rounded w-24"></div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            
+            {/* Error State for Traders */}
+            {tradersError && (
+              <div className="text-center py-6 text-red-500 text-sm">
+                {language === 'zh' ? '加载交易员列表失败' : 'Failed to load traders'}
+              </div>
+            )}
+            
+            {/* Traders List */}
+            {!isTradersLoading && !tradersError && traders && (
+              <div className="space-y-1">
+                {traders.map(trader => (
+                  <button
+                    key={trader.trader_id}
+                    onClick={() => setSelectedTraderId(trader.trader_id)}
+                    className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-all group ${
+                      selectedTraderId === trader.trader_id
+                        ? 'ring-1 ring-purple-500/50 bg-purple-500/10 shadow-[0_0_15px_rgba(168,85,247,0.1)]'
+                        : 'hover:bg-nofx-bg-lighter/60 hover:ring-1 hover:ring-purple-500/20 bg-transparent'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <div className={`w-2 h-2 rounded-full ${selectedTraderId === trader.trader_id ? 'bg-purple-500' : 'bg-nofx-text-muted/30'}`}></div>
+                      <span className={selectedTraderId === trader.trader_id ? 'text-nofx-text' : 'text-nofx-text-muted'}>
+                        {trader.trader_name}
+                      </span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+            
+            {/* Empty State */}
+            {!isTradersLoading && !tradersError && traders && traders.length === 0 && (
               <div className="text-center py-6 text-nofx-text-muted text-sm">
                 {language === 'zh' ? '暂无交易员' : 'No traders available'}
               </div>
