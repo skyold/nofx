@@ -381,9 +381,18 @@ func (e *ChaosExecutor) recordAndConfirmOrder(orderResult map[string]interface{}
 }
 
 func (e *ChaosExecutor) createOrderRecord(orderID, clientOrderID, symbol, action, positionSide string, quantity, price float64, leverage int) *store.TraderOrder {
-	side := "BUY"
-	if action == "open_short" || action == "close_long" {
+	// Determine order type (market for chaos)
+	orderType := "MARKET"
+
+	// Determine side (BUY/SELL)
+	var side string
+	switch action {
+	case "open_long", "close_short":
+		side = "BUY"
+	case "open_short", "close_long":
 		side = "SELL"
+	default:
+		side = "BUY"
 	}
 
 	reduceOnly := strings.HasPrefix(action, "close")
@@ -397,11 +406,15 @@ func (e *ChaosExecutor) createOrderRecord(orderID, clientOrderID, symbol, action
 		Symbol:          market.Normalize(symbol),
 		Side:            side,
 		PositionSide:    positionSide,
-		Type:            "MARKET",
+		Type:            orderType,
 		TimeInForce:     "GTC",
 		Quantity:        quantity,
 		Price:           price,
 		Status:          "NEW",
+		FilledQuantity:  0,
+		AvgFillPrice:    0,
+		Commission:      0,
+		CommissionAsset: "USDT",
 		Leverage:        leverage,
 		ReduceOnly:      reduceOnly,
 		ClosePosition:   reduceOnly,
@@ -416,12 +429,18 @@ func (e *ChaosExecutor) recordOrderFill(orderRecordID int64, exchangeOrderID, sy
 		return
 	}
 
-	side := "BUY"
-	if action == "open_short" || action == "close_long" {
+	// Determine side (BUY/SELL)
+	var side string
+	switch action {
+	case "open_long", "close_short":
+		side = "BUY"
+	case "open_short", "close_long":
 		side = "SELL"
+	default:
+		side = "BUY"
 	}
 
-	tradeID := fmt.Sprintf("chaos-fill-%s-%d", exchangeOrderID, time.Now().UnixNano())
+	tradeID := fmt.Sprintf("%s-%d", exchangeOrderID, time.Now().UnixNano())
 
 	fill := &store.TraderFill{
 		TraderID:        e.traderID,
@@ -437,9 +456,28 @@ func (e *ChaosExecutor) recordOrderFill(orderRecordID int64, exchangeOrderID, sy
 		QuoteQuantity:   price * quantity,
 		Commission:      fee,
 		CommissionAsset: "USDT",
-		RealizedPnL:     0,
+		RealizedPnL:     0, // Will be calculated for close orders
 		IsMaker:         false,
 		CreatedAt:       store.UnixTime(time.Now().UTC().UnixMilli()),
+	}
+
+	// Calculate realized PnL for close orders
+	if action == "close_long" || action == "close_short" {
+		// Try to get the entry price from the open position
+		var positionSide string
+		if action == "close_long" {
+			positionSide = "LONG"
+		} else {
+			positionSide = "SHORT"
+		}
+
+		if openPos, err := e.store.Position().GetOpenPositionBySymbol(e.traderID, symbol, positionSide); err == nil && openPos != nil {
+			if positionSide == "LONG" {
+				fill.RealizedPnL = (price - openPos.EntryPrice) * quantity
+			} else {
+				fill.RealizedPnL = (openPos.EntryPrice - price) * quantity
+			}
+		}
 	}
 
 	e.store.Order().CreateFill(fill)
