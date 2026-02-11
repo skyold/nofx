@@ -1,7 +1,6 @@
 package kernel
 
 import (
-	"math"
 	"testing"
 )
 
@@ -101,130 +100,6 @@ func TestLeverageFallback(t *testing.T) {
 	}
 }
 
-func TestValidateDecisionsSliceUpdate(t *testing.T) {
-	decisions := []Decision{
-		{
-			Symbol:     "BTCUSDT",
-			Action:     "open_long",
-			RiskR:      1.0,
-			EntryPrice: 100,
-			StopLoss:   90,
-			TakeProfit: 130,
-			Leverage:   5,
-		},
-	}
-
-	err := validateDecisions(decisions, 10000, 10, 5, 10.0, 1.5)
-	if err != nil {
-		t.Fatalf("validateDecisions failed: %v", err)
-	}
-
-	if decisions[0].PositionSizeUSD <= 0 {
-		t.Fatalf("PositionSizeUSD was not updated in slice, got %.8f", decisions[0].PositionSizeUSD)
-	}
-
-	if math.Abs(decisions[0].PositionSizeUSD-1000) > 1e-6 {
-		t.Fatalf("PositionSizeUSD mismatch, got %.8f, want 1000", decisions[0].PositionSizeUSD)
-	}
-}
-
-// TestChaosPositionSizeClamping tests automatic clamping when position size exceeds limit in Chaos mode
-func TestChaosPositionSizeClamping(t *testing.T) {
-	// Setup scenario matching the user error
-	// decision[symbol=ETHUSDT action=open_long lev=5 entry=3092.16000000 sl=3086.00000000 tp=3120.00000000 risk_r=0.25 pos_usd=1324.28 conf=75]: position size 1324.28 exceeds max allowed 1055.26 for ETHUSDT
-
-	accountEquity := 211.052
-	btcEthPosRatio := 1.0                        // Reduced from 5.0 to force clamping with lower base risk
-	maxAllowed := accountEquity * btcEthPosRatio // 211.052
-
-	decision := Decision{
-		Symbol:     "ETHUSDT",
-		Action:     "open_long",
-		Leverage:   5,
-		EntryPrice: 3092.16,
-		StopLoss:   3086.00,
-		TakeProfit: 3120.00,
-		RiskR:      1.0, // Increased to 1.0 (1% risk) to generate enough size
-		Confidence: 75,
-	}
-
-	// With baseRiskPercent = 0.01:
-	// RiskAmount = 211.052 * 0.01 * 1.0 = 2.11052
-	// RiskPerUnit = 3092.16 - 3086.00 = 6.16
-	// Qty = 2.11052 / 6.16 = 0.3426
-	// PosSize = 0.3426 * 3092.16 = 1059.43
-	// MaxAllowed = 211.052
-	// Should clamp.
-
-	// Should not return error, but clamp position size
-	err := validateDecision(&decision, accountEquity, 5, 5, btcEthPosRatio, 1.0)
-	if err != nil {
-		t.Fatalf("validateDecision failed: %v", err)
-	}
-
-	// Check if position size is clamped
-	if decision.PositionSizeUSD > maxAllowed+0.01 { // Allow tiny float error
-		t.Errorf("PositionSizeUSD not clamped: got %.2f, want <= %.2f", decision.PositionSizeUSD, maxAllowed)
-	}
-
-	if math.Abs(decision.PositionSizeUSD-maxAllowed) > 0.01 {
-		t.Errorf("PositionSizeUSD should be clamped to maxAllowed: got %.2f, want %.2f", decision.PositionSizeUSD, maxAllowed)
-	}
-}
-
-// TestChaosPositionSizeMinimumAdjustment tests min position size adjustment and equity check
-func TestChaosPositionSizeMinimumAdjustment(t *testing.T) {
-	// Case 1: Adjustment success
-	// Equity 200, Calculated 20 (<100), Adjusted to 100, 100 < 200 OK.
-	t.Run("Adjustment_Success", func(t *testing.T) {
-		accountEquity := 200.0
-		decision := Decision{
-			Symbol:     "ETHUSDT",
-			Action:     "open_long",
-			Leverage:   5,
-			EntryPrice: 100,
-			StopLoss:   99,
-			TakeProfit: 105,
-			RiskR:      0.1, // Very low risk -> small size
-			Confidence: 75,
-		}
-
-		err := validateDecision(&decision, accountEquity, 5, 5, 1.0, 1.0)
-		if err != nil {
-			t.Fatalf("Should not error: %v", err)
-		}
-
-		if math.Abs(decision.PositionSizeUSD-100.0) > 0.01 {
-			t.Errorf("PositionSizeUSD not adjusted to min: got %.2f, want 100.00", decision.PositionSizeUSD)
-		}
-	})
-
-	// Case 2: Equity too low
-	// Equity 50, Calculated 20 (<100), Adjusted to 100, 100 > 50 Error.
-	t.Run("Equity_Too_Low", func(t *testing.T) {
-		accountEquity := 50.0
-		decision := Decision{
-			Symbol:     "ETHUSDT",
-			Action:     "open_long",
-			Leverage:   5,
-			EntryPrice: 100,
-			StopLoss:   99,
-			TakeProfit: 105,
-			RiskR:      0.1,
-			Confidence: 75,
-		}
-
-		err := validateDecision(&decision, accountEquity, 5, 5, 1.0, 1.0)
-		if err == nil {
-			t.Fatalf("Should error due to low equity")
-		}
-		
-		expectedError := "exceeds account equity"
-		if !contains(err.Error(), expectedError) {
-			t.Errorf("Error message mismatch: got '%v', want to contain '%s'", err, expectedError)
-		}
-	})
-}
 
 // contains checks if string contains substring (helper function)
 func contains(s, substr string) bool {

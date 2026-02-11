@@ -45,13 +45,13 @@ type AutoTraderConfig struct {
 	BybitSecretKey string
 
 	// OKX API configuration
-	OKXAPIKey     string
-	OKXSecretKey  string
+	OKXAPIKey    string
+	OKXSecretKey string
 	OKXPassphrase string
 
 	// Bitget API configuration
-	BitgetAPIKey     string
-	BitgetSecretKey  string
+	BitgetAPIKey    string
+	BitgetSecretKey string
 	BitgetPassphrase string
 
 	// Gate API configuration
@@ -59,8 +59,8 @@ type AutoTraderConfig struct {
 	GateSecretKey string
 
 	// KuCoin API configuration
-	KuCoinAPIKey     string
-	KuCoinSecretKey  string
+	KuCoinAPIKey    string
+	KuCoinSecretKey string
 	KuCoinPassphrase string
 
 	// Hyperliquid configuration
@@ -122,9 +122,9 @@ type AutoTrader struct {
 	config                AutoTraderConfig
 	trader                Trader // Use Trader interface (supports multiple platforms)
 	mcpClient             mcp.AIClient
-	store                 *store.Store           // Data storage (decision records, etc.)
+	store                 *store.Store             // Data storage (decision records, etc.)
 	strategyEngine        *kernel.StrategyEngine // Strategy engine (uses strategy configuration)
-	cycleNumber           int                    // Current cycle number
+	cycleNumber           int                      // Current cycle number
 	initialBalance        float64
 	dailyPnL              float64
 	customPrompt          string // Custom trading strategy prompt
@@ -1718,74 +1718,12 @@ func (at *AutoTrader) GetAccountInfo() (map[string]interface{}, error) {
 
 // GetPositions gets position list (for API)
 func (at *AutoTrader) GetPositions() ([]map[string]interface{}, error) {
-	var result []map[string]interface{}
-
-	// 1. First, try to fetch OPEN positions from local database for this specific TraderID
-	// This ensures proper isolation when multiple traders share the same exchange account
-	if at.store != nil {
-		dbPositions, err := at.store.Position().GetOpenPositions(at.id)
-		if err == nil && len(dbPositions) > 0 {
-			for _, pos := range dbPositions {
-				// Fetch current mark price (needed for calculating unrealized PnL)
-				markPrice := pos.EntryPrice // Default fallback
-				marketData, err := market.Get(pos.Symbol)
-				if err == nil {
-					markPrice = marketData.CurrentPrice
-				}
-
-				// Calculate unrealized PnL
-				var unrealizedPnl float64
-				if pos.Side == "LONG" {
-					unrealizedPnl = (markPrice - pos.EntryPrice) * pos.Quantity
-				} else {
-					unrealizedPnl = (pos.EntryPrice - markPrice) * pos.Quantity
-				}
-
-				// Calculate margin used
-				marginUsed := (pos.Quantity * markPrice) / float64(pos.Leverage)
-
-				// Calculate P&L percentage
-				pnlPct := calculatePnLPercentage(unrealizedPnl, marginUsed)
-
-				// Estimate liquidation price (simplified)
-				// Long: EntryPrice * (1 - 1/Leverage + MaintenanceMarginRate)
-				// Short: EntryPrice * (1 + 1/Leverage - MaintenanceMarginRate)
-				mmr := 0.005 // Approx 0.5% maintenance margin
-				var liqPrice float64
-				if pos.Side == "LONG" {
-					liqPrice = pos.EntryPrice * (1 - 1/float64(pos.Leverage) + mmr)
-				} else {
-					liqPrice = pos.EntryPrice * (1 + 1/float64(pos.Leverage) - mmr)
-				}
-
-				result = append(result, map[string]interface{}{
-					"symbol":             pos.Symbol,
-					"side":               strings.ToLower(pos.Side), // Convert back to lowercase for compatibility
-					"entry_price":        pos.EntryPrice,
-					"mark_price":         markPrice,
-					"quantity":           pos.Quantity,
-					"leverage":           pos.Leverage,
-					"unrealized_pnl":     unrealizedPnl,
-					"unrealized_pnl_pct": pnlPct,
-					"liquidation_price":  liqPrice,
-					"margin_used":        marginUsed,
-					"positionAmt":        pos.Quantity, // Compatible field
-				})
-			}
-			logger.Infof("📊 [%s] Loaded %d positions from local database (Isolated view)", at.name, len(result))
-			return result, nil
-		}
-	}
-
-	// 2. Fallback: If no local positions found (or store nil), fetch from exchange
-	// WARNING: This returns ALL positions for the exchange account, potentially mixing traders
-	logger.Infof("⚠️ [%s] No local positions found, falling back to exchange API (Shared view)", at.name)
 	positions, err := at.trader.GetPositions()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get positions: %w", err)
 	}
 
-	result = make([]map[string]interface{}, 0, len(positions))
+	var result []map[string]interface{}
 	for _, pos := range positions {
 		symbol := pos["symbol"].(string)
 		side := pos["side"].(string)
@@ -2272,22 +2210,22 @@ func (at *AutoTrader) recordOrderFill(orderRecordID int64, exchangeOrderID, symb
 	normalizedSymbol := market.Normalize(symbol)
 
 	fill := &store.TraderFill{
-		TraderID:        at.id,
-		ExchangeID:      at.exchangeID,
-		ExchangeType:    at.exchange,
-		OrderID:         orderRecordID,
-		ExchangeOrderID: exchangeOrderID,
-		ExchangeTradeID: tradeID,
-		Symbol:          normalizedSymbol,
-		Side:            side,
-		Price:           price,
-		Quantity:        quantity,
-		QuoteQuantity:   price * quantity,
-		Commission:      fee,
-		CommissionAsset: "USDT",
-		RealizedPnL:     0,     // Will be calculated for close orders
-		IsMaker:         false, // Market orders are usually taker
-		CreatedAt:       time.Now().UTC().UnixMilli(),
+		TraderID:         at.id,
+		ExchangeID:       at.exchangeID,
+		ExchangeType:     at.exchange,
+		OrderID:          orderRecordID,
+		ExchangeOrderID:  exchangeOrderID,
+		ExchangeTradeID:  tradeID,
+		Symbol:           normalizedSymbol,
+		Side:             side,
+		Price:            price,
+		Quantity:         quantity,
+		QuoteQuantity:    price * quantity,
+		Commission:       fee,
+		CommissionAsset:  "USDT",
+		RealizedPnL:      0, // Will be calculated for close orders
+		IsMaker:          false, // Market orders are usually taker
+		CreatedAt:        time.Now().UTC().UnixMilli(),
 	}
 
 	// Calculate realized PnL for close orders
@@ -2418,3 +2356,4 @@ func getSideFromAction(action string) string {
 func (at *AutoTrader) GetOpenOrders(symbol string) ([]OpenOrder, error) {
 	return at.trader.GetOpenOrders(symbol)
 }
+

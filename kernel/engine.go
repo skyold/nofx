@@ -106,25 +106,25 @@ type RecentOrder struct {
 
 // Context trading context (complete information passed to AI)
 type Context struct {
-	CurrentTime        string                             `json:"current_time"`
-	RuntimeMinutes     int                                `json:"runtime_minutes"`
-	CallCount          int                                `json:"call_count"`
-	Account            AccountInfo                        `json:"account"`
-	Positions          []PositionInfo                     `json:"positions"`
-	CandidateCoins     []CandidateCoin                    `json:"candidate_coins"`
-	PromptVariant      string                             `json:"prompt_variant,omitempty"`
-	TradingStats       *TradingStats                      `json:"trading_stats,omitempty"`
-	RecentOrders       []RecentOrder                      `json:"recent_orders,omitempty"`
-	MarketDataMap      map[string]*market.Data            `json:"-"`
-	MultiTFMarket      map[string]map[string]*market.Data `json:"-"`
-	OITopDataMap       map[string]*OITopData              `json:"-"`
-	QuantDataMap       map[string]*QuantData              `json:"-"`
-	OIRankingData      *nofxos.OIRankingData              `json:"-"` // Market-wide OI ranking data
-	NetFlowRankingData *nofxos.NetFlowRankingData         `json:"-"` // Market-wide fund flow ranking data
-	PriceRankingData   *nofxos.PriceRankingData           `json:"-"` // Market-wide price gainers/losers
-	BTCETHLeverage     int                                `json:"-"`
-	AltcoinLeverage    int                                `json:"-"`
-	Timeframes         []string                           `json:"-"`
+	CurrentTime     string                             `json:"current_time"`
+	RuntimeMinutes  int                                `json:"runtime_minutes"`
+	CallCount       int                                `json:"call_count"`
+	Account         AccountInfo                        `json:"account"`
+	Positions       []PositionInfo                     `json:"positions"`
+	CandidateCoins  []CandidateCoin                    `json:"candidate_coins"`
+	PromptVariant   string                             `json:"prompt_variant,omitempty"`
+	TradingStats    *TradingStats                      `json:"trading_stats,omitempty"`
+	RecentOrders    []RecentOrder                      `json:"recent_orders,omitempty"`
+	MarketDataMap   map[string]*market.Data            `json:"-"`
+	MultiTFMarket   map[string]map[string]*market.Data `json:"-"`
+	OITopDataMap    map[string]*OITopData              `json:"-"`
+	QuantDataMap    map[string]*QuantData              `json:"-"`
+	OIRankingData      *nofxos.OIRankingData      `json:"-"` // Market-wide OI ranking data
+	NetFlowRankingData *nofxos.NetFlowRankingData `json:"-"` // Market-wide fund flow ranking data
+	PriceRankingData   *nofxos.PriceRankingData   `json:"-"` // Market-wide price gainers/losers
+	BTCETHLeverage     int                          `json:"-"`
+	AltcoinLeverage int                                `json:"-"`
+	Timeframes      []string                           `json:"-"`
 }
 
 // Decision AI trading decision
@@ -148,20 +148,18 @@ type Decision struct {
 	// Common parameters
 	Confidence int     `json:"confidence,omitempty"` // Confidence level (0-100)
 	RiskUSD    float64 `json:"risk_usd,omitempty"`   // Maximum USD risk
-	RiskR      float64 `json:"risk_r,omitempty"`     // Risk-Reward Ratio (for Chaos mode)
 	Reasoning  string  `json:"reasoning"`
 }
 
 // FullDecision AI's complete decision (including chain of thought)
 type FullDecision struct {
-	SystemPrompt        string      `json:"system_prompt"`
-	UserPrompt          string      `json:"user_prompt"`
-	CoTTrace            string      `json:"cot_trace"`
-	Decisions           []Decision  `json:"decisions"`
-	RawDecisions        interface{} `json:"raw_decisions,omitempty"` // For audit: Raw LLM output structure before processing
-	RawResponse         string      `json:"raw_response"`
-	Timestamp           time.Time   `json:"timestamp"`
-	AIRequestDurationMs int64       `json:"ai_request_duration_ms,omitempty"`
+	SystemPrompt        string     `json:"system_prompt"`
+	UserPrompt          string     `json:"user_prompt"`
+	CoTTrace            string     `json:"cot_trace"`
+	Decisions           []Decision `json:"decisions"`
+	RawResponse         string     `json:"raw_response"`
+	Timestamp           time.Time  `json:"timestamp"`
+	AIRequestDurationMs int64      `json:"ai_request_duration_ms,omitempty"`
 }
 
 // QuantData quantitative data structure (fund flow, position changes, price changes)
@@ -1063,47 +1061,11 @@ func (e *StrategyEngine) writeAvailableIndicators(sb *strings.Builder) {
 	indicators := e.config.Indicators
 	kline := indicators.Klines
 
-	primaryTimeframe := strings.TrimSpace(kline.PrimaryTimeframe)
-	selectedTimeframes := kline.SelectedTimeframes
-	if len(selectedTimeframes) == 0 {
-		if primaryTimeframe != "" {
-			selectedTimeframes = append(selectedTimeframes, primaryTimeframe)
-		}
-		if kline.EnableMultiTimeframe && strings.TrimSpace(kline.LongerTimeframe) != "" {
-			selectedTimeframes = append(selectedTimeframes, strings.TrimSpace(kline.LongerTimeframe))
-		}
-	}
-	if primaryTimeframe == "" && len(selectedTimeframes) > 0 {
-		primaryTimeframe = selectedTimeframes[0]
-	}
-
-	ordered := make([]string, 0, len(selectedTimeframes)+1)
-	seen := map[string]struct{}{}
-	if primaryTimeframe != "" {
-		ordered = append(ordered, primaryTimeframe)
-		seen[primaryTimeframe] = struct{}{}
-	}
-	for _, tf := range selectedTimeframes {
-		tf = strings.TrimSpace(tf)
-		if tf == "" {
-			continue
-		}
-		if _, ok := seen[tf]; ok {
-			continue
-		}
-		ordered = append(ordered, tf)
-		seen[tf] = struct{}{}
-	}
-
-	if len(ordered) == 0 {
-		sb.WriteString("- price series\n")
+	sb.WriteString(fmt.Sprintf("- %s price series", kline.PrimaryTimeframe))
+	if kline.EnableMultiTimeframe {
+		sb.WriteString(fmt.Sprintf(" + %s K-line series\n", kline.LongerTimeframe))
 	} else {
-		sb.WriteString(fmt.Sprintf("- %s price series", ordered[0]))
-		if len(ordered) > 1 {
-			sb.WriteString(fmt.Sprintf(" + %s K-line series\n", strings.Join(ordered[1:], " + ")))
-		} else {
-			sb.WriteString("\n")
-		}
+		sb.WriteString("\n")
 	}
 
 	if indicators.EnableEMA {
@@ -1449,30 +1411,6 @@ func (e *StrategyEngine) formatMarketData(data *market.Data) string {
 
 	sb.WriteString("\n\n")
 
-	if data.LocalSupport > 0 || data.DailyLow > 0 {
-		localSupportStr := ""
-		if data.LocalSupport > 0 {
-			timePart := ""
-			if data.LocalSupportTime > 0 {
-				timePart = fmt.Sprintf(" (%s Low)", time.Unix(data.LocalSupportTime/1000, 0).UTC().Format("15:04"))
-			}
-			localSupportStr = fmt.Sprintf("Local_Support: %s%s", formatPriceForPrompt(data.LocalSupport), timePart)
-		}
-		dailyLowStr := ""
-		if data.DailyLow > 0 {
-			dailyLowStr = fmt.Sprintf("Daily_Low: %s", formatPriceForPrompt(data.DailyLow))
-		}
-
-		switch {
-		case localSupportStr != "" && dailyLowStr != "":
-			sb.WriteString(localSupportStr + ", " + dailyLowStr + "\n\n")
-		case localSupportStr != "":
-			sb.WriteString(localSupportStr + "\n\n")
-		case dailyLowStr != "":
-			sb.WriteString(dailyLowStr + "\n\n")
-		}
-	}
-
 	if indicators.EnableOI || indicators.EnableFundingRate {
 		sb.WriteString(fmt.Sprintf("Additional data for %s:\n\n", data.Symbol))
 
@@ -1492,48 +1430,6 @@ func (e *StrategyEngine) formatMarketData(data *market.Data) string {
 			if tfData, ok := data.TimeframeData[tf]; ok {
 				sb.WriteString(fmt.Sprintf("=== %s Timeframe (oldest → latest) ===\n\n", strings.ToUpper(tf)))
 				e.formatTimeframeSeriesData(&sb, tfData, indicators)
-			}
-		}
-		// Physical Structural Anchors injection:
-		// Compute read-only anchors from existing multi-timeframe series to give LLM
-		// clear structural levels (session/structural/local) without changing API or system prompt.
-		anchors := market.ComputeAnchors(data.TimeframeData)
-		if len(anchors) > 0 {
-			sb.WriteString("### 物理结构锚点 (Physical Structural Anchors):\n")
-			for _, a := range anchors {
-				priceStr := formatPriceForPrompt(a.Price)
-				t := time.Unix(a.Time/1000, 0).UTC().Format("01-02 15:04")
-				src := ""
-				switch a.Timeframe {
-				case "1d":
-					if a.Type == "Major Support" {
-						src = "24H Daily Low"
-					} else {
-						src = "24H Daily High"
-					}
-				case "1h", "4h":
-					src = a.Timeframe + " Structure"
-				default:
-					src = a.Timeframe + " Pivot"
-				}
-				sb.WriteString(fmt.Sprintf("- [%s]: %s (%s, %s)\n", a.Type, priceStr, src, t))
-			}
-			sb.WriteString("\n")
-			// Dynamic references: provide minimal indicator context (BOLL lower/EMA50)
-			// from existing series' latest values to aid local decision precision.
-			refParts := []string{}
-			if tf, ok := data.TimeframeData["5m"]; ok && len(tf.BOLLLower) > 0 {
-				refParts = append(refParts, fmt.Sprintf("BB_Lower (5M): %s", formatPriceForPrompt(tf.BOLLLower[len(tf.BOLLLower)-1])))
-			}
-			if tf, ok := data.TimeframeData["1h"]; ok && len(tf.EMA50Values) > 0 {
-				refParts = append(refParts, fmt.Sprintf("EMA50 (1H): %.4f", tf.EMA50Values[len(tf.EMA50Values)-1]))
-			}
-			if len(refParts) > 0 {
-				sb.WriteString("### 动态参考 (Dynamic References):\n")
-				for _, p := range refParts {
-					sb.WriteString(fmt.Sprintf("- %s\n", p))
-				}
-				sb.WriteString("\n")
 			}
 		}
 	} else {
@@ -1763,23 +1659,6 @@ func formatFlowValue(v float64) string {
 	return fmt.Sprintf("%s%.2f", sign, v)
 }
 
-func formatPriceForPrompt(price float64) string {
-	switch {
-	case price < 0.0001:
-		return fmt.Sprintf("%.8f", price)
-	case price < 0.001:
-		return fmt.Sprintf("%.6f", price)
-	case price < 0.01:
-		return fmt.Sprintf("%.6f", price)
-	case price < 1.0:
-		return fmt.Sprintf("%.4f", price)
-	case price < 100:
-		return fmt.Sprintf("%.4f", price)
-	default:
-		return fmt.Sprintf("%.2f", price)
-	}
-}
-
 func formatFloatSlice(values []float64) string {
 	strValues := make([]string, len(values))
 	for i, v := range values {
@@ -1986,12 +1865,6 @@ func validateDecision(d *Decision, accountEquity float64, btcEthLeverage, altcoi
 		"close_short": true,
 		"hold":        true,
 		"wait":        true,
-	}
-
-	if d.RiskR > 0 {
-		// 这是一个 Chaos 策略的决策，但是 kernel 已经不再支持 chaos 策略的验证
-		// Chaos 策略现在通过 chaos standalone 模式运行
-		return fmt.Errorf("chaos strategy validation is not supported in kernel engine, please use chaos standalone mode")
 	}
 
 	if !validActions[d.Action] {

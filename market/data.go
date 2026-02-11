@@ -234,10 +234,10 @@ func GetWithExchange(symbol, exchange string) (*Data, error) {
 
 	// Check if data is empty
 	if len(klines3m) == 0 {
-		return nil, fmt.Errorf("3-minute K-line data is empty (API fallback failed)")
+		return nil, fmt.Errorf("3-minute K-line data is empty")
 	}
 	if len(klines4h) == 0 {
-		return nil, fmt.Errorf("4-hour K-line data is empty (API fallback failed)")
+		return nil, fmt.Errorf("4-hour K-line data is empty")
 	}
 
 	// Calculate current indicators (based on 3-minute latest data)
@@ -396,7 +396,7 @@ func GetWithTimeframes(symbol string, timeframes []string, primaryTimeframe stri
 	currentRSI7 := calculateRSI(primaryKlines, 7)
 
 	// Calculate price changes
-	priceChange1h := calculatePriceChangeByBars(primaryKlines, primaryTimeframe, 60)  // 1 hour
+	priceChange1h := calculatePriceChangeByBars(primaryKlines, primaryTimeframe, 60) // 1 hour
 	priceChange4h := calculatePriceChangeByBars(primaryKlines, primaryTimeframe, 240) // 4 hours
 
 	localSupport, localSupportTime, _ := CalculateLocalSupport(primaryKlines, count)
