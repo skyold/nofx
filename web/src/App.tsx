@@ -17,7 +17,7 @@ import { DebateArenaPage } from './pages/DebateArenaPage'
 import { StrategyMarketPage } from './pages/StrategyMarketPage'
 import { TimeMachinePage } from './pages/TimeMachinePage'
 import { DataPage } from './pages/DataPage'
-import { TransactionListPage } from './pages/TransactionListPage'
+import { NewTransactionListPage } from './pages/NewTransactionListPage'
 import { LoginRequiredOverlay } from './components/LoginRequiredOverlay'
 import HeaderBar from './components/HeaderBar'
 import { LanguageProvider, useLanguage } from './contexts/LanguageContext'
@@ -502,7 +502,7 @@ function App() {
             ) : currentPage === 'debate' ? (
               <DebateArenaPage />
             ) : currentPage === 'transactions' ? (
-              <TransactionListPage />
+              <NewTransactionListPage />
             ) : currentPage === 'chaos-studio' ? (
               <ChaosStudioPage />
             ) : currentPage === 'chaos' ? (
