@@ -454,23 +454,6 @@ func (t *VirtualTrader) GetTrades(startTime time.Time, limit int) ([]types.Trade
 		}
 
 		// Filter by time
-		if order.Time/1000000 < startTimeMs { // order.Time is usually nano in some contexts, but let's check.
-			// Wait, in executeOrder: orderID := fmt.Sprintf("%d", time.Now().UnixNano())
-			// But order.Time?
-			// In executeOrder: "time": order.Time
-			// VirtualOrder struct: Time int64 `json:"time"`
-			// Let's check where VirtualOrder is created.
-			continue
-		}
-
-		// Wait, I need to check how Time is stored in VirtualOrder.
-		// In executeOrder:
-		// order := &VirtualOrder{
-		// 	...
-		// 	Time:         time.Now().UTC().UnixMilli(),
-		// }
-		// So it is UnixMilli.
-
 		if order.Time < startTimeMs {
 			continue
 		}
