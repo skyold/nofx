@@ -11,35 +11,35 @@ import (
 // TraderOrder order record
 // All time fields use int64 millisecond timestamps (UTC) to avoid timezone issues
 type TraderOrder struct {
-	ID                int64    `gorm:"primaryKey;autoIncrement" json:"id"`
-	TraderID          string   `gorm:"column:trader_id;not null;index:idx_orders_trader_id" json:"trader_id"`
-	ExchangeID        string   `gorm:"column:exchange_id;not null;default:''" json:"exchange_id"`
-	ExchangeType      string   `gorm:"column:exchange_type;not null;default:''" json:"exchange_type"`
-	ExchangeOrderID   string   `gorm:"column:exchange_order_id;not null;uniqueIndex:idx_orders_exchange_unique,priority:2" json:"exchange_order_id"`
-	ClientOrderID     string   `gorm:"column:client_order_id;default:''" json:"client_order_id"`
-	Symbol            string   `gorm:"column:symbol;not null;index:idx_orders_symbol" json:"symbol"`
-	Side              string   `gorm:"column:side;not null" json:"side"`
-	PositionSide      string   `gorm:"column:position_side;default:''" json:"position_side"`
-	Type              string   `gorm:"column:type;not null" json:"type"`
-	TimeInForce       string   `gorm:"column:time_in_force;default:GTC" json:"time_in_force"`
-	Quantity          float64  `gorm:"column:quantity;not null" json:"quantity"`
-	Price             float64  `gorm:"column:price;default:0" json:"price"`
-	StopPrice         float64  `gorm:"column:stop_price;default:0" json:"stop_price"`
-	Status            string   `gorm:"column:status;not null;default:NEW;index:idx_orders_status" json:"status"`
-	FilledQuantity    float64  `gorm:"column:filled_quantity;default:0" json:"filled_quantity"`
-	AvgFillPrice      float64  `gorm:"column:avg_fill_price;default:0" json:"avg_fill_price"`
-	Commission        float64  `gorm:"column:commission;default:0" json:"commission"`
-	CommissionAsset   string   `gorm:"column:commission_asset;default:USDT" json:"commission_asset"`
-	Leverage          int      `gorm:"column:leverage;default:1" json:"leverage"`
-	ReduceOnly        bool     `gorm:"column:reduce_only;default:false" json:"reduce_only"`
-	ClosePosition     bool     `gorm:"column:close_position;default:false" json:"close_position"`
-	WorkingType       string   `gorm:"column:working_type;default:CONTRACT_PRICE" json:"working_type"`
-	PriceProtect      bool     `gorm:"column:price_protect;default:false" json:"price_protect"`
-	OrderAction       string   `gorm:"column:order_action;default:''" json:"order_action"`
-	RelatedPositionID int64    `gorm:"column:related_position_id;default:0" json:"related_position_id"`
-	CreatedAt         UnixTime `gorm:"column:created_at" json:"created_at"` // Unix milliseconds UTC
-	UpdatedAt         UnixTime `gorm:"column:updated_at" json:"updated_at"` // Unix milliseconds UTC
-	FilledAt          UnixTime `gorm:"column:filled_at" json:"filled_at"`   // Unix milliseconds UTC
+	ID                int64   `gorm:"primaryKey;autoIncrement" json:"id"`
+	TraderID          string  `gorm:"column:trader_id;not null;index:idx_orders_trader_id" json:"trader_id"`
+	ExchangeID        string  `gorm:"column:exchange_id;not null;default:''" json:"exchange_id"`
+	ExchangeType      string  `gorm:"column:exchange_type;not null;default:''" json:"exchange_type"`
+	ExchangeOrderID   string  `gorm:"column:exchange_order_id;not null;uniqueIndex:idx_orders_exchange_unique,priority:2" json:"exchange_order_id"`
+	ClientOrderID     string  `gorm:"column:client_order_id;default:''" json:"client_order_id"`
+	Symbol            string  `gorm:"column:symbol;not null;index:idx_orders_symbol" json:"symbol"`
+	Side              string  `gorm:"column:side;not null" json:"side"`
+	PositionSide      string  `gorm:"column:position_side;default:''" json:"position_side"`
+	Type              string  `gorm:"column:type;not null" json:"type"`
+	TimeInForce       string  `gorm:"column:time_in_force;default:GTC" json:"time_in_force"`
+	Quantity          float64 `gorm:"column:quantity;not null" json:"quantity"`
+	Price             float64 `gorm:"column:price;default:0" json:"price"`
+	StopPrice         float64 `gorm:"column:stop_price;default:0" json:"stop_price"`
+	Status            string  `gorm:"column:status;not null;default:NEW;index:idx_orders_status" json:"status"`
+	FilledQuantity    float64 `gorm:"column:filled_quantity;default:0" json:"filled_quantity"`
+	AvgFillPrice      float64 `gorm:"column:avg_fill_price;default:0" json:"avg_fill_price"`
+	Commission        float64 `gorm:"column:commission;default:0" json:"commission"`
+	CommissionAsset   string  `gorm:"column:commission_asset;default:USDT" json:"commission_asset"`
+	Leverage          int     `gorm:"column:leverage;default:1" json:"leverage"`
+	ReduceOnly        bool    `gorm:"column:reduce_only;default:false" json:"reduce_only"`
+	ClosePosition     bool    `gorm:"column:close_position;default:false" json:"close_position"`
+	WorkingType       string  `gorm:"column:working_type;default:CONTRACT_PRICE" json:"working_type"`
+	PriceProtect      bool    `gorm:"column:price_protect;default:false" json:"price_protect"`
+	OrderAction       string  `gorm:"column:order_action;default:''" json:"order_action"`
+	RelatedPositionID int64   `gorm:"column:related_position_id;default:0" json:"related_position_id"`
+	CreatedAt         int64   `gorm:"column:created_at" json:"created_at"`         // Unix milliseconds UTC
+	UpdatedAt         int64   `gorm:"column:updated_at" json:"updated_at"`         // Unix milliseconds UTC
+	FilledAt          int64   `gorm:"column:filled_at" json:"filled_at"`           // Unix milliseconds UTC
 }
 
 // TableName returns the table name for TraderOrder
@@ -50,26 +50,23 @@ func (TraderOrder) TableName() string {
 // TraderFill trade record
 // All time fields use int64 millisecond timestamps (UTC) to avoid timezone issues
 type TraderFill struct {
-	ID              int64    `gorm:"primaryKey;autoIncrement" json:"id"`
-	TraderID        string   `gorm:"column:trader_id;not null;index:idx_fills_trader_id" json:"trader_id"`
-	ExchangeID      string   `gorm:"column:exchange_id;not null;default:''" json:"exchange_id"`
-	ExchangeType    string   `gorm:"column:exchange_type;not null;default:''" json:"exchange_type"`
-	OrderID         int64    `gorm:"column:order_id;not null;index:idx_fills_order_id" json:"order_id"`
-	ExchangeOrderID string   `gorm:"column:exchange_order_id;not null" json:"exchange_order_id"`
-	ExchangeTradeID string   `gorm:"column:exchange_trade_id;not null;uniqueIndex:idx_fills_exchange_unique,priority:2" json:"exchange_trade_id"`
-	Symbol          string   `gorm:"column:symbol;not null" json:"symbol"`
-	Side            string   `gorm:"column:side;not null" json:"side"`
-	Price           float64  `gorm:"column:price;not null" json:"price"`
-	Quantity        float64  `gorm:"column:quantity;not null" json:"quantity"`
-	QuoteQuantity   float64  `gorm:"column:quote_quantity;not null" json:"quote_quantity"`
-	Commission      float64  `gorm:"column:commission;not null" json:"commission"`
-	CommissionAsset string   `gorm:"column:commission_asset;not null" json:"commission_asset"`
-	RealizedPnL     float64  `gorm:"column:realized_pnl;default:0" json:"realized_pnl"`
-	IsMaker         bool     `gorm:"column:is_maker;default:false" json:"is_maker"`
-	CreatedAt       UnixTime `gorm:"column:created_at" json:"created_at"` // Unix milliseconds UTC
-
-	// Enriched fields from Order (not stored in trader_fills table)
-	ClientOrderID string `gorm:"-" json:"client_order_id"`
+	ID              int64   `gorm:"primaryKey;autoIncrement" json:"id"`
+	TraderID        string  `gorm:"column:trader_id;not null;index:idx_fills_trader_id" json:"trader_id"`
+	ExchangeID      string  `gorm:"column:exchange_id;not null;default:''" json:"exchange_id"`
+	ExchangeType    string  `gorm:"column:exchange_type;not null;default:''" json:"exchange_type"`
+	OrderID         int64   `gorm:"column:order_id;not null;index:idx_fills_order_id" json:"order_id"`
+	ExchangeOrderID string  `gorm:"column:exchange_order_id;not null" json:"exchange_order_id"`
+	ExchangeTradeID string  `gorm:"column:exchange_trade_id;not null;uniqueIndex:idx_fills_exchange_unique,priority:2" json:"exchange_trade_id"`
+	Symbol          string  `gorm:"column:symbol;not null" json:"symbol"`
+	Side            string  `gorm:"column:side;not null" json:"side"`
+	Price           float64 `gorm:"column:price;not null" json:"price"`
+	Quantity        float64 `gorm:"column:quantity;not null" json:"quantity"`
+	QuoteQuantity   float64 `gorm:"column:quote_quantity;not null" json:"quote_quantity"`
+	Commission      float64 `gorm:"column:commission;not null" json:"commission"`
+	CommissionAsset string  `gorm:"column:commission_asset;not null" json:"commission_asset"`
+	RealizedPnL     float64 `gorm:"column:realized_pnl;default:0" json:"realized_pnl"`
+	IsMaker         bool    `gorm:"column:is_maker;default:false" json:"is_maker"`
+	CreatedAt       int64   `gorm:"column:created_at" json:"created_at"` // Unix milliseconds UTC
 }
 
 // TableName returns the table name for TraderFill
@@ -159,15 +156,6 @@ func (s *OrderStore) CreateOrder(order *TraderOrder) error {
 		return fmt.Errorf("failed to check existing order: %w", err)
 	}
 	if existing != nil {
-		// If existing record has empty ClientOrderID but incoming has one, update it
-		if existing.ClientOrderID == "" && order.ClientOrderID != "" {
-			if err := s.db.Model(&TraderOrder{}).
-				Where("id = ?", existing.ID).
-				Update("client_order_id", order.ClientOrderID).Error; err != nil {
-				return fmt.Errorf("failed to update client_order_id: %w", err)
-			}
-			existing.ClientOrderID = order.ClientOrderID
-		}
 		order.ID = existing.ID
 		order.CreatedAt = existing.CreatedAt
 		order.UpdatedAt = existing.UpdatedAt
@@ -184,11 +172,11 @@ func (s *OrderStore) UpdateOrderStatus(id int64, status string, filledQty, avgPr
 		"filled_quantity": filledQty,
 		"avg_fill_price":  avgPrice,
 		"commission":      commission,
-		"updated_at":      UnixTime(time.Now().UTC().UnixMilli()),
+		"updated_at":      time.Now().UTC().UnixMilli(),
 	}
 
 	if status == "FILLED" {
-		updates["filled_at"] = UnixTime(time.Now().UTC().UnixMilli())
+		updates["filled_at"] = time.Now().UTC().UnixMilli()
 	}
 
 	return s.db.Model(&TraderOrder{}).Where("id = ?", id).Updates(updates).Error
@@ -418,7 +406,7 @@ func (s *OrderStore) GetLastFillTimeByExchange(exchangeID string) (int64, error)
 	if err != nil {
 		return 0, err
 	}
-	return int64(fill.CreatedAt), nil
+	return fill.CreatedAt, nil
 }
 
 // GetRecentFillSymbolsByExchange returns distinct symbols with fills since given time (Unix ms)

@@ -103,13 +103,13 @@ func (t *VirtualTrader) SyncOrdersFromVirtual(traderID string, exchangeID string
 							Quantity:           realPos.Quantity,
 							EntryPrice:         entryPrice,
 							EntryOrderID:       "normalize_side",
-							EntryTime:          store.UnixTime(nowMs),
+							EntryTime:          nowMs,
 							Leverage:           localPos.Leverage,
 							Status:             "OPEN",
 							Source:             "sync",
 							Fee:                localPos.Fee,
-							CreatedAt:          store.UnixTime(nowMs),
-							UpdatedAt:          store.UnixTime(nowMs),
+							CreatedAt:          nowMs,
+							UpdatedAt:          nowMs,
 						}
 						if err := positionStore.CreateOpenPosition(newPos); err != nil {
 							logger.Infof("⚠️  Failed to create normalized position for %s: %v", localPos.Symbol, err)
@@ -183,9 +183,9 @@ func (t *VirtualTrader) SyncOrdersFromVirtual(traderID string, exchangeID string
 			FilledQuantity:  trade.Quantity,
 			AvgFillPrice:    trade.Price,
 			Commission:      trade.Fee,
-			FilledAt:        store.UnixTime(tradeTimeMs),
-			CreatedAt:       store.UnixTime(tradeTimeMs),
-			UpdatedAt:       store.UnixTime(tradeTimeMs),
+			FilledAt:        tradeTimeMs,
+			CreatedAt:       tradeTimeMs,
+			UpdatedAt:       tradeTimeMs,
 		}
 
 		// Save order to DB
@@ -210,7 +210,7 @@ func (t *VirtualTrader) SyncOrdersFromVirtual(traderID string, exchangeID string
 			CommissionAsset: "USDT",
 			RealizedPnL:     trade.RealizedPnL,
 			IsMaker:         false,
-			CreatedAt:       store.UnixTime(tradeTimeMs),
+			CreatedAt:       tradeTimeMs,
 		}
 
 		if err := orderStore.CreateFill(fillRecord); err != nil {

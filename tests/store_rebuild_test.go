@@ -213,7 +213,7 @@ func TestRebuildFromFills_ZeroPnL_Close(t *testing.T) {
 			OrderAction:     "open_long",
 			PositionSide:    "LONG",
 			Status:          "FILLED",
-			CreatedAt:       store.UnixTime(t1),
+			CreatedAt:       t1,
 		},
 		{
 			ID:              2,
@@ -224,7 +224,7 @@ func TestRebuildFromFills_ZeroPnL_Close(t *testing.T) {
 			OrderAction:     "close_long",
 			PositionSide:    "LONG",
 			Status:          "FILLED",
-			CreatedAt:       store.UnixTime(t2),
+			CreatedAt:       t2,
 		},
 	}
 	for _, o := range orders {
@@ -243,7 +243,7 @@ func TestRebuildFromFills_ZeroPnL_Close(t *testing.T) {
 			OrderID:         1, // Links to Open Order
 			ExchangeOrderID: "ord_open",
 			ExchangeTradeID: "trade1",
-			CreatedAt:       store.UnixTime(t1),
+			CreatedAt:       t1,
 		},
 		{
 			TraderID:        traderID,
@@ -255,7 +255,7 @@ func TestRebuildFromFills_ZeroPnL_Close(t *testing.T) {
 			OrderID:         2, // Links to Close Order
 			ExchangeOrderID: "ord_close",
 			ExchangeTradeID: "trade2",
-			CreatedAt:       store.UnixTime(t2),
+			CreatedAt:       t2,
 		},
 	}
 	for _, f := range fills {

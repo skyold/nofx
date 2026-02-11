@@ -31,10 +31,6 @@ import type {
   DebatePersonalityInfo,
   PositionHistoryResponse,
   TransactionListResponse,
-  AnalystProfile,
-  CreateAnalystProfileRequest,
-  AnalysisSession,
-  AnalysisSessionDetail,
 } from '../types'
 import { CryptoService } from './crypto'
 import { httpClient } from './httpClient'
@@ -826,52 +822,5 @@ export const api = {
       trader_id: traderId,
     })
     if (!result.success) throw new Error('Failed to assign transaction')
-  },
-
-  // Analyst Studio APIs
-  async getAnalystProfiles(): Promise<AnalystProfile[]> {
-    const result = await httpClient.get<AnalystProfile[]>(`${API_BASE}/analysts`)
-    if (!result.success) throw new Error('Failed to get analyst profiles')
-    return Array.isArray(result.data) ? result.data : []
-  },
-
-  async getAnalystProfile(id: string): Promise<AnalystProfile> {
-    const result = await httpClient.get<AnalystProfile>(`${API_BASE}/analysts/${id}`)
-    if (!result.success) throw new Error('Failed to get analyst profile')
-    return result.data!
-  },
-
-  async createAnalystProfile(request: CreateAnalystProfileRequest): Promise<AnalystProfile> {
-    const result = await httpClient.post<AnalystProfile>(`${API_BASE}/analysts`, request)
-    if (!result.success) throw new Error('Failed to create analyst profile')
-    return result.data!
-  },
-
-  async updateAnalystProfile(id: string, request: CreateAnalystProfileRequest): Promise<AnalystProfile> {
-    const result = await httpClient.put<AnalystProfile>(`${API_BASE}/analysts/${id}`, request)
-    if (!result.success) throw new Error('Failed to update analyst profile')
-    return result.data!
-  },
-
-  async deleteAnalystProfile(id: string): Promise<void> {
-    const result = await httpClient.delete(`${API_BASE}/analysts/${id}`)
-    if (!result.success) throw new Error('Failed to delete analyst profile')
-  },
-
-  async triggerAnalysis(id: string): Promise<void> {
-    const result = await httpClient.post(`${API_BASE}/analysts/${id}/trigger`)
-    if (!result.success) throw new Error('Failed to trigger analysis')
-  },
-
-  async getAnalysisSessions(limit = 20): Promise<AnalysisSession[]> {
-    const result = await httpClient.get<AnalysisSession[]>(`${API_BASE}/analysis-sessions?limit=${limit}`)
-    if (!result.success) throw new Error('Failed to get analysis sessions')
-    return Array.isArray(result.data) ? result.data : []
-  },
-
-  async getAnalysisSessionDetail(id: number): Promise<AnalysisSessionDetail> {
-    const result = await httpClient.get<AnalysisSessionDetail>(`${API_BASE}/analysis-sessions/${id}`)
-    if (!result.success) throw new Error('Failed to get analysis session detail')
-    return result.data!
   },
 }

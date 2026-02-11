@@ -67,13 +67,13 @@ func (pb *PositionBuilder) handleOpen(
 			Quantity:           quantity,
 			EntryPrice:         price,
 			EntryOrderID:       orderID,
-			EntryTime:          UnixTime(tradeTimeMs),
+			EntryTime:          tradeTimeMs,
 			Leverage:           1,
 			Status:             "OPEN",
 			Source:             "sync",
 			Fee:                fee,
-			CreatedAt:          UnixTime(nowMs),
-			UpdatedAt:          UnixTime(nowMs),
+			CreatedAt:          nowMs,
+			UpdatedAt:          nowMs,
 		}
 		return pb.positionStore.CreateOpenPosition(position)
 	}

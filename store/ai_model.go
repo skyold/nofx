@@ -1,6 +1,7 @@
 package store
 
 import (
+	"errors"
 	"fmt"
 	"nofx/crypto"
 	"nofx/logger"
@@ -17,16 +18,16 @@ type AIModelStore struct {
 
 // AIModel AI model configuration
 type AIModel struct {
-	ID              string                 `gorm:"primaryKey" json:"id"`
-	UserID          string                 `gorm:"column:user_id;not null;default:default;index" json:"user_id"`
-	Name            string                 `gorm:"not null" json:"name"`
-	Provider        string                 `gorm:"not null" json:"provider"`
-	Enabled         bool                   `gorm:"default:false" json:"enabled"`
+	ID              string          `gorm:"primaryKey" json:"id"`
+	UserID          string          `gorm:"column:user_id;not null;default:default;index" json:"user_id"`
+	Name            string          `gorm:"not null" json:"name"`
+	Provider        string          `gorm:"not null" json:"provider"`
+	Enabled         bool            `gorm:"default:false" json:"enabled"`
 	APIKey          crypto.EncryptedString `gorm:"column:api_key;default:''" json:"apiKey"`
-	CustomAPIURL    string                 `gorm:"column:custom_api_url;default:''" json:"customApiUrl"`
-	CustomModelName string                 `gorm:"column:custom_model_name;default:''" json:"customModelName"`
-	CreatedAt       time.Time              `json:"created_at"`
-	UpdatedAt       time.Time              `json:"updated_at"`
+	CustomAPIURL    string          `gorm:"column:custom_api_url;default:''" json:"customApiUrl"`
+	CustomModelName string          `gorm:"column:custom_model_name;default:''" json:"customModelName"`
+	CreatedAt       time.Time       `json:"created_at"`
+	UpdatedAt       time.Time       `json:"updated_at"`
 }
 
 func (AIModel) TableName() string { return "ai_models" }
@@ -48,6 +49,11 @@ func (s *AIModelStore) initTables() error {
 	return s.db.AutoMigrate(&AIModel{})
 }
 
+func (s *AIModelStore) initDefaultData() error {
+	// No longer pre-populate AI models - create on demand when user configures
+	return nil
+}
+
 // List retrieves user's AI model list
 func (s *AIModelStore) List(userID string) ([]*AIModel, error) {
 	var models []*AIModel
@@ -64,12 +70,28 @@ func (s *AIModelStore) Get(userID, modelID string) (*AIModel, error) {
 		return nil, fmt.Errorf("model ID cannot be empty")
 	}
 
-	var model AIModel
-	err := s.db.Where("user_id = ? AND id = ?", userID, modelID).First(&model).Error
-	if err != nil {
-		return nil, err
+	candidates := []string{}
+	if userID != "" {
+		candidates = append(candidates, userID)
 	}
-	return &model, nil
+	if userID != "default" {
+		candidates = append(candidates, "default")
+	}
+	if len(candidates) == 0 {
+		candidates = append(candidates, "default")
+	}
+
+	for _, uid := range candidates {
+		var model AIModel
+		err := s.db.Where("user_id = ? AND id = ?", uid, modelID).First(&model).Error
+		if err == nil {
+			return &model, nil
+		}
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, err
+		}
+	}
+	return nil, gorm.ErrRecordNotFound
 }
 
 // GetByID retrieves an AI model by ID only (for debate engine)
@@ -88,7 +110,20 @@ func (s *AIModelStore) GetByID(modelID string) (*AIModel, error) {
 
 // GetDefault retrieves the default enabled AI model
 func (s *AIModelStore) GetDefault(userID string) (*AIModel, error) {
-	return s.firstEnabled(userID)
+	if userID == "" {
+		userID = "default"
+	}
+	model, err := s.firstEnabled(userID)
+	if err == nil {
+		return model, nil
+	}
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, err
+	}
+	if userID != "default" {
+		return s.firstEnabled("default")
+	}
+	return nil, fmt.Errorf("please configure an available AI model in the system first")
 }
 
 func (s *AIModelStore) firstEnabled(userID string) (*AIModel, error) {

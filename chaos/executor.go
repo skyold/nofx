@@ -419,8 +419,8 @@ func (e *ChaosExecutor) createOrderRecord(orderID, clientOrderID, symbol, action
 		ReduceOnly:      reduceOnly,
 		ClosePosition:   reduceOnly,
 		OrderAction:     action,
-		CreatedAt:       store.UnixTime(time.Now().UTC().UnixMilli()),
-		UpdatedAt:       store.UnixTime(time.Now().UTC().UnixMilli()),
+		CreatedAt:       time.Now().UTC().UnixMilli(),
+		UpdatedAt:       time.Now().UTC().UnixMilli(),
 	}
 }
 
@@ -458,7 +458,7 @@ func (e *ChaosExecutor) recordOrderFill(orderRecordID int64, exchangeOrderID, sy
 		CommissionAsset: "USDT",
 		RealizedPnL:     0, // Will be calculated for close orders
 		IsMaker:         false,
-		CreatedAt:       store.UnixTime(time.Now().UTC().UnixMilli()),
+		CreatedAt:       time.Now().UTC().UnixMilli(),
 	}
 
 	// Calculate realized PnL for close orders
@@ -501,11 +501,11 @@ func (e *ChaosExecutor) recordPositionChange(orderID, symbol, side, action strin
 			Quantity:           quantity,
 			EntryPrice:         price,
 			EntryOrderID:       orderID,
-			EntryTime:          store.UnixTime(nowMs),
+			EntryTime:          nowMs,
 			Leverage:           leverage,
 			Status:             "OPEN",
-			CreatedAt:          store.UnixTime(nowMs),
-			UpdatedAt:          store.UnixTime(nowMs),
+			CreatedAt:          nowMs,
+			UpdatedAt:          nowMs,
 		}
 		if err := e.store.Position().CreateOpenPosition(pos); err != nil {
 			logger.Infof("  ⚠️ [Chaos] Failed to record position: %v", err)

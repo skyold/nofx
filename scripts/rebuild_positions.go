@@ -143,7 +143,7 @@ func main() {
 			AvgFillPrice:    raw.AvgFillPrice,
 			Commission:      raw.Commission,
 			Leverage:        raw.Leverage,
-			CreatedAt:       store.UnixTime(createdAt),
+			CreatedAt:       createdAt,
 		}
 
 		// Normalize
@@ -318,7 +318,7 @@ func main() {
 							CloseReason:        "rebuild_script",
 							Source:             "rebuild",
 							CreatedAt:          order.CreatedAt, // Use close time as creation time
-							UpdatedAt:          store.UnixTime(time.Now().UnixMilli()),
+							UpdatedAt:          time.Now().UnixMilli(),
 						}
 
 						if err := db.Create(newPos).Error; err != nil {

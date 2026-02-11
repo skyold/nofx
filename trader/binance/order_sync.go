@@ -220,7 +220,6 @@ func (t *FuturesTrader) SyncOrdersFromBinance(traderID string, exchangeID string
 			ExchangeID:      exchangeID,
 			ExchangeType:    exchangeType,
 			ExchangeOrderID: trade.TradeID,
-			ClientOrderID:   fmt.Sprintf("sync_%s", trade.TradeID),
 			Symbol:          symbol,
 			Side:            side,
 			PositionSide:    positionSide,
@@ -232,9 +231,9 @@ func (t *FuturesTrader) SyncOrdersFromBinance(traderID string, exchangeID string
 			FilledQuantity:  trade.Quantity,
 			AvgFillPrice:    trade.Price,
 			Commission:      trade.Fee,
-			FilledAt:        store.UnixTime(tradeTimeMs),
-			CreatedAt:       store.UnixTime(tradeTimeMs),
-			UpdatedAt:       store.UnixTime(tradeTimeMs),
+			FilledAt:        tradeTimeMs,
+			CreatedAt:       tradeTimeMs,
+			UpdatedAt:       tradeTimeMs,
 		}
 
 		// Insert order record
@@ -260,7 +259,7 @@ func (t *FuturesTrader) SyncOrdersFromBinance(traderID string, exchangeID string
 			CommissionAsset: "USDT",
 			RealizedPnL:     trade.RealizedPnL,
 			IsMaker:         false,
-			CreatedAt:       store.UnixTime(tradeTimeMs),
+			CreatedAt:       tradeTimeMs,
 		}
 
 		if err := orderStore.CreateFill(fillRecord); err != nil {

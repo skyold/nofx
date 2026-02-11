@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"nofx/analyzer"
 	"nofx/auth"
 	"nofx/backtest"
 	"nofx/config"
@@ -37,7 +36,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/sirupsen/logrus"
 )
 
 // Server HTTP API server
@@ -48,25 +46,16 @@ type Server struct {
 	cryptoHandler   *CryptoHandler
 	backtestManager *backtest.Manager
 	debateHandler   *DebateHandler
-	scheduler       *analyzer.Scheduler
 	httpServer      *http.Server
 	port            int
 }
 
 // NewServer Creates API server
-func NewServer(traderManager *manager.TraderManager, st *store.Store, cryptoService *crypto.CryptoService, backtestManager *backtest.Manager, scheduler *analyzer.Scheduler, port int) *Server {
+func NewServer(traderManager *manager.TraderManager, st *store.Store, cryptoService *crypto.CryptoService, backtestManager *backtest.Manager, port int) *Server {
 	// Set to Release mode (reduce log output)
 	gin.SetMode(gin.ReleaseMode)
 
-	// Use gin.New() instead of gin.Default() to control middleware
-	router := gin.New()
-	router.Use(gin.Recovery())
-
-	// Only enable Gin logger if global log level is INFO or DEBUG
-	// This prevents noisy access logs when running in default WARN mode
-	if logger.Log.Level >= logrus.InfoLevel {
-		router.Use(gin.Logger())
-	}
+	router := gin.Default()
 
 	// Enable CORS
 	router.Use(corsMiddleware())
@@ -89,7 +78,6 @@ func NewServer(traderManager *manager.TraderManager, st *store.Store, cryptoServ
 		cryptoHandler:   cryptoHandler,
 		backtestManager: backtestManager,
 		debateHandler:   debateHandler,
-		scheduler:       scheduler,
 		port:            port,
 	}
 
@@ -178,7 +166,6 @@ func (s *Server) setupRoutes() {
 			protected.PUT("/traders/:id/prompt", s.handleUpdateTraderPrompt)
 			protected.POST("/traders/:id/sync-balance", s.handleSyncBalance)
 			protected.POST("/traders/:id/close-position", s.handleClosePosition)
-			protected.POST("/traders/:id/rebuild-positions", s.handleRebuildPositions)
 			protected.PUT("/traders/:id/competition", s.handleToggleCompetition)
 			protected.GET("/traders/:id/grid-risk", s.handleGetGridRiskInfo)
 
@@ -223,17 +210,6 @@ func (s *Server) setupRoutes() {
 			protected.GET("/transactions", s.handleGetTransactions)
 			protected.PUT("/transactions/:id/trader", s.handleAssignTransaction)
 			protected.DELETE("/traders/:id/history", s.handleClearHistory)
-
-			// Analysis Studio
-			protected.GET("/analysts", s.handleListAnalystProfiles)
-			protected.POST("/analysts", s.handleCreateAnalystProfile)
-			protected.GET("/analysts/:id", s.handleGetAnalystProfile)
-			protected.PUT("/analysts/:id", s.handleUpdateAnalystProfile)
-			protected.DELETE("/analysts/:id", s.handleDeleteAnalystProfile)
-			protected.POST("/analysts/:id/trigger", s.handleTriggerAnalysis)
-
-			protected.GET("/analysis-sessions", s.handleListAnalysisSessions)
-			protected.GET("/analysis-sessions/:id", s.handleGetAnalysisSession)
 
 			// Data for specified trader (using query parameter ?trader_id=xxx)
 			protected.GET("/status", s.handleStatus)
@@ -1433,12 +1409,9 @@ func (s *Server) handleClosePosition(c *gin.Context) {
 	}
 
 	// Get current position info BEFORE closing (to get quantity and price)
-	// This also helps us detect "ghost positions" (exist locally but not on exchange)
 	positions, err := tempTrader.GetPositions()
 	if err != nil {
 		logger.Infof("⚠️ Failed to get positions: %v", err)
-		SafeInternalError(c, "Failed to query exchange positions", err)
-		return
 	}
 
 	var posQty float64
@@ -1542,31 +1515,6 @@ func (s *Server) handleClosePosition(c *gin.Context) {
 		"symbol":  req.Symbol,
 		"side":    req.Side,
 		"result":  result,
-	})
-}
-
-// handleRebuildPositions Rebuild positions from orders
-func (s *Server) handleRebuildPositions(c *gin.Context) {
-	userID := c.GetString("user_id")
-	traderID := c.Param("id")
-
-	// Verify ownership
-	if _, err := s.store.Trader().GetFullConfig(userID, traderID); err != nil {
-		SafeNotFound(c, "Trader")
-		return
-	}
-
-	pb := store.NewPositionBuilder(s.store.Position())
-	// Use RebuildFromFills instead of RebuildFromOrders for better accuracy with trade history
-	count, err := pb.RebuildFromFills(traderID, s.store.Order())
-	if err != nil {
-		SafeInternalError(c, "Rebuild positions", err)
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"message": fmt.Sprintf("Successfully rebuilt %d missing positions", count),
-		"count":   count,
 	})
 }
 

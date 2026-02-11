@@ -77,7 +77,6 @@ func (t *LighterTraderV2) SyncOrdersFromLighter(traderID string, exchangeID stri
 			ExchangeID:      exchangeID,   // UUID
 			ExchangeType:    exchangeType, // Exchange type
 			ExchangeOrderID: trade.TradeID,
-			ClientOrderID:   fmt.Sprintf("sync_%s", trade.TradeID),
 			Symbol:          symbol,
 			Side:            strings.ToUpper(side),
 			PositionSide:    positionSide,
@@ -89,9 +88,9 @@ func (t *LighterTraderV2) SyncOrdersFromLighter(traderID string, exchangeID stri
 			FilledQuantity:  trade.Quantity,
 			AvgFillPrice:    trade.Price,
 			Commission:      trade.Fee,
-			FilledAt:        store.UnixTime(tradeTimeMs),
-			CreatedAt:       store.UnixTime(tradeTimeMs),
-			UpdatedAt:       store.UnixTime(tradeTimeMs),
+			FilledAt:        tradeTimeMs,
+			CreatedAt:       tradeTimeMs,
+			UpdatedAt:       tradeTimeMs,
 		}
 
 		// Insert order record
@@ -117,7 +116,7 @@ func (t *LighterTraderV2) SyncOrdersFromLighter(traderID string, exchangeID stri
 			CommissionAsset: "USDT",
 			RealizedPnL:     trade.RealizedPnL,
 			IsMaker:         false,
-			CreatedAt:       store.UnixTime(tradeTimeMs),
+			CreatedAt:       tradeTimeMs,
 		}
 
 		if err := orderStore.CreateFill(fillRecord); err != nil {
@@ -141,13 +140,7 @@ func (t *LighterTraderV2) SyncOrdersFromLighter(traderID string, exchangeID stri
 			trade.TradeID, symbol, side, trade.Quantity, trade.Price, trade.RealizedPnL, trade.Fee, orderAction)
 	}
 
-	logger.Infof("✅ Lighter order sync completed: %d new trades synced", syncedCount)
-
-	// Reconcile positions to fix ghost positions
-	if err := st.Position().ReconcilePositions(t, traderID, exchangeID); err != nil {
-		logger.Infof("⚠️ Failed to reconcile positions: %v", err)
-	}
-
+	logger.Infof("✅ Order sync completed: %d new trades synced", syncedCount)
 	return nil
 }
 

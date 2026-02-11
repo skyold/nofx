@@ -218,7 +218,6 @@ func (t *GateTrader) SyncOrdersFromGate(traderID string, exchangeID string, exch
 			ExchangeID:      exchangeID,   // UUID
 			ExchangeType:    exchangeType, // Exchange type
 			ExchangeOrderID: trade.TradeID,
-			ClientOrderID:   func() string { if trade.OrderID != "" { return trade.OrderID } ; return fmt.Sprintf("sync_%s", trade.TradeID) }(),
 			Symbol:          symbol,
 			Side:            side,
 			PositionSide:    "BOTH", // Gate uses one-way position mode
@@ -230,9 +229,9 @@ func (t *GateTrader) SyncOrdersFromGate(traderID string, exchangeID string, exch
 			FilledQuantity:  trade.FillQty,
 			AvgFillPrice:    trade.FillPrice,
 			Commission:      trade.Fee,
-			FilledAt:        store.UnixTime(execTimeMs),
-			CreatedAt:       store.UnixTime(execTimeMs),
-			UpdatedAt:       store.UnixTime(execTimeMs),
+			FilledAt:        execTimeMs,
+			CreatedAt:       execTimeMs,
+			UpdatedAt:       execTimeMs,
 		}
 
 		// Insert order record
@@ -258,7 +257,7 @@ func (t *GateTrader) SyncOrdersFromGate(traderID string, exchangeID string, exch
 			CommissionAsset: trade.FeeAsset,
 			RealizedPnL:     trade.ProfitLoss,
 			IsMaker:         false,
-			CreatedAt:       store.UnixTime(execTimeMs),
+			CreatedAt:       execTimeMs,
 		}
 
 		if err := orderStore.CreateFill(fillRecord); err != nil {
@@ -288,12 +287,6 @@ func (t *GateTrader) SyncOrdersFromGate(traderID string, exchangeID string, exch
 	}
 
 	logger.Infof("✅ Gate order sync completed: %d new trades synced", syncedCount)
-
-	// Reconcile positions to fix ghost positions
-	if err := st.Position().ReconcilePositions(t, traderID, exchangeID); err != nil {
-		logger.Infof("⚠️ Failed to reconcile positions: %v", err)
-	}
-
 	return nil
 }
 

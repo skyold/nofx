@@ -879,46 +879,4 @@ export interface GridRiskInfo {
   breakout_direction: string
 }
 
-// Analyst Profile
-export interface AnalystProfile {
-  id: string;
-  name: string;
-  system_prompt: string;
-  model_id: string;
-  cron_schedule: string;
-  is_enabled: boolean;
-  created_at: string;
-  updated_at: string;
-}
 
-export interface CreateAnalystProfileRequest {
-  name: string;
-  system_prompt: string;
-  model_id: string;
-  cron_schedule: string;
-  is_enabled: boolean;
-}
-
-// Analysis Session & Record
-export interface AnalysisSession {
-  id: number;
-  created_at: number; // unix timestamp
-  context_summary: string; // JSON string
-  overall_summary: string;
-}
-
-export interface AnalysisRecord {
-  id: number;
-  session_id: number;
-  analyst_id: string;
-  analyst_name: string;
-  sentiment: string;
-  score: number;
-  reasoning: string;
-  created_at: number; // unix timestamp
-}
-
-export interface AnalysisSessionDetail {
-  session: AnalysisSession;
-  records: AnalysisRecord[];
-}

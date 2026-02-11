@@ -230,7 +230,6 @@ func (t *BybitTrader) SyncOrdersFromBybit(traderID string, exchangeID string, ex
 			ExchangeID:      exchangeID,   // UUID
 			ExchangeType:    exchangeType, // Exchange type
 			ExchangeOrderID: trade.ExecID, // Use ExecID as unique identifier
-			ClientOrderID:   func() string { if trade.OrderID != "" { return trade.OrderID } ; return fmt.Sprintf("sync_%s", trade.ExecID) }(),
 			Symbol:          symbol,
 			Side:            side,
 			PositionSide:    "BOTH", // Bybit uses one-way position mode
@@ -242,9 +241,9 @@ func (t *BybitTrader) SyncOrdersFromBybit(traderID string, exchangeID string, ex
 			FilledQuantity:  trade.ExecQty,
 			AvgFillPrice:    trade.ExecPrice,
 			Commission:      trade.ExecFee,
-			FilledAt:        store.UnixTime(execTimeMs),
-			CreatedAt:       store.UnixTime(execTimeMs),
-			UpdatedAt:       store.UnixTime(execTimeMs),
+			FilledAt:        execTimeMs,
+			CreatedAt:       execTimeMs,
+			UpdatedAt:       execTimeMs,
 		}
 
 		// Insert order record
@@ -270,7 +269,7 @@ func (t *BybitTrader) SyncOrdersFromBybit(traderID string, exchangeID string, ex
 			CommissionAsset: "USDT",
 			RealizedPnL:     trade.ClosedPnL,
 			IsMaker:         trade.IsMaker,
-			CreatedAt:       store.UnixTime(execTimeMs),
+			CreatedAt:       execTimeMs,
 		}
 
 		if err := orderStore.CreateFill(fillRecord); err != nil {
@@ -295,12 +294,6 @@ func (t *BybitTrader) SyncOrdersFromBybit(traderID string, exchangeID string, ex
 	}
 
 	logger.Infof("✅ Bybit order sync completed: %d new trades synced", syncedCount)
-
-	// Reconcile positions to fix ghost positions
-	if err := st.Position().ReconcilePositions(t, traderID, exchangeID); err != nil {
-		logger.Infof("⚠️ Failed to reconcile positions: %v", err)
-	}
-
 	return nil
 }
 

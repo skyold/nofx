@@ -12,8 +12,6 @@ type Page =
   | 'trader'
   | 'chaos'
   | 'chaos-studio'
-  | 'analyst-studio'
-  | 'analysis-dashboard'
   | 'backtest'
   | 'strategy'
   | 'strategy-market'
@@ -115,8 +113,6 @@ export default function HeaderBar({
                 { page: 'traders', path: '/traders', label: t('configNav', language), requiresAuth: true },
                 { page: 'trader', path: '/dashboard', label: t('dashboardNav', language), requiresAuth: true },
                 { page: 'chaos-studio', path: '/chaos-studio', label: 'Chaos Studio', requiresAuth: true },
-                { page: 'analyst-studio', path: '/analyst-studio', label: 'Analyst Studio', requiresAuth: true },
-                { page: 'analysis-dashboard', path: '/analysis-dashboard', label: 'Dashboard', requiresAuth: true },
                 { page: 'chaos', path: '/chaos', label: 'Chaos', requiresAuth: true },
                 { page: 'strategy', path: '/strategy', label: t('strategyNav', language), requiresAuth: true },
                 { page: 'competition', path: '/competition', label: t('realtimeNav', language), requiresAuth: true },
@@ -125,7 +121,7 @@ export default function HeaderBar({
                 { page: 'faq', path: '/faq', label: t('faqNav', language), requiresAuth: false },
               ]
 
-              const CHAOS_ONLY_PAGES: Page[] = ['time-machine', 'transactions', 'chaos-studio', 'chaos', 'analyst-studio', 'analysis-dashboard']
+              const CHAOS_ONLY_PAGES: Page[] = ['time-machine', 'transactions', 'chaos-studio', 'chaos']
               const SHARED_PAGES: Page[] = ['traders']
 
               const navTabs = allNavTabs.filter(tab => {
@@ -379,8 +375,6 @@ export default function HeaderBar({
                     { page: 'traders', path: '/traders', label: t('configNav', language), requiresAuth: true },
                     { page: 'trader', path: '/dashboard', label: t('dashboardNav', language), requiresAuth: true },
                     { page: 'chaos-studio', path: '/chaos-studio', label: 'Chaos Studio', requiresAuth: true },
-                    { page: 'analyst-studio', path: '/analyst-studio', label: 'Analyst Studio', requiresAuth: true },
-                    { page: 'analysis-dashboard', path: '/analysis-dashboard', label: 'Dashboard', requiresAuth: true },
                     { page: 'chaos', path: '/chaos', label: 'Chaos', requiresAuth: true },
                     { page: 'strategy', path: '/strategy', label: t('strategyNav', language), requiresAuth: true },
                     { page: 'competition', path: '/competition', label: t('realtimeNav', language), requiresAuth: true },
@@ -389,7 +383,7 @@ export default function HeaderBar({
                     { page: 'faq', path: '/faq', label: t('faqNav', language), requiresAuth: false },
                   ]
 
-                  const CHAOS_ONLY_PAGES: Page[] = ['time-machine', 'transactions', 'chaos-studio', 'chaos', 'analyst-studio', 'analysis-dashboard']
+                  const CHAOS_ONLY_PAGES: Page[] = ['time-machine', 'transactions', 'chaos-studio', 'chaos']
                   const SHARED_PAGES: Page[] = ['traders']
 
                   const navTabs = allNavTabs.filter(tab => {

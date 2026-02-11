@@ -78,29 +78,29 @@ type TraderStats struct {
 // TraderPosition position record
 // All time fields use int64 millisecond timestamps (UTC) to avoid timezone issues
 type TraderPosition struct {
-	ID                 int64    `gorm:"primaryKey;autoIncrement" json:"id"`
-	TraderID           string   `gorm:"column:trader_id;not null;index:idx_positions_trader" json:"trader_id"`
-	ExchangeID         string   `gorm:"column:exchange_id;not null;default:'';index:idx_positions_exchange" json:"exchange_id"`
-	ExchangeType       string   `gorm:"column:exchange_type;not null;default:''" json:"exchange_type"`
-	ExchangePositionID string   `gorm:"column:exchange_position_id;not null;default:''" json:"exchange_position_id"`
-	Symbol             string   `gorm:"column:symbol;not null" json:"symbol"`
-	Side               string   `gorm:"column:side;not null" json:"side"`
-	EntryQuantity      float64  `gorm:"column:entry_quantity;default:0" json:"entry_quantity"`
-	Quantity           float64  `gorm:"column:quantity;not null" json:"quantity"`
-	EntryPrice         float64  `gorm:"column:entry_price;not null" json:"entry_price"`
-	EntryOrderID       string   `gorm:"column:entry_order_id;default:''" json:"entry_order_id"`
-	EntryTime          UnixTime `gorm:"column:entry_time;not null;index:idx_positions_entry" json:"entry_time"` // Unix milliseconds UTC
-	ExitPrice          float64  `gorm:"column:exit_price;default:0" json:"exit_price"`
-	ExitOrderID        string   `gorm:"column:exit_order_id;default:''" json:"exit_order_id"`
-	ExitTime           UnixTime `gorm:"column:exit_time;index:idx_positions_exit" json:"exit_time"` // Unix milliseconds UTC, 0 means not set
-	RealizedPnL        float64  `gorm:"column:realized_pnl;default:0" json:"realized_pnl"`
-	Fee                float64  `gorm:"column:fee;default:0" json:"fee"`
-	Leverage           int      `gorm:"column:leverage;default:1" json:"leverage"`
-	Status             string   `gorm:"column:status;default:OPEN;index:idx_positions_status" json:"status"`
-	CloseReason        string   `gorm:"column:close_reason;default:''" json:"close_reason"`
-	Source             string   `gorm:"column:source;default:system" json:"source"`
-	CreatedAt          UnixTime `gorm:"column:created_at" json:"created_at"` // Unix milliseconds UTC
-	UpdatedAt          UnixTime `gorm:"column:updated_at" json:"updated_at"` // Unix milliseconds UTC
+	ID                 int64   `gorm:"primaryKey;autoIncrement" json:"id"`
+	TraderID           string  `gorm:"column:trader_id;not null;index:idx_positions_trader" json:"trader_id"`
+	ExchangeID         string  `gorm:"column:exchange_id;not null;default:'';index:idx_positions_exchange" json:"exchange_id"`
+	ExchangeType       string  `gorm:"column:exchange_type;not null;default:''" json:"exchange_type"`
+	ExchangePositionID string  `gorm:"column:exchange_position_id;not null;default:''" json:"exchange_position_id"`
+	Symbol             string  `gorm:"column:symbol;not null" json:"symbol"`
+	Side               string  `gorm:"column:side;not null" json:"side"`
+	EntryQuantity      float64 `gorm:"column:entry_quantity;default:0" json:"entry_quantity"`
+	Quantity           float64 `gorm:"column:quantity;not null" json:"quantity"`
+	EntryPrice         float64 `gorm:"column:entry_price;not null" json:"entry_price"`
+	EntryOrderID       string  `gorm:"column:entry_order_id;default:''" json:"entry_order_id"`
+	EntryTime          int64   `gorm:"column:entry_time;not null;index:idx_positions_entry" json:"entry_time"` // Unix milliseconds UTC
+	ExitPrice          float64 `gorm:"column:exit_price;default:0" json:"exit_price"`
+	ExitOrderID        string  `gorm:"column:exit_order_id;default:''" json:"exit_order_id"`
+	ExitTime           int64   `gorm:"column:exit_time;index:idx_positions_exit" json:"exit_time"` // Unix milliseconds UTC, 0 means not set
+	RealizedPnL        float64 `gorm:"column:realized_pnl;default:0" json:"realized_pnl"`
+	Fee                float64 `gorm:"column:fee;default:0" json:"fee"`
+	Leverage           int     `gorm:"column:leverage;default:1" json:"leverage"`
+	Status             string  `gorm:"column:status;default:OPEN;index:idx_positions_status" json:"status"`
+	CloseReason        string  `gorm:"column:close_reason;default:''" json:"close_reason"`
+	Source             string  `gorm:"column:source;default:system" json:"source"`
+	CreatedAt          int64   `gorm:"column:created_at" json:"created_at"`   // Unix milliseconds UTC
+	UpdatedAt          int64   `gorm:"column:updated_at" json:"updated_at"`   // Unix milliseconds UTC
 }
 
 // TableName returns the table name
@@ -181,14 +181,14 @@ func (s *PositionStore) Create(pos *TraderPosition) error {
 func (s *PositionStore) ClosePosition(id int64, exitPrice float64, exitOrderID string, realizedPnL float64, fee float64, closeReason string) error {
 	nowMs := time.Now().UTC().UnixMilli()
 	return s.db.Model(&TraderPosition{}).Where("id = ?", id).Updates(map[string]interface{}{
-		"exit_price":    exitPrice,
+		"exit_price":   exitPrice,
 		"exit_order_id": exitOrderID,
-		"exit_time":     UnixTime(nowMs),
-		"realized_pnl":  realizedPnL,
-		"fee":           fee,
-		"status":        "CLOSED",
-		"close_reason":  closeReason,
-		"updated_at":    UnixTime(nowMs),
+		"exit_time":    nowMs,
+		"realized_pnl": realizedPnL,
+		"fee":          fee,
+		"status":       "CLOSED",
+		"close_reason": closeReason,
+		"updated_at":   nowMs,
 	}).Error
 }
 
@@ -217,7 +217,7 @@ func (s *PositionStore) UpdatePositionQuantityAndPrice(id int64, addQty float64,
 		"entry_quantity": newEntryQty,
 		"entry_price":    newEntryPrice,
 		"fee":            newFee,
-		"updated_at":     UnixTime(nowMs),
+		"updated_at":     nowMs,
 	}).Error
 }
 
@@ -255,9 +255,9 @@ func (s *PositionStore) ReducePositionQuantity(id int64, reduceQty float64, exit
 			"exit_price":   newExitPrice,
 			"realized_pnl": newPnL,
 			"status":       "CLOSED",
-			"exit_time":    UnixTime(nowMs),
+			"exit_time":    nowMs,
 			"close_reason": "sync",
-			"updated_at":   UnixTime(nowMs),
+			"updated_at":   nowMs,
 		}).Error
 	}
 
@@ -266,7 +266,7 @@ func (s *PositionStore) ReducePositionQuantity(id int64, reduceQty float64, exit
 		"fee":          newFee,
 		"exit_price":   newExitPrice,
 		"realized_pnl": newPnL,
-		"updated_at":   UnixTime(nowMs),
+		"updated_at":   nowMs,
 	}).Error
 }
 
@@ -276,7 +276,7 @@ func (s *PositionStore) UpdatePositionExchangeInfo(id int64, exchangeID, exchang
 	return s.db.Model(&TraderPosition{}).Where("id = ?", id).Updates(map[string]interface{}{
 		"exchange_id":   exchangeID,
 		"exchange_type": exchangeType,
-		"updated_at":    UnixTime(nowMs),
+		"updated_at":    nowMs,
 	}).Error
 }
 
@@ -294,15 +294,15 @@ func (s *PositionStore) ClosePositionFully(id int64, exitPrice float64, exitOrde
 	}
 
 	return s.db.Model(&TraderPosition{}).Where("id = ?", id).Updates(map[string]interface{}{
-		"quantity":      quantity,
-		"exit_price":    exitPrice,
-		"exit_order_id": exitOrderID,
-		"exit_time":     UnixTime(exitTimeMs),
-		"realized_pnl":  totalRealizedPnL,
-		"fee":           totalFee,
-		"status":        "CLOSED",
-		"close_reason":  closeReason,
-		"updated_at":    UnixTime(time.Now().UTC().UnixMilli()),
+		"quantity":       quantity,
+		"exit_price":     exitPrice,
+		"exit_order_id":  exitOrderID,
+		"exit_time":      exitTimeMs,
+		"realized_pnl":   totalRealizedPnL,
+		"fee":            totalFee,
+		"status":         "CLOSED",
+		"close_reason":   closeReason,
+		"updated_at":     time.Now().UTC().UnixMilli(),
 	}).Error
 }
 
@@ -530,12 +530,12 @@ func (s *PositionStore) GetRecentTrades(traderID string, limit int) ([]RecentTra
 			EntryPrice:  pos.EntryPrice,
 			ExitPrice:   pos.ExitPrice,
 			RealizedPnL: pos.RealizedPnL,
-			EntryTime:   int64(pos.EntryTime) / 1000, // Convert ms to seconds for API compatibility
+			EntryTime:   pos.EntryTime / 1000, // Convert ms to seconds for API compatibility
 		}
 
 		if pos.ExitTime > 0 {
-			t.ExitTime = int64(pos.ExitTime) / 1000 // Convert ms to seconds
-			durationMs := int64(pos.ExitTime - pos.EntryTime)
+			t.ExitTime = pos.ExitTime / 1000 // Convert ms to seconds
+			durationMs := pos.ExitTime - pos.EntryTime
 			t.HoldDuration = formatDurationMs(durationMs)
 		}
 
@@ -727,8 +727,8 @@ func (s *PositionStore) GetHoldingTimeStats(traderID string) ([]HoldingTimeStats
 	}
 
 	rangeStats := map[string]*struct {
-		count    int
-		wins     int
+		count   int
+		wins    int
 		totalPnL float64
 	}{
 		"<1h":   {},
@@ -1098,18 +1098,18 @@ func (s *PositionStore) CreateFromClosedPnL(traderID, exchangeID, exchangeType s
 		Quantity:           record.Quantity,
 		EntryQuantity:      record.Quantity,
 		EntryPrice:         record.EntryPrice,
-		EntryTime:          UnixTime(entryTimeMs),
+		EntryTime:          entryTimeMs,
 		ExitPrice:          record.ExitPrice,
 		ExitOrderID:        record.OrderID,
-		ExitTime:           UnixTime(exitTimeMs),
+		ExitTime:           exitTimeMs,
 		RealizedPnL:        record.RealizedPnL,
 		Fee:                record.Fee,
 		Leverage:           record.Leverage,
 		Status:             "CLOSED",
 		CloseReason:        record.CloseType,
 		Source:             "sync",
-		CreatedAt:          UnixTime(nowMs),
-		UpdatedAt:          UnixTime(nowMs),
+		CreatedAt:          nowMs,
+		UpdatedAt:          nowMs,
 	}
 
 	err = s.db.Create(pos).Error
@@ -1137,7 +1137,7 @@ func (s *PositionStore) GetLastClosedPositionTime(traderID string) (int64, error
 		return 0, fmt.Errorf("failed to get last closed position time: %w", err)
 	}
 
-	return int64(pos.ExitTime), nil
+	return pos.ExitTime, nil
 }
 
 // CreateOpenPosition creates an open position
@@ -1193,12 +1193,12 @@ func (s *PositionStore) ClosePositionWithAccurateData(id int64, exitPrice float6
 	return s.db.Model(&TraderPosition{}).Where("id = ?", id).Updates(map[string]interface{}{
 		"exit_price":    exitPrice,
 		"exit_order_id": exitOrderID,
-		"exit_time":     UnixTime(exitTimeMs),
+		"exit_time":     exitTimeMs,
 		"realized_pnl":  realizedPnL,
 		"fee":           fee,
 		"status":        "CLOSED",
 		"close_reason":  closeReason,
-		"updated_at":    UnixTime(time.Now().UTC().UnixMilli()),
+		"updated_at":    time.Now().UTC().UnixMilli(),
 	}).Error
 }
 

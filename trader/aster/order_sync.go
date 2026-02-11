@@ -75,7 +75,6 @@ func (t *AsterTrader) SyncOrdersFromAster(traderID string, exchangeID string, ex
 			ExchangeID:      exchangeID,   // UUID
 			ExchangeType:    exchangeType, // Exchange type
 			ExchangeOrderID: trade.TradeID,
-			ClientOrderID:   fmt.Sprintf("sync_%s", trade.TradeID),
 			Symbol:          symbol,
 			Side:            side,
 			PositionSide:    "BOTH", // Aster uses one-way position mode
@@ -87,9 +86,9 @@ func (t *AsterTrader) SyncOrdersFromAster(traderID string, exchangeID string, ex
 			FilledQuantity:  trade.Quantity,
 			AvgFillPrice:    trade.Price,
 			Commission:      trade.Fee,
-			FilledAt:        store.UnixTime(tradeTimeMs),
-			CreatedAt:       store.UnixTime(tradeTimeMs),
-			UpdatedAt:       store.UnixTime(tradeTimeMs),
+			FilledAt:        tradeTimeMs,
+			CreatedAt:       tradeTimeMs,
+			UpdatedAt:       tradeTimeMs,
 		}
 
 		// Insert order record
@@ -115,7 +114,7 @@ func (t *AsterTrader) SyncOrdersFromAster(traderID string, exchangeID string, ex
 			CommissionAsset: "USDT",
 			RealizedPnL:     trade.RealizedPnL,
 			IsMaker:         false,
-			CreatedAt:       store.UnixTime(tradeTimeMs),
+			CreatedAt:       tradeTimeMs,
 		}
 
 		if err := orderStore.CreateFill(fillRecord); err != nil {
@@ -140,12 +139,6 @@ func (t *AsterTrader) SyncOrdersFromAster(traderID string, exchangeID string, ex
 	}
 
 	logger.Infof("✅ Aster order sync completed: %d new trades synced", syncedCount)
-
-	// Reconcile positions to fix ghost positions
-	if err := st.Position().ReconcilePositions(t, traderID, exchangeID); err != nil {
-		logger.Infof("⚠️ Failed to reconcile positions: %v", err)
-	}
-
 	return nil
 }
 
