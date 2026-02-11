@@ -110,11 +110,11 @@ func (s *TraderStore) Update(trader *Trader) error {
 		trader.ID, trader.Name, trader.AIModelID, trader.StrategyID)
 
 	updates := map[string]interface{}{
-		"name":                trader.Name,
-		"ai_model_id":         trader.AIModelID,
-		"exchange_id":         trader.ExchangeID,
-		"strategy_id":         trader.StrategyID,
-		"is_cross_margin":     trader.IsCrossMargin,
+		"name":           trader.Name,
+		"ai_model_id":    trader.AIModelID,
+		"exchange_id":    trader.ExchangeID,
+		"strategy_id":    trader.StrategyID,
+		"is_cross_margin": trader.IsCrossMargin,
 		"show_in_competition": trader.ShowInCompetition,
 	}
 
@@ -203,7 +203,7 @@ func (s *TraderStore) GetFullConfig(userID, traderID string) (*TraderFullConfig,
 // getStrategyByID internal method: gets strategy by ID
 func (s *TraderStore) getStrategyByID(userID, strategyID string) (*Strategy, error) {
 	var strategy Strategy
-	err := s.db.Where("id = ? AND user_id = ?", strategyID, userID).
+	err := s.db.Where("id = ? AND (user_id = ? OR is_default = ?)", strategyID, userID, true).
 		First(&strategy).Error
 	if err != nil {
 		return nil, err
@@ -217,6 +217,12 @@ func (s *TraderStore) getActiveOrDefaultStrategy(userID string) (*Strategy, erro
 
 	// First try to get user's active strategy
 	err := s.db.Where("user_id = ? AND is_active = ?", userID, true).First(&strategy).Error
+	if err == nil {
+		return &strategy, nil
+	}
+
+	// Fallback to system default strategy
+	err = s.db.Where("is_default = ?", true).First(&strategy).Error
 	if err != nil {
 		return nil, err
 	}
