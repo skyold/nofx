@@ -47,6 +47,9 @@ func (at *AutoTrader) RunChaosCycle() error {
 		return err
 	}
 
+	// Save equity snapshot (Align with nofx AutoTrader behavior)
+	at.saveChaosEquitySnapshot(ctx)
+
 	// 2. Execute Chaos Engine (LLM call)
 	chaosDecision, err := chaos.GetChaosDecisions(ctx, at.mcpClient)
 	if err != nil {
@@ -284,6 +287,27 @@ func (at *AutoTrader) buildChaosContext() (*chaos.ChaosContext, error) {
 	}
 
 	return chaosCtx, nil
+}
+
+// saveChaosEquitySnapshot saves equity snapshot for chaos mode (matches auto_trader behavior)
+func (at *AutoTrader) saveChaosEquitySnapshot(ctx *chaos.ChaosContext) {
+	if at.store == nil || ctx == nil {
+		return
+	}
+
+	snapshot := &store.EquitySnapshot{
+		TraderID:      at.id,
+		Timestamp:     time.Now().UTC(),
+		TotalEquity:   ctx.Account.TotalEquity,
+		Balance:       ctx.Account.TotalEquity - ctx.Account.UnrealizedPnL,
+		UnrealizedPnL: ctx.Account.UnrealizedPnL,
+		PositionCount: ctx.Account.PositionCount,
+		MarginUsedPct: ctx.Account.MarginUsedPct,
+	}
+
+	if err := at.store.Equity().Save(snapshot); err != nil {
+		logger.Infof("⚠️ Failed to save equity snapshot: %v", err)
+	}
 }
 
 func (at *AutoTrader) executeChaosDecision(result *chaos.DecisionResult, ctx *chaos.ChaosContext) ([]store.DecisionAction, []string) {
