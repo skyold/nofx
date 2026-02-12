@@ -222,6 +222,8 @@ func (at *AutoTrader) buildChaosContext() (*chaos.ChaosContext, error) {
 	}
 
 	symbolsToFetch := make(map[string]bool)
+	// Always fetch BTC data for global market context
+	symbolsToFetch["BTCUSDT"] = true
 	for _, p := range positionSnapshots {
 		symbolsToFetch[p.Symbol] = true
 	}

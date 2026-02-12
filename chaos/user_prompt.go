@@ -22,37 +22,39 @@ func (e *ChaosEngine) BuildUserPromptFromChaosContext(ctx *ChaosContext) string 
 	sb.WriteString("# 🌀 Chaos Mode User Prompt\n\n")
 
 	// 1. System Status & Environment
-	sb.WriteString(e.buildSystemStatusFromContext(ctx))
+	sb.WriteString(e.buildHeader(ctx))
 
-	// 2. Account Information
-	sb.WriteString(e.buildAccountInfoFromContext(ctx))
+	// 2. Global Market Context (BTC)
+	sb.WriteString(e.buildGlobalContext(ctx))
 
-	// 3. Recent Trades
-	sb.WriteString(e.buildRecentTradesFromContext(ctx))
+	// 3. Account Information
+	sb.WriteString(e.buildAccountStatus(ctx))
 
-	// 4. Historical Statistics
-	sb.WriteString(e.buildHistoricalStatsFromContext(ctx))
+	// 4. Trading Performance (Stats & History)
+	sb.WriteString(e.buildTradingPerformance(ctx))
 
 	// 5. Current Positions
-	sb.WriteString(e.buildPositionsFromContext(ctx))
+	sb.WriteString(e.buildPositions(ctx))
 
 	// 6. Candidate Coins (Market Data)
-	sb.WriteString(e.buildCandidateCoinsFromContext(ctx))
+	sb.WriteString(e.buildCandidates(ctx))
 
 	// 7. Rankings (OI, Netflow, Price)
-	sb.WriteString(e.buildRankingsFromContext(ctx))
+	sb.WriteString(e.buildRankings(ctx))
 
 	sb.WriteString("---\n\n")
 
 	return sb.String()
 }
 
-func (e *ChaosEngine) buildSystemStatusFromContext(ctx *ChaosContext) string {
-	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("Time: %s | Period: #%d | Runtime: %d minutes\n\n",
-		ctx.CurrentTime, ctx.CallCount, ctx.RuntimeMinutes))
+func (e *ChaosEngine) buildHeader(ctx *ChaosContext) string {
+	return fmt.Sprintf("Time: %s | Period: #%d | Runtime: %d minutes\n\n",
+		ctx.CurrentTime, ctx.CallCount, ctx.RuntimeMinutes)
+}
 
-	// BTC market context
+func (e *ChaosEngine) buildGlobalContext(ctx *ChaosContext) string {
+	var sb strings.Builder
+	// BTC market context as global indicator
 	if btcData, hasBTC := ctx.MarketDataMap["BTCUSDT"]; hasBTC {
 		sb.WriteString(fmt.Sprintf("BTC: %.2f (1h: %+.2f%%, 4h: %+.2f%%) | MACD: %.4f | RSI: %.2f\n\n",
 			btcData.CurrentPrice, btcData.PriceChange1h, btcData.PriceChange4h,
@@ -61,7 +63,7 @@ func (e *ChaosEngine) buildSystemStatusFromContext(ctx *ChaosContext) string {
 	return sb.String()
 }
 
-func (e *ChaosEngine) buildAccountInfoFromContext(ctx *ChaosContext) string {
+func (e *ChaosEngine) buildAccountStatus(ctx *ChaosContext) string {
 	return fmt.Sprintf("Account: Equity %.2f | Balance %.2f (%.1f%%) | PnL %+.2f%% | Margin %.1f%% | Positions %d\n\n",
 		ctx.Account.TotalEquity,
 		ctx.Account.AvailableBalance,
@@ -71,7 +73,19 @@ func (e *ChaosEngine) buildAccountInfoFromContext(ctx *ChaosContext) string {
 		ctx.Account.PositionCount)
 }
 
-func (e *ChaosEngine) buildRecentTradesFromContext(ctx *ChaosContext) string {
+func (e *ChaosEngine) buildTradingPerformance(ctx *ChaosContext) string {
+	var sb strings.Builder
+
+	// 1. Historical Stats
+	sb.WriteString(e.buildHistoricalStats(ctx))
+
+	// 2. Recent Trades
+	sb.WriteString(e.buildRecentTrades(ctx))
+
+	return sb.String()
+}
+
+func (e *ChaosEngine) buildRecentTrades(ctx *ChaosContext) string {
 	if len(ctx.RecentOrders) == 0 {
 		return ""
 	}
@@ -92,7 +106,7 @@ func (e *ChaosEngine) buildRecentTradesFromContext(ctx *ChaosContext) string {
 	return sb.String()
 }
 
-func (e *ChaosEngine) buildHistoricalStatsFromContext(ctx *ChaosContext) string {
+func (e *ChaosEngine) buildHistoricalStats(ctx *ChaosContext) string {
 	if ctx.TradingStats == nil || ctx.TradingStats.TotalTrades == 0 {
 		return ""
 	}
@@ -155,7 +169,7 @@ func (e *ChaosEngine) buildHistoricalStatsFromContext(ctx *ChaosContext) string 
 	return sb.String()
 }
 
-func (e *ChaosEngine) buildPositionsFromContext(ctx *ChaosContext) string {
+func (e *ChaosEngine) buildPositions(ctx *ChaosContext) string {
 	var sb strings.Builder
 	if len(ctx.Positions) > 0 {
 		sb.WriteString("## Current Positions\n")
@@ -208,7 +222,7 @@ func (e *ChaosEngine) formatPositionInfoFromContext(index int, pos kernel.Positi
 	return sb.String()
 }
 
-func (e *ChaosEngine) buildCandidateCoinsFromContext(ctx *ChaosContext) string {
+func (e *ChaosEngine) buildCandidates(ctx *ChaosContext) string {
 	var sb strings.Builder
 
 	// Identify coins already in positions to avoid duplication
@@ -249,7 +263,7 @@ func (e *ChaosEngine) buildCandidateCoinsFromContext(ctx *ChaosContext) string {
 	return sb.String()
 }
 
-func (e *ChaosEngine) buildRankingsFromContext(ctx *ChaosContext) string {
+func (e *ChaosEngine) buildRankings(ctx *ChaosContext) string {
 	var sb strings.Builder
 	// Get language for market data formatting
 	nofxosLang := nofxos.LangEnglish
