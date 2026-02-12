@@ -78,7 +78,7 @@ func (t *FuturesTrader) SyncOrdersFromBinance(traderID string, exchangeID string
 		logger.Infof("  ⚠️ Failed to get commission symbols: %v", err)
 	} else {
 		if len(commissionSymbols) > 0 {
-			logger.Infof("  📋 COMMISSION symbols found: %d - %v", len(commissionSymbols), commissionSymbols)
+			logger.Debugf("  📋 COMMISSION symbols found: %d - %v", len(commissionSymbols), commissionSymbols)
 			for _, s := range commissionSymbols {
 				symbolMap[s] = true
 			}
@@ -88,7 +88,7 @@ func (t *FuturesTrader) SyncOrdersFromBinance(traderID string, exchangeID string
 	// Method 2: Always include active positions (catches trades that COMMISSION missed)
 	positionSymbols := t.getPositionSymbols()
 	if len(positionSymbols) > 0 {
-		logger.Infof("  📋 Position symbols found: %d - %v", len(positionSymbols), positionSymbols)
+		logger.Debugf("  📋 Position symbols found: %d - %v", len(positionSymbols), positionSymbols)
 		for _, s := range positionSymbols {
 			symbolMap[s] = true
 		}
@@ -96,7 +96,7 @@ func (t *FuturesTrader) SyncOrdersFromBinance(traderID string, exchangeID string
 
 	// Method 3: Include symbols from recent fills in DB (in case some were partially synced)
 	// recentSymbols, _ := orderStore.GetRecentFillSymbolsByExchange(exchangeID, lastSyncTimeMs)
-	// logger.Infof("  📋 Recent fill symbols found: %d - %v", len(recentSymbols), recentSymbols)
+	// logger.Debugf("  📋 Recent fill symbols found: %d - %v", len(recentSymbols), recentSymbols)
 	// for _, s := range recentSymbols {
 	// 	symbolMap[s] = true
 	// }
@@ -110,7 +110,7 @@ func (t *FuturesTrader) SyncOrdersFromBinance(traderID string, exchangeID string
 		logger.Infof("  ⚠️ Failed to get PnL symbols: %v", err)
 	} else {
 		if len(pnlSymbols) > 0 {
-			logger.Infof("  📋 REALIZED_PNL symbols found: %d - %v", len(pnlSymbols), pnlSymbols)
+			logger.Debugf("  📋 REALIZED_PNL symbols found: %d - %v", len(pnlSymbols), pnlSymbols)
 			for _, s := range pnlSymbols {
 				symbolMap[s] = true
 			}
