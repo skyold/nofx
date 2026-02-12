@@ -168,7 +168,7 @@ func (e *ChaosEngine) buildPositionsFromContext(ctx *ChaosContext) string {
 	return sb.String()
 }
 
-func (e *ChaosEngine) formatPositionInfoFromContext(index int, pos PositionSnapshot, ctx *ChaosContext) string {
+func (e *ChaosEngine) formatPositionInfoFromContext(index int, pos kernel.PositionInfo, ctx *ChaosContext) string {
 	var sb strings.Builder
 
 	holdingDuration := ""

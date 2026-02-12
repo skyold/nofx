@@ -39,33 +39,24 @@ type DecisionResult struct {
 // ChaosContext contains all information needed for Chaos mode execution
 // independent from kernel.Context
 type ChaosContext struct {
-	// Basic info
-	CurrentTime    string
-	RuntimeMinutes int
-	CallCount      int
+    CurrentTime     string                             `json:"current_time"`
+	RuntimeMinutes  int                                `json:"runtime_minutes"`
+	CallCount       int                                `json:"call_count"`
+	Account         kernel.AccountInfo                 `json:"account"`
+	Positions       []kernel.PositionInfo              `json:"positions"`
+	CandidateCoins  []kernel.CandidateCoin             `json:"candidate_coins"`
+	TradingStats    *kernel.TradingStats               `json:"trading_stats,omitempty"`
+	RecentOrders    []kernel.RecentOrder               `json:"recent_orders,omitempty"`
+	MarketDataMap   map[string]*market.Data            `json:"-"`
+	MultiTFMarket   map[string]map[string]*market.Data `json:"-"`
+	OITopDataMap    map[string]*kernel.OITopData       `json:"-"`
+	QuantDataMap    map[string]*kernel.QuantData       `json:"-"`
+	OIRankingData      *nofxos.OIRankingData           `json:"-"` // Market-wide OI ranking data
+	NetFlowRankingData *nofxos.NetFlowRankingData      `json:"-"` // Market-wide fund flow ranking data
+	PriceRankingData   *nofxos.PriceRankingData        `json:"-"` // Market-wide price gainers/losers
+	Timeframes         []string                        `json:"-"`
+	Config             *ChaosConfig                    `json:"config,omitempty"`
 
-	// Configuration
-	Config *ChaosConfig
-
-	// Account & Positions
-	Account   AccountSnapshot
-	Positions []PositionSnapshot
-
-	// Market Data
-	CandidateCoins []CandidateCoin
-	MarketDataMap  map[string]*market.Data
-	OITopDataMap   map[string]*OITopData
-	// Optional Quant Data
-	QuantDataMap map[string]*kernel.QuantData
-
-	// Rankings
-	OIRankingData      *nofxos.OIRankingData
-	NetFlowRankingData *nofxos.NetFlowRankingData
-	PriceRankingData   *nofxos.PriceRankingData
-	TradingStats       *kernel.TradingStats
-	RecentOrders       []kernel.RecentOrder
-
-	
 }
 
 // ChaosConfig mirrors the store.ChaosStrategyConfig but can be extended
@@ -76,42 +67,4 @@ type ChaosConfig struct {
 	Indicators         store.IndicatorConfig
 }
 
-// AccountSnapshot independent account info
-type AccountSnapshot struct {
-	TotalEquity      float64 `json:"total_equity"`
-	AvailableBalance float64 `json:"available_balance"`
-	UnrealizedPnL    float64 `json:"unrealized_pnl"`
-	TotalPnLPct      float64 `json:"total_pnl_pct"`
-	MarginUsedPct    float64 `json:"margin_used_pct"`
-	PositionCount    int     `json:"position_count"`
-}
 
-// PositionSnapshot independent position info
-type PositionSnapshot struct {
-	Symbol           string  `json:"symbol"`
-	Side             string  `json:"side"`
-	EntryPrice       float64 `json:"entry_price"`
-	MarkPrice        float64 `json:"mark_price"`
-	Quantity         float64 `json:"quantity"`
-	Leverage         int     `json:"leverage"`
-	UnrealizedPnL    float64 `json:"unrealized_pnl"`
-	UnrealizedPnLPct float64 `json:"unrealized_pnl_pct"`
-	PeakPnLPct       float64 `json:"peak_pnl_pct"`
-	MarginUsed       float64 `json:"margin_used"`
-	LiquidationPrice float64 `json:"liquidation_price"`
-	UpdateTime       int64   `json:"update_time"`
-}
-
-// CandidateCoin independent candidate coin
-type CandidateCoin struct {
-	Symbol  string   `json:"symbol"`
-	Sources []string `json:"sources"`
-}
-
-// OITopData independent OI Top data
-type OITopData struct {
-	Rank              int     `json:"rank"`
-	OIDeltaPercent    float64 `json:"oi_delta_percent"`
-	OIDeltaValue      float64 `json:"oi_delta_value"`
-	PriceDeltaPercent float64 `json:"price_delta_percent"`
-}

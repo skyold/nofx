@@ -3,6 +3,7 @@ package trader
 import (
 	"fmt"
 	"nofx/chaos"
+	"nofx/kernel"
 	"nofx/logger"
 	"nofx/market"
 	"nofx/provider/nofxos"
@@ -120,7 +121,7 @@ func (at *AutoTrader) buildChaosContext() (*chaos.ChaosContext, error) {
 	}
 
 	// Convert positions to Chaos format
-	var positionSnapshots []chaos.PositionSnapshot
+	var positionSnapshots []kernel.PositionInfo
 	for _, pos := range positions {
 		symbol := pos["symbol"].(string)
 		side := pos["side"].(string)
@@ -150,7 +151,7 @@ func (at *AutoTrader) buildChaosContext() (*chaos.ChaosContext, error) {
 			pnlPct = (unrealizedPnl / marginUsed) * 100
 		}
 
-		positionSnapshots = append(positionSnapshots, chaos.PositionSnapshot{
+		positionSnapshots = append(positionSnapshots, kernel.PositionInfo{
 			Symbol:           symbol,
 			Side:             side,
 			EntryPrice:       entryPrice,
@@ -167,7 +168,7 @@ func (at *AutoTrader) buildChaosContext() (*chaos.ChaosContext, error) {
 	}
 
 	// 3. Prepare Candidate Coins
-	candidateCoins := []chaos.CandidateCoin{}
+	candidateCoins := []kernel.CandidateCoin{}
 	existingCandidateMap := make(map[string]bool)
 
 	// 3.1 Fetch candidates from strategy
@@ -175,7 +176,7 @@ func (at *AutoTrader) buildChaosContext() (*chaos.ChaosContext, error) {
 		candidates, err := at.strategyEngine.GetCandidateCoins()
 		if err == nil {
 			for _, c := range candidates {
-				candidateCoins = append(candidateCoins, chaos.CandidateCoin{
+				candidateCoins = append(candidateCoins, kernel.CandidateCoin{
 					Symbol:  c.Symbol,
 					Sources: c.Sources,
 				})
@@ -189,7 +190,7 @@ func (at *AutoTrader) buildChaosContext() (*chaos.ChaosContext, error) {
 	for _, pos := range positionSnapshots {
 		if !existingCandidateMap[pos.Symbol] {
 			logger.Infof("➕ Merging held position %s into candidate coins for management", pos.Symbol)
-			candidateCoins = append(candidateCoins, chaos.CandidateCoin{
+			candidateCoins = append(candidateCoins, kernel.CandidateCoin{
 				Symbol:  pos.Symbol,
 				Sources: []string{"Existing Position"},
 			})
@@ -238,7 +239,7 @@ func (at *AutoTrader) buildChaosContext() (*chaos.ChaosContext, error) {
 	}
 
 	// 5. Get OI Top Data
-	oiTopMap := make(map[string]*chaos.OITopData)
+	oiTopMap := make(map[string]*kernel.OITopData)
 	if chaosConfig.CoinSource.UseOITop {
 		apiKey := chaosConfig.Indicators.NofxOSAPIKey
 		if apiKey == "" {
@@ -248,7 +249,7 @@ func (at *AutoTrader) buildChaosContext() (*chaos.ChaosContext, error) {
 		oiPositions, err := client.GetOITopPositions()
 		if err == nil {
 			for _, p := range oiPositions {
-				oiTopMap[p.Symbol] = &chaos.OITopData{
+				oiTopMap[p.Symbol] = &kernel.OITopData{
 					Rank:              p.Rank,
 					OIDeltaPercent:    p.OIDeltaPercent,
 					OIDeltaValue:      p.OIDeltaValue,
@@ -269,7 +270,7 @@ func (at *AutoTrader) buildChaosContext() (*chaos.ChaosContext, error) {
 			PromptVariant: chaosConfig.PromptVariant,
 			Indicators:    indicatorsConfig,
 		},
-		Account: chaos.AccountSnapshot{
+		Account: kernel.AccountInfo{
 			TotalEquity:      totalEquity,
 			AvailableBalance: availableBalance,
 			UnrealizedPnL:    totalUnrealizedProfit,
