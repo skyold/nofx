@@ -378,9 +378,9 @@ func (s *Server) handlePreviewPrompt(c *gin.Context) {
 	}
 
 	var req struct {
-		Config          store.StrategyConfig `json:"config" binding:"required"`
-		AccountEquity   float64              `json:"account_equity"`
-		PromptVariant   string               `json:"prompt_variant"`
+		Config        store.StrategyConfig `json:"config" binding:"required"`
+		AccountEquity float64              `json:"account_equity"`
+		PromptVariant string               `json:"prompt_variant"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -562,9 +562,9 @@ func (s *Server) handleStrategyTestRun(c *gin.Context) {
 		chaosEngine := chaos.NewChaosEngine(&req.Config)
 
 		// 1. Build Chaos Context natively
-		var chaosCandidates []chaos.CandidateCoin
+		var chaosCandidates []kernel.CandidateCoin
 		for _, c := range candidates {
-			chaosCandidates = append(chaosCandidates, chaos.CandidateCoin{
+			chaosCandidates = append(chaosCandidates, kernel.CandidateCoin{
 				Symbol:  c.Symbol,
 				Sources: c.Sources,
 			})
@@ -580,11 +580,11 @@ func (s *Server) handleStrategyTestRun(c *gin.Context) {
 				PromptVariant: req.PromptVariant,
 				Indicators:    req.Config.Indicators,
 			},
-			Account: chaos.AccountSnapshot{
+			Account: kernel.AccountInfo{
 				TotalEquity:      1000.0,
 				AvailableBalance: 1000.0,
 			},
-			Positions:          []chaos.PositionSnapshot{},
+			Positions:          []kernel.PositionInfo{},
 			CandidateCoins:     chaosCandidates,
 			MarketDataMap:      marketDataMap,
 			QuantDataMap:       quantDataMap,
@@ -701,4 +701,3 @@ func (s *Server) runRealAITest(userID, modelID, systemPrompt, userPrompt string)
 
 	return response, nil
 }
-
