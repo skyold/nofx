@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"nofx/chaos"
 	"nofx/logger"
 	"os"
 	"path/filepath"
@@ -498,7 +499,15 @@ func (r *Runner) buildDecisionContext(ts int64, marketData map[string]*market.Da
 	positions := r.convertPositions(priceMap)
 
 	// Get candidate coins from strategy engine (includes source info)
-	candidateCoins, err := r.strategyEngine.GetCandidateCoins()
+	strategyConfig := r.strategyEngine.GetConfig()
+	var candidateCoins []kernel.CandidateCoin
+	var err error
+	if strategyConfig.StrategyType == "chaos_trading" {
+		chaosEngine := chaos.NewChaosEngine(strategyConfig)
+		candidateCoins, err = chaosEngine.GetCandidateCoins()
+	} else {
+		candidateCoins, err = r.strategyEngine.GetCandidateCoins()
+	}
 	if err != nil {
 		// Fallback to simple list if strategy engine fails
 		candidateCoins = make([]kernel.CandidateCoin, 0, len(r.cfg.Symbols))
@@ -524,7 +533,6 @@ func (r *Runner) buildDecisionContext(ts int64, marketData map[string]*market.Da
 	}
 
 	// Fetch quantitative data if enabled in strategy (uses current data as approximation)
-	strategyConfig := r.strategyEngine.GetConfig()
 	if strategyConfig.Indicators.EnableQuantData {
 		// Collect symbols to query (candidate coins + position coins)
 		symbolSet := make(map[string]bool)

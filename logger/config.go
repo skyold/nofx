@@ -2,7 +2,7 @@ package logger
 
 // Config is the logger configuration (simplified version)
 type Config struct {
-	Level string `json:"level"` // Log level: debug, info, warn, error (default: warn)
+	Level string `json:"level"` // Log level: debug, info, warn, error (default: info)
 }
 
 // SetDefaults sets default values
