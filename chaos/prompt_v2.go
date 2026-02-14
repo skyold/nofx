@@ -22,7 +22,13 @@ func (e *ChaosEngine) BuildCandidatesJSON(ctx *ChaosContext) string {
 		positionSymbols[market.Normalize(pos.Symbol)] = true
 	}
 
-	targetTimeframes := []string{"15m", "1h", "4h"}
+	targetTimeframes := ctx.Timeframes
+	if len(targetTimeframes) == 0 && ctx.Config != nil && len(ctx.Config.Indicators.Klines.SelectedTimeframes) > 0 {
+		targetTimeframes = ctx.Config.Indicators.Klines.SelectedTimeframes
+	}
+	if len(targetTimeframes) == 0 {
+		targetTimeframes = []string{"15m", "1h", "4h"}
+	}
 
 	for _, coin := range ctx.CandidateCoins {
 		normalizedSymbol := market.Normalize(coin.Symbol)
@@ -43,8 +49,8 @@ func (e *ChaosEngine) BuildCandidatesJSON(ctx *ChaosContext) string {
 		for _, tf := range targetTimeframes {
 			if tfData, hasData := marketData.TimeframeData[tf]; hasData {
 				candidate.Timeframes[tf] = TimeframeJSON{
-					Signals:    e.buildSignals(marketData, tfData),
-					Indicators: e.buildIndicators(tfData),
+					Signals:    e.buildSignals(marketData, tfData, ctx.Config),
+					Indicators: e.buildIndicators(tfData, ctx.Config),
 					Klines:     e.buildKlines(tfData),
 				}
 			}
@@ -107,11 +113,15 @@ type KeyLevelsJSON struct {
 }
 
 type IndicatorsJSON struct {
-	EMA20    []float64 `json:"ema20"`
-	EMA50    []float64 `json:"ema50"`
-	RSI7     []float64 `json:"rsi7"`
-	RSI14    []float64 `json:"rsi14"`
-	MACDHist []float64 `json:"macd_hist"`
+	EMA20    []float64 `json:"ema20,omitempty"`
+	EMA50    []float64 `json:"ema50,omitempty"`
+	RSI7     []float64 `json:"rsi7,omitempty"`
+	RSI14    []float64 `json:"rsi14,omitempty"`
+	MACD     []float64 `json:"macd,omitempty"`
+	ATR      float64   `json:"atr,omitempty"`
+	BOLLUpper  []float64 `json:"boll_upper,omitempty"`
+	BOLLMiddle []float64 `json:"boll_middle,omitempty"`
+	BOLLLower  []float64 `json:"boll_lower,omitempty"`
 }
 
 type KlinesJSON struct {
@@ -124,40 +134,42 @@ type KlinesJSON struct {
 // Builder Logic
 // ============================================================================
 
-func (e *ChaosEngine) buildSignals(md *market.Data, tf *market.TimeframeSeriesData) SignalsJSON {
+func (e *ChaosEngine) buildSignals(md *market.Data, tf *market.TimeframeSeriesData, cfg *ChaosConfig) SignalsJSON {
 	signals := SignalsJSON{}
 
-	// 1. RSI Signal (Current TF)
-	rsiVal := 50.0
-	if len(tf.RSI14Values) > 0 {
-		rsiVal = tf.RSI14Values[len(tf.RSI14Values)-1]
-	}
-	signals.RSI.Current = roundFloat(rsiVal, 1)
-	if rsiVal > 70 {
-		signals.RSI.State = "overbought"
-	} else if rsiVal < 30 {
-		signals.RSI.State = "oversold"
-	} else {
-		signals.RSI.State = "neutral"
-	}
+	enableEMA := cfg == nil || cfg.Indicators.EnableEMA
+	enableRSI := cfg == nil || cfg.Indicators.EnableRSI
 
-	if len(tf.RSI14Values) >= 3 {
-		prev := tf.RSI14Values[len(tf.RSI14Values)-2]
-		prev2 := tf.RSI14Values[len(tf.RSI14Values)-3]
-		if rsiVal > prev && prev > prev2 {
-			signals.RSI.Trend = "rising"
-		} else if rsiVal < prev && prev < prev2 {
-			signals.RSI.Trend = "falling"
+	if enableRSI {
+		rsiVal := 50.0
+		if len(tf.RSI14Values) > 0 {
+			rsiVal = tf.RSI14Values[len(tf.RSI14Values)-1]
+		}
+		signals.RSI.Current = roundFloat(rsiVal, 1)
+		if rsiVal > 70 {
+			signals.RSI.State = "overbought"
+		} else if rsiVal < 30 {
+			signals.RSI.State = "oversold"
 		} else {
-			signals.RSI.Trend = "flat"
+			signals.RSI.State = "neutral"
+		}
+
+		if len(tf.RSI14Values) >= 3 {
+			prev := tf.RSI14Values[len(tf.RSI14Values)-2]
+			prev2 := tf.RSI14Values[len(tf.RSI14Values)-3]
+			if rsiVal > prev && prev > prev2 {
+				signals.RSI.Trend = "rising"
+			} else if rsiVal < prev && prev < prev2 {
+				signals.RSI.Trend = "falling"
+			} else {
+				signals.RSI.Trend = "flat"
+			}
 		}
 	}
 
-	// 2. EMA Cross Signal (Current TF)
-	signals.EMACross = detectEMACross(tf.EMA20Values, tf.EMA50Values)
+	if enableEMA {
+		signals.EMACross = detectEMACross(tf.EMA20Values, tf.EMA50Values)
 
-	// 3. Market Regime & Trend Strength (Only for 1h and 4h)
-	if tf.Timeframe == "1h" || tf.Timeframe == "4h" {
 		if len(tf.EMA20Values) > 0 && len(tf.EMA50Values) > 0 {
 			ema20 := tf.EMA20Values[len(tf.EMA20Values)-1]
 			ema50 := tf.EMA50Values[len(tf.EMA50Values)-1]
@@ -177,7 +189,6 @@ func (e *ChaosEngine) buildSignals(md *market.Data, tf *market.TimeframeSeriesDa
 		}
 	}
 
-	// 4. Momentum (Current TF)
 	if md.PriceChange1h > 0.5 {
 		signals.Momentum = "strong_up"
 	} else if md.PriceChange1h < -0.5 {
@@ -188,7 +199,6 @@ func (e *ChaosEngine) buildSignals(md *market.Data, tf *market.TimeframeSeriesDa
 		signals.Momentum = "weak_down"
 	}
 
-	// 5. Key Levels (Filter by timeframe if possible, otherwise use global)
 	anchors := market.ComputeAnchors(md.TimeframeData)
 	for _, a := range anchors {
 		if a.Timeframe == tf.Timeframe {
@@ -200,7 +210,6 @@ func (e *ChaosEngine) buildSignals(md *market.Data, tf *market.TimeframeSeriesDa
 		}
 	}
 
-	// 6. Guardrail Levels (Global for the coin, but included in each TF for safety)
 	if md.LocalSupport > 0 {
 		signals.KeyLevels.LocalSupport = md.LocalSupport
 		if md.LocalSupportTime > 0 {
@@ -214,15 +223,35 @@ func (e *ChaosEngine) buildSignals(md *market.Data, tf *market.TimeframeSeriesDa
 	return signals
 }
 
-func (e *ChaosEngine) buildIndicators(tf *market.TimeframeSeriesData) IndicatorsJSON {
-	limit := 10 // Last 10 points
-	return IndicatorsJSON{
-		EMA20:    getLastN(tf.EMA20Values, limit),
-		EMA50:    getLastN(tf.EMA50Values, limit),
-		RSI7:     getLastN(tf.RSI7Values, limit),
-		RSI14:    getLastN(tf.RSI14Values, limit),
-		MACDHist: []float64{}, // Placeholder, as Histogram series is not in TimeframeSeriesData struct
+func (e *ChaosEngine) buildIndicators(tf *market.TimeframeSeriesData, cfg *ChaosConfig) IndicatorsJSON {
+	limit := 10
+	indicators := IndicatorsJSON{}
+
+	if cfg == nil || cfg.Indicators.EnableEMA {
+		indicators.EMA20 = getLastN(tf.EMA20Values, limit)
+		indicators.EMA50 = getLastN(tf.EMA50Values, limit)
 	}
+
+	if cfg == nil || cfg.Indicators.EnableRSI {
+		indicators.RSI7 = getLastN(tf.RSI7Values, limit)
+		indicators.RSI14 = getLastN(tf.RSI14Values, limit)
+	}
+
+	if cfg == nil || cfg.Indicators.EnableMACD {
+		indicators.MACD = getLastN(tf.MACDValues, limit)
+	}
+
+	if cfg == nil || cfg.Indicators.EnableATR {
+		indicators.ATR = roundFloat(tf.ATR14, 4)
+	}
+
+	if cfg == nil || cfg.Indicators.EnableBOLL {
+		indicators.BOLLUpper = getLastN(tf.BOLLUpper, limit)
+		indicators.BOLLMiddle = getLastN(tf.BOLLMiddle, limit)
+		indicators.BOLLLower = getLastN(tf.BOLLLower, limit)
+	}
+
+	return indicators
 }
 
 func (e *ChaosEngine) buildKlines(tf *market.TimeframeSeriesData) KlinesJSON {
