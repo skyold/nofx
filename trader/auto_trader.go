@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"nofx/chaos"
 	"nofx/experience"
 	"nofx/kernel"
 	"nofx/logger"
@@ -124,7 +125,8 @@ type AutoTrader struct {
 	mcpClient             mcp.AIClient
 	store                 *store.Store             // Data storage (decision records, etc.)
 	strategyEngine        *kernel.StrategyEngine // Strategy engine (uses strategy configuration)
-	cycleNumber           int                      // Current cycle number
+	chaosEngine           *chaos.ChaosEngine     // Chaos engine (uses strategy configuration)
+	cycleNumber           int                    // Current cycle number
 	initialBalance        float64
 	dailyPnL              float64
 	customPrompt          string // Custom trading strategy prompt
@@ -346,6 +348,12 @@ func NewAutoTrader(config AutoTraderConfig, st *store.Store, userID string) (*Au
 	strategyEngine := kernel.NewStrategyEngine(config.StrategyConfig)
 	logger.Infof("✓ [%s] Using strategy engine (strategy configuration loaded)", config.Name)
 
+	var chaosEngine *chaos.ChaosEngine
+	if config.StrategyConfig.StrategyType == "chaos_trading" {
+		chaosEngine = chaos.NewChaosEngine(config.StrategyConfig)
+		logger.Infof("✓ [%s] Using chaos engine (chaos mode detected)", config.Name)
+	}
+
 	return &AutoTrader{
 		id:                    config.ID,
 		name:                  config.Name,
@@ -358,6 +366,7 @@ func NewAutoTrader(config AutoTraderConfig, st *store.Store, userID string) (*Au
 		mcpClient:             mcpClient,
 		store:                 st,
 		strategyEngine:        strategyEngine,
+		chaosEngine:           chaosEngine,
 		cycleNumber:           cycleNumber,
 		initialBalance:        config.InitialBalance,
 		lastResetTime:         time.Now(),
@@ -903,17 +912,19 @@ func (at *AutoTrader) buildTradingContext() (*kernel.Context, error) {
 
 	// 3. Use strategy engine to get candidate coins (must have strategy engine)
 	var candidateCoins []kernel.CandidateCoin
-	if at.strategyEngine == nil {
+	if at.chaosEngine != nil && at.config.StrategyConfig.StrategyType == "chaos_trading" {
+		candidateCoins, err = at.chaosEngine.GetCandidateCoins()
+	} else if at.strategyEngine != nil {
+		candidateCoins, err = at.strategyEngine.GetCandidateCoins()
+	}
+
+	if err != nil {
+		// Log warning but don't fail - equity snapshot should still be saved
+		logger.Infof("⚠️ [%s] Failed to get candidate coins: %v (will use empty list)", at.name, err)
+	} else if len(candidateCoins) > 0 {
+		logger.Infof("📋 [%s] Strategy engine fetched candidate coins: %d", at.name, len(candidateCoins))
+	} else if at.strategyEngine == nil && at.chaosEngine == nil {
 		logger.Infof("⚠️ [%s] No strategy engine configured, skipping candidate coins", at.name)
-	} else {
-		coins, err := at.strategyEngine.GetCandidateCoins()
-		if err != nil {
-			// Log warning but don't fail - equity snapshot should still be saved
-			logger.Infof("⚠️ [%s] Failed to get candidate coins: %v (will use empty list)", at.name, err)
-		} else {
-			candidateCoins = coins
-			logger.Infof("📋 [%s] Strategy engine fetched candidate coins: %d", at.name, len(candidateCoins))
-		}
 	}
 
 	// 4. Calculate total P&L

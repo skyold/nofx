@@ -172,8 +172,8 @@ func (at *AutoTrader) buildChaosContext() (*chaos.ChaosContext, error) {
 	existingCandidateMap := make(map[string]bool)
 
 	// 3.1 Fetch candidates from strategy
-	if at.strategyEngine != nil {
-		candidates, err := at.strategyEngine.GetCandidateCoins()
+	if at.chaosEngine != nil {
+		candidates, err := at.chaosEngine.GetCandidateCoins()
 		if err == nil {
 			for _, c := range candidates {
 				candidateCoins = append(candidateCoins, kernel.CandidateCoin{
