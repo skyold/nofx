@@ -9,37 +9,48 @@ import (
 	"time"
 )
 
-// BuildUserPromptFromChaosContextV2 使用 ChaosContext 构建 V2 版本的 User Prompt。
+// BuildUserPromptFromChaosContext_v2 使用 ChaosContext 构建 V2 版本的 User Prompt。
 // 它采用与 V1 相同的构成逻辑，但使用新的 JSON 格式。
-func (e *ChaosEngine) BuildUserPromptFromChaosContextV2(ctx *ChaosContext) string {
+func (e *ChaosEngine) BuildUserPromptFromChaosContext_v2(ctx *ChaosContext) string {
 	if ctx == nil {
 		return ""
 	}
 	var sb strings.Builder
 
+	// 添加 Chaos 头部以增加可见性
 	sb.WriteString("# 🌀 Chaos 模式用户提示 (V2)\n\n")
 
 	sb.WriteString(e.getTechnicalIndicatorsReference())
 	sb.WriteString("\n\n")
 	sb.WriteString("---\n\n")
 
+	// 1. 系统状态与环境
 	sb.WriteString(e.buildHeader(ctx))
+
+	// 2. 全球市场背景 (BTC)
 	sb.WriteString(e.buildGlobalContext(ctx))
+
+	// 3. 账户信息
 	sb.WriteString(e.buildAccountStatus(ctx))
+
+	// 4. 交易表现 (统计与历史)
 	sb.WriteString(e.buildTradingPerformance(ctx))
+
+	// 5. 当前持仓
 	sb.WriteString(e.buildPositions(ctx))
 
+	// 6. 市场数据 (JSON 格式)
 	sb.WriteString("## 市场数据 (JSON 格式)\n\n")
-	sb.WriteString(e.BuildMarketDataV2(ctx))
+	sb.WriteString(e.BuildJsonMarketData(ctx))
 
 	sb.WriteString("---\n\n")
 
 	return sb.String()
 }
 
-// BuildMarketDataV2 generates the JSON market data part of User Prompt V2.
-func (e *ChaosEngine) BuildMarketDataV2(ctx *ChaosContext) string {
-	data := e.buildCompleteMarketDataV2(ctx)
+// BuildJsonMarketData generates the JSON market data part of User Prompt.
+func (e *ChaosEngine) BuildJsonMarketData(ctx *ChaosContext) string {
+	data := e.buildCompleteMarketData(ctx)
 	jsonData, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
 		return fmt.Sprintf("Error building JSON: %v", err)
@@ -243,17 +254,17 @@ position_pct = (当前价格 - 20根K线最低价) / (20根K线最高价 - 20根
 }
 
 // ============================================================================
-// Data Structures (V2 - Full Design)
+// Data Structures (JSON Design)
 // ============================================================================
 
-type MarketDataV2 struct {
-	Timestamp      string           `json:"timestamp"`
-	Account        AccountInfoV2    `json:"account"`
-	Candidates     []CandidateV2    `json:"candidates"`
-	MarketRankings MarketRankingsV2 `json:"market_rankings,omitempty"`
+type MarketData struct {
+	Timestamp      string         `json:"timestamp"`
+	Account        AccountInfo    `json:"account"`
+	Candidates     []Candidate    `json:"candidates"`
+	MarketRankings MarketRankings `json:"market_rankings,omitempty"`
 }
 
-type AccountInfoV2 struct {
+type AccountInfo struct {
 	Equity         float64 `json:"equity"`
 	Balance        float64 `json:"balance"`
 	PnlPct         float64 `json:"pnl_pct"`
@@ -261,94 +272,94 @@ type AccountInfoV2 struct {
 	PositionsCount int     `json:"positions_count"`
 }
 
-type CandidateV2 struct {
-	Symbol     string                 `json:"symbol"`
-	Timeframes map[string]TimeframeV2 `json:"timeframes"`
+type Candidate struct {
+	Symbol     string               `json:"symbol"`
+	Timeframes map[string]Timeframe `json:"timeframes"`
 }
 
-type TimeframeV2 struct {
-	Signals    SignalsV2    `json:"signals"`
-	Indicators IndicatorsV2 `json:"indicators"`
-	Klines     KlinesV2     `json:"klines"`
+type Timeframe struct {
+	Signals    Signals    `json:"signals"`
+	Indicators Indicators `json:"indicators"`
+	Klines     Klines     `json:"klines"`
 }
 
-type SignalsV2 struct {
-	MarketRegime           string               `json:"market_regime,omitempty"`
-	MarketRegimeConfidence string               `json:"market_regime_confidence,omitempty"`
-	TrendStrength          float64              `json:"trend_strength,omitempty"`
-	TrendStrengthLabel     string               `json:"trend_strength_label,omitempty"`
-	Momentum               string               `json:"momentum,omitempty"`
-	VolumePriceRelationship string              `json:"volume_price_relationship,omitempty"`
-	PricePosition          PricePositionV2      `json:"price_position,omitempty"`
-	VolatilityState        VolatilityStateV2    `json:"volatility_state,omitempty"`
-	KeyLevels              KeyLevelsV2          `json:"key_levels,omitempty"`
+type Signals struct {
+	MarketRegime            string          `json:"market_regime,omitempty"`
+	MarketRegimeConfidence  string          `json:"market_regime_confidence,omitempty"`
+	TrendStrength           float64         `json:"trend_strength,omitempty"`
+	TrendStrengthLabel      string          `json:"trend_strength_label,omitempty"`
+	Momentum                string          `json:"momentum,omitempty"`
+	VolumePriceRelationship string          `json:"volume_price_relationship,omitempty"`
+	PricePosition           PricePosition   `json:"price_position,omitempty"`
+	VolatilityState         VolatilityState `json:"volatility_state,omitempty"`
+	KeyLevels               KeyLevels       `json:"key_levels,omitempty"`
 }
 
-type PricePositionV2 struct {
+type PricePosition struct {
 	PctOfRange float64 `json:"pct_of_range,omitempty"`
 	Zone       string  `json:"zone,omitempty"`
 }
 
-type VolatilityStateV2 struct {
+type VolatilityState struct {
 	Classification string `json:"classification,omitempty"`
 	Trend          string `json:"trend,omitempty"`
 	SqueezeAlert   bool   `json:"squeeze_alert,omitempty"`
 }
 
-type KeyLevelsV2 struct {
-	Resistance    []KeyLevelV2 `json:"resistance,omitempty"`
-	Support       []KeyLevelV2 `json:"support,omitempty"`
-	CurrentPrice  float64       `json:"current_price,omitempty"`
+type KeyLevels struct {
+	Resistance   []KeyLevel `json:"resistance,omitempty"`
+	Support      []KeyLevel `json:"support,omitempty"`
+	CurrentPrice float64    `json:"current_price,omitempty"`
 }
 
-type KeyLevelV2 struct {
+type KeyLevel struct {
 	Price    float64 `json:"price"`
 	Type     string  `json:"type,omitempty"`
 	Strength string  `json:"strength,omitempty"`
 	Tests    int     `json:"tests,omitempty"`
 }
 
-type IndicatorsV2 struct {
-	EMA20     []float64       `json:"ema20,omitempty"`
-	EMA50     []float64       `json:"ema50,omitempty"`
-	RSI7      []float64       `json:"rsi7,omitempty"`
-	RSI14     []float64       `json:"rsi14,omitempty"`
-	MACD      MACDDataV2      `json:"macd,omitempty"`
-	ATR14     float64         `json:"atr14,omitempty"`
-	Bollinger BollingerDataV2 `json:"bollinger,omitempty"`
-	Volume    []float64       `json:"volume,omitempty"`
+type Indicators struct {
+	EMA20     []float64     `json:"ema20,omitempty"`
+	EMA50     []float64     `json:"ema50,omitempty"`
+	RSI7      []float64     `json:"rsi7,omitempty"`
+	RSI14     []float64     `json:"rsi14,omitempty"`
+	MACD      MACDData      `json:"macd,omitempty"`
+	ATR14     float64       `json:"atr14,omitempty"`
+	Bollinger BollingerData `json:"bollinger,omitempty"`
+	Volume    []float64     `json:"volume,omitempty"`
 }
 
-type MACDDataV2 struct {
+type MACDData struct {
 	Line      []float64 `json:"line,omitempty"`
 	Signal    []float64 `json:"signal,omitempty"`
 	Histogram []float64 `json:"histogram,omitempty"`
 }
 
-type BollingerDataV2 struct {
+type BollingerData struct {
 	Upper    []float64 `json:"upper,omitempty"`
 	Middle   []float64 `json:"middle,omitempty"`
 	Lower    []float64 `json:"lower,omitempty"`
 	WidthPct float64   `json:"width_pct,omitempty"`
 }
 
-type KlinesV2 struct {
+type Klines struct {
 	Date            string          `json:"date"`
 	Columns         []string        `json:"columns"`
 	Values          [][]interface{} `json:"values"`
 	CurrentBarIndex int             `json:"current_bar_index"`
 }
 
-type MarketRankingsV2 struct {
-	OIIncrease1h   []RankingItemV2 `json:"oi_increase_1h,omitempty"`
-	OIDecrease1h   []RankingItemV2 `json:"oi_decrease_1h,omitempty"`
-	FundInflow1h   []RankingItemV2 `json:"fund_inflow_1h,omitempty"`
-	FundOutflow1h  []RankingItemV2 `json:"fund_outflow_1h,omitempty"`
-	TopGainers1h   []RankingItemV2 `json:"top_gainers_1h,omitempty"`
-	TopLosers1h    []RankingItemV2 `json:"top_losers_1h,omitempty"`
+type MarketRankings struct {
+	OIIncrease1h  []RankingItem `json:"oi_increase_1h,omitempty"`
+	OIDecrease1h  []RankingItem `json:"oi_decrease_1h,omitempty"`
+	FundInflow1h  []RankingItem `json:"fund_inflow_1h,omitempty"`
+	FundOutflow1h []RankingItem `json:"fund_outflow_1h,omitempty"`
+	TopGainers1h  []RankingItem `json:"top_gainers_1h,omitempty"`
+	TopLosers1h   []RankingItem `json:"top_losers_1h,omitempty"`
 }
 
-type RankingItemV2 struct {
+type RankingItem struct {
 	Symbol    string  `json:"symbol"`
 	OIChange  float64 `json:"oi_change,omitempty"`
 	OIPct     float64 `json:"oi_pct,omitempty"`
@@ -364,18 +375,18 @@ type RankingItemV2 struct {
 // Builder Logic
 // ============================================================================
 
-func (e *ChaosEngine) buildCompleteMarketDataV2(ctx *ChaosContext) MarketDataV2 {
-	result := MarketDataV2{
+func (e *ChaosEngine) buildCompleteMarketData(ctx *ChaosContext) MarketData {
+	result := MarketData{
 		Timestamp: ctx.CurrentTime,
-		Account: AccountInfoV2{
+		Account: AccountInfo{
 			Equity:         ctx.Account.TotalEquity,
 			Balance:        ctx.Account.AvailableBalance,
 			PnlPct:         ctx.Account.TotalPnLPct,
 			MarginUsedPct:  ctx.Account.MarginUsedPct,
 			PositionsCount: ctx.Account.PositionCount,
 		},
-		Candidates:     []CandidateV2{},
-		MarketRankings: MarketRankingsV2{},
+		Candidates:     []Candidate{},
+		MarketRankings: MarketRankings{},
 	}
 
 	positionSymbols := make(map[string]bool)
@@ -402,17 +413,17 @@ func (e *ChaosEngine) buildCompleteMarketDataV2(ctx *ChaosContext) MarketDataV2 
 			continue
 		}
 
-		candidate := CandidateV2{
+		candidate := Candidate{
 			Symbol:     coin.Symbol,
-			Timeframes: make(map[string]TimeframeV2),
+			Timeframes: make(map[string]Timeframe),
 		}
 
 		for _, tf := range targetTimeframes {
 			if tfData, hasData := marketData.TimeframeData[tf]; hasData {
-				candidate.Timeframes[tf] = TimeframeV2{
-					Signals:    e.buildSignalsV2(marketData, tfData, ctx.Config),
-					Indicators: e.buildIndicatorsV2(tfData, ctx.Config),
-					Klines:     e.buildKlinesV2(tfData),
+				candidate.Timeframes[tf] = Timeframe{
+					Signals:    e.buildSignals(marketData, tfData, ctx.Config),
+					Indicators: e.buildIndicators(tfData, ctx.Config),
+					Klines:     e.buildKlines(tfData),
 				}
 			}
 		}
@@ -422,13 +433,13 @@ func (e *ChaosEngine) buildCompleteMarketDataV2(ctx *ChaosContext) MarketDataV2 
 		}
 	}
 
-	result.MarketRankings = e.buildMarketRankingsV2(ctx)
+	result.MarketRankings = e.buildMarketRankings(ctx)
 
 	return result
 }
 
-func (e *ChaosEngine) buildSignalsV2(md *market.Data, tf *market.TimeframeSeriesData, cfg *ChaosConfig) SignalsV2 {
-	signals := SignalsV2{}
+func (e *ChaosEngine) buildSignals(md *market.Data, tf *market.TimeframeSeriesData, cfg *ChaosConfig) Signals {
+	signals := Signals{}
 
 	enableEMA := cfg == nil || cfg.Indicators.EnableEMA
 	enableRSI := cfg == nil || cfg.Indicators.EnableRSI
@@ -489,7 +500,7 @@ func (e *ChaosEngine) buildSignalsV2(md *market.Data, tf *market.TimeframeSeries
 		}
 		if high20 > low20 {
 			pct := (md.CurrentPrice - low20) / (high20 - low20) * 100
-			signals.PricePosition = PricePositionV2{
+			signals.PricePosition = PricePosition{
 				PctOfRange: roundFloat(pct, 1),
 				Zone:       getZoneForPricePosition(pct),
 			}
@@ -498,7 +509,7 @@ func (e *ChaosEngine) buildSignalsV2(md *market.Data, tf *market.TimeframeSeries
 
 	signals.VolatilityState = e.calculateVolatilityState(tf)
 
-	signals.KeyLevels = e.buildKeyLevelsV2(md, tf)
+	signals.KeyLevels = e.buildKeyLevels(md, tf)
 
 	return signals
 }
@@ -568,8 +579,8 @@ func (e *ChaosEngine) calculateVolumePriceRelationship(tf *market.TimeframeSerie
 	}
 }
 
-func (e *ChaosEngine) calculateVolatilityState(tf *market.TimeframeSeriesData) VolatilityStateV2 {
-	state := VolatilityStateV2{
+func (e *ChaosEngine) calculateVolatilityState(tf *market.TimeframeSeriesData) VolatilityState {
+	state := VolatilityState{
 		Classification: "medium",
 		Trend:          "stable",
 		SqueezeAlert:   false,
@@ -613,15 +624,15 @@ func (e *ChaosEngine) calculateVolatilityState(tf *market.TimeframeSeriesData) V
 	return state
 }
 
-func (e *ChaosEngine) buildKeyLevelsV2(md *market.Data, tf *market.TimeframeSeriesData) KeyLevelsV2 {
-	keyLevels := KeyLevelsV2{
+func (e *ChaosEngine) buildKeyLevels(md *market.Data, tf *market.TimeframeSeriesData) KeyLevels {
+	keyLevels := KeyLevels{
 		CurrentPrice: md.CurrentPrice,
 	}
 
 	anchors := market.ComputeAnchors(map[string]*market.TimeframeSeriesData{tf.Timeframe: tf})
 	for _, a := range anchors {
 		if a.Timeframe == tf.Timeframe {
-			level := KeyLevelV2{
+			level := KeyLevel{
 				Price:    a.Price,
 				Type:     a.Type,
 				Strength: "medium",
@@ -636,7 +647,7 @@ func (e *ChaosEngine) buildKeyLevelsV2(md *market.Data, tf *market.TimeframeSeri
 	}
 
 	if md.LocalSupport > 0 {
-		keyLevels.Support = append(keyLevels.Support, KeyLevelV2{
+		keyLevels.Support = append(keyLevels.Support, KeyLevel{
 			Price:    md.LocalSupport,
 			Type:     "local_support",
 			Strength: "strong",
@@ -644,7 +655,7 @@ func (e *ChaosEngine) buildKeyLevelsV2(md *market.Data, tf *market.TimeframeSeri
 		})
 	}
 	if md.DailyLow > 0 {
-		keyLevels.Support = append(keyLevels.Support, KeyLevelV2{
+		keyLevels.Support = append(keyLevels.Support, KeyLevel{
 			Price:    md.DailyLow,
 			Type:     "daily_low",
 			Strength: "strong",
@@ -655,9 +666,9 @@ func (e *ChaosEngine) buildKeyLevelsV2(md *market.Data, tf *market.TimeframeSeri
 	return keyLevels
 }
 
-func (e *ChaosEngine) buildIndicatorsV2(tf *market.TimeframeSeriesData, cfg *ChaosConfig) IndicatorsV2 {
+func (e *ChaosEngine) buildIndicators(tf *market.TimeframeSeriesData, cfg *ChaosConfig) Indicators {
 	limit := 10
-	indicators := IndicatorsV2{}
+	indicators := Indicators{}
 
 	if cfg == nil || cfg.Indicators.EnableEMA {
 		indicators.EMA20 = getLastN(tf.EMA20Values, limit)
@@ -672,7 +683,7 @@ func (e *ChaosEngine) buildIndicatorsV2(tf *market.TimeframeSeriesData, cfg *Cha
 	if cfg == nil || cfg.Indicators.EnableMACD {
 		macdVals := getLastN(tf.MACDValues, limit*3)
 		if len(macdVals) >= limit*3 {
-			indicators.MACD = MACDDataV2{
+			indicators.MACD = MACDData{
 				Line:      macdVals[0:limit],
 				Signal:    macdVals[limit : 2*limit],
 				Histogram: macdVals[2*limit : 3*limit],
@@ -688,7 +699,7 @@ func (e *ChaosEngine) buildIndicatorsV2(tf *market.TimeframeSeriesData, cfg *Cha
 		upper := getLastN(tf.BOLLUpper, limit)
 		middle := getLastN(tf.BOLLMiddle, limit)
 		lower := getLastN(tf.BOLLLower, limit)
-		indicators.Bollinger = BollingerDataV2{
+		indicators.Bollinger = BollingerData{
 			Upper:  upper,
 			Middle: middle,
 			Lower:  lower,
@@ -712,8 +723,8 @@ func (e *ChaosEngine) buildIndicatorsV2(tf *market.TimeframeSeriesData, cfg *Cha
 	return indicators
 }
 
-func (e *ChaosEngine) buildKlinesV2(tf *market.TimeframeSeriesData) KlinesV2 {
-	klines := KlinesV2{
+func (e *ChaosEngine) buildKlines(tf *market.TimeframeSeriesData) Klines {
+	klines := Klines{
 		Columns:         []string{"time", "o", "h", "l", "c", "v"},
 		Values:          make([][]interface{}, 0),
 		CurrentBarIndex: len(tf.Klines) - 1,
@@ -745,42 +756,44 @@ func (e *ChaosEngine) buildKlinesV2(tf *market.TimeframeSeriesData) KlinesV2 {
 	return klines
 }
 
-func (e *ChaosEngine) buildMarketRankingsV2(ctx *ChaosContext) MarketRankingsV2 {
-	rankings := MarketRankingsV2{}
+func (e *ChaosEngine) buildMarketRankings(ctx *ChaosContext) MarketRankings {
+	rankings := MarketRankings{}
 
 	if ctx.OIRankingData != nil {
-		for _, item := range ctx.OIRankingData.TopIncreases {
-			rankings.OIIncrease1h = append(rankings.OIIncrease1h, RankingItemV2{
+		for _, item := range ctx.OIRankingData.TopPositions {
+			rankings.OIIncrease1h = append(rankings.OIIncrease1h, RankingItem{
 				Symbol:   item.Symbol,
-				OIChange: item.Change,
-				OIPct:    item.ChangePercent,
-				PricePct: item.PriceChange,
+				OIChange: item.OIDelta,
+				OIPct:    item.OIDeltaPercent,
+				PricePct: item.PriceDeltaPercent,
 			})
 		}
-		for _, item := range ctx.OIRankingData.TopDecreases {
-			rankings.OIDecrease1h = append(rankings.OIDecrease1h, RankingItemV2{
+		for _, item := range ctx.OIRankingData.LowPositions {
+			rankings.OIDecrease1h = append(rankings.OIDecrease1h, RankingItem{
 				Symbol:   item.Symbol,
-				OIChange: item.Change,
-				OIPct:    item.ChangePercent,
-				PricePct: item.PriceChange,
+				OIChange: item.OIDelta,
+				OIPct:    item.OIDeltaPercent,
+				PricePct: item.PriceDeltaPercent,
 			})
 		}
 	}
 
-	if ctx.PriceRankingData != nil {
-		for _, item := range ctx.PriceRankingData.TopGainers {
-			rankings.TopGainers1h = append(rankings.TopGainers1h, RankingItemV2{
-				Symbol:    item.Symbol,
-				ChangePct: item.ChangePercent,
-				Price:     item.Price,
-			})
-		}
-		for _, item := range ctx.PriceRankingData.TopLosers {
-			rankings.TopLosers1h = append(rankings.TopLosers1h, RankingItemV2{
-				Symbol:    item.Symbol,
-				ChangePct: item.ChangePercent,
-				Price:     item.Price,
-			})
+	if ctx.PriceRankingData != nil && ctx.PriceRankingData.Durations != nil {
+		if data1h, ok := ctx.PriceRankingData.Durations["1h"]; ok {
+			for _, item := range data1h.Top {
+				rankings.TopGainers1h = append(rankings.TopGainers1h, RankingItem{
+					Symbol:    item.Symbol,
+					ChangePct: item.PriceDelta * 100,
+					Price:     item.Price,
+				})
+			}
+			for _, item := range data1h.Low {
+				rankings.TopLosers1h = append(rankings.TopLosers1h, RankingItem{
+					Symbol:    item.Symbol,
+					ChangePct: item.PriceDelta * 100,
+					Price:     item.Price,
+				})
+			}
 		}
 	}
 
