@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"nofx/market"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -51,11 +52,36 @@ func (e *ChaosEngine) BuildUserPromptFromChaosContext_v2(ctx *ChaosContext) stri
 // BuildJsonMarketData generates the JSON market data part of User Prompt.
 func (e *ChaosEngine) BuildJsonMarketData(ctx *ChaosContext) string {
 	data := e.buildCompleteMarketData(ctx)
-	jsonData, err := json.MarshalIndent(data, "", "  ")
+	// Use json.MarshalIndent for pretty printing.
+	prettyJSON, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
 		return fmt.Sprintf("Error building JSON: %v", err)
 	}
-	return string(jsonData)
+
+	// Compress arrays (numeric or string) to single line using regex
+	// Numeric pattern: optional sign, digits, optional decimal part, optional exponent
+	num := `-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?`
+	// String pattern: double quotes surrounding non-quote characters
+	str := `"[^"]*"`
+	// Value pattern: number or string
+	val := `(?:` + num + `|` + str + `)`
+
+	// Pattern: [ space? val (space? , space? val)* space? ]
+	pattern := `\[\s*` + val + `(?:\s*,\s*` + val + `)*\s*\]`
+	re := regexp.MustCompile(pattern)
+
+	// Regex to match newline and following indentation
+	whitespaceRe := regexp.MustCompile(`\n\s*`)
+
+	compactJSON := re.ReplaceAllStringFunc(string(prettyJSON), func(match string) string {
+		// Remove newlines and indentation, keeping value content intact
+		clean := whitespaceRe.ReplaceAllString(match, "")
+		// Add space after comma for readability (safe for these data types)
+		clean = strings.ReplaceAll(clean, ",", ", ")
+		return clean
+	})
+
+	return compactJSON
 }
 
 // getTechnicalIndicatorsReference returns the technical indicators reference documentation.
@@ -319,49 +345,28 @@ type KeyLevel struct {
 	Tests    int     `json:"tests,omitempty"`
 }
 
-// CompactJSONFloatSlice represents a slice of float64 that marshals into a compact JSON array
-type CompactJSONFloatSlice []float64
-
-func (s CompactJSONFloatSlice) MarshalJSON() ([]byte, error) {
-	if s == nil {
-		return []byte("null"), nil
-	}
-	var sb strings.Builder
-	sb.WriteString("[")
-	for i, v := range s {
-		if i > 0 {
-			sb.WriteString(",")
-		}
-		// Format float to remove unnecessary zeros, similar to default JSON behavior but compact
-		// Use -1 precision to let strconv.FormatFloat decide the minimal necessary digits
-		sb.WriteString(strings.TrimRight(strings.TrimRight(fmt.Sprintf("%f", v), "0"), "."))
-	}
-	sb.WriteString("]")
-	return []byte(sb.String()), nil
-}
-
 type Indicators struct {
-	EMA20     CompactJSONFloatSlice `json:"ema20,omitempty"`
-	EMA50     CompactJSONFloatSlice `json:"ema50,omitempty"`
-	RSI7      CompactJSONFloatSlice `json:"rsi7,omitempty"`
-	RSI14     CompactJSONFloatSlice `json:"rsi14,omitempty"`
-	MACD      MACDData              `json:"macd,omitempty"`
-	ATR14     float64               `json:"atr14,omitempty"`
-	Bollinger BollingerData         `json:"bollinger,omitempty"`
-	Volume    CompactJSONFloatSlice `json:"volume,omitempty"`
+	EMA20     []float64     `json:"ema20,omitempty"`
+	EMA50     []float64     `json:"ema50,omitempty"`
+	RSI7      []float64     `json:"rsi7,omitempty"`
+	RSI14     []float64     `json:"rsi14,omitempty"`
+	MACD      MACDData      `json:"macd,omitempty"`
+	ATR14     float64       `json:"atr14,omitempty"`
+	Bollinger BollingerData `json:"bollinger,omitempty"`
+	Volume    []float64     `json:"volume,omitempty"`
 }
 
 type MACDData struct {
-	Line      CompactJSONFloatSlice `json:"line,omitempty"`
-	Signal    CompactJSONFloatSlice `json:"signal,omitempty"`
-	Histogram CompactJSONFloatSlice `json:"histogram,omitempty"`
+	Line      []float64 `json:"line,omitempty"`
+	Signal    []float64 `json:"signal,omitempty"`
+	Histogram []float64 `json:"histogram,omitempty"`
 }
 
 type BollingerData struct {
-	Upper    CompactJSONFloatSlice `json:"upper,omitempty"`
-	Middle   CompactJSONFloatSlice `json:"middle,omitempty"`
-	Lower    CompactJSONFloatSlice `json:"lower,omitempty"`
-	WidthPct float64               `json:"width_pct,omitempty"`
+	Upper    []float64 `json:"upper,omitempty"`
+	Middle   []float64 `json:"middle,omitempty"`
+	Lower    []float64 `json:"lower,omitempty"`
+	WidthPct float64   `json:"width_pct,omitempty"`
 }
 
 type Klines struct {
@@ -742,29 +747,6 @@ func (e *ChaosEngine) buildIndicators(tf *market.TimeframeSeriesData, cfg *Chaos
 	indicators.Volume = volumes
 
 	return indicators
-}
-
-// Custom JSON marshaler for Klines to format values in single line arrays
-func (k Klines) MarshalJSON() ([]byte, error) {
-	type Alias Klines
-	// Create a temporary struct to avoid infinite recursion
-	aux := &struct {
-		Alias
-		Values []json.RawMessage `json:"values"`
-	}{
-		Alias: (Alias)(k),
-	}
-
-	// Manually marshal each row to ensure it stays on one line
-	for _, row := range k.Values {
-		rowBytes, err := json.Marshal(row)
-		if err != nil {
-			return nil, err
-		}
-		aux.Values = append(aux.Values, json.RawMessage(rowBytes))
-	}
-
-	return json.Marshal(aux)
 }
 
 func (e *ChaosEngine) buildKlines(tf *market.TimeframeSeriesData) Klines {
