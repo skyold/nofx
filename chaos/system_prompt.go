@@ -33,7 +33,7 @@ func (e *ChaosEngine) buildSystemPromptWithContext(ctx *ChaosContext) string {
 	if ctx.Config != nil && ctx.Config.ChaosPrompt != "" {
 		// Use manager to build the full prompt including Contract and Footer
 		// We pass indicators config for dynamic market data generation
-		return e.manager.BuildPrompt(
+		return e.manager.BuildSystemPrompt(
 			ctx.Config.PromptVariant,
 			ctx.Config.ChaosPrompt,
 			ctx.Config.Indicators,

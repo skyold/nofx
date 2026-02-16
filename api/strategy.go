@@ -602,7 +602,7 @@ func (s *Server) handleStrategyTestRun(c *gin.Context) {
 
 		// 2. Generate prompts using Chaos native methods
 		systemPrompt = chaosEngine.BuildSystemPrompt(1000.0, req.PromptVariant)
-		userPrompt = chaosEngine.BuildUserPromptFromChaosContext(chaosCtx)
+		userPrompt = chaosEngine.BuildUserPromptFromChaosContext_v2(chaosCtx)
 	} else {
 		// 🛠️ Standard Mode Path
 		systemPrompt = engine.BuildSystemPrompt(1000.0, req.PromptVariant)

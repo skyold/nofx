@@ -56,7 +56,7 @@ func (m *Manager) IsChaosMode(customPrompt string) bool {
 }
 
 // BuildPrompt builds the system prompt for Chaos mode
-func (m *Manager) BuildPrompt(variant string, customPrompt string, indicators store.IndicatorConfig) string {
+func (m *Manager) BuildSystemPrompt(variant string, customPrompt string, indicators store.IndicatorConfig) string {
 	var sb strings.Builder
 
 	// BLOCK A: System Execution Contract (Code Generated)
