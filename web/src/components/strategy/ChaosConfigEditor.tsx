@@ -150,6 +150,12 @@ export function ChaosConfigEditor({
           <textarea
             value={config.chaos_prompt || ''}
             onChange={(e) => updateField('chaos_prompt', e.target.value)}
+            onKeyDown={(e) => {
+               if ((e.ctrlKey || e.metaKey) && (e.key === 'a' || e.key === 'A')) {
+                 e.preventDefault()
+                 e.currentTarget.select()
+               }
+             }}
             disabled={disabled}
             className="w-full h-96 px-3 py-2 rounded resize-none font-mono text-xs"
             style={{

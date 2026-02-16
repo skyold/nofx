@@ -1268,12 +1268,18 @@ export function ChaosStudioPage() {
                           </span>
                         </div>
                       </div>
-                      <pre
-                        className="p-2 rounded-lg text-[11px] font-mono overflow-auto bg-nofx-bg border border-purple-500/20 text-nofx-text"
-                        style={{ maxHeight: '400px' }}
-                      >
-                        {promptPreview.system_prompt}
-                      </pre>
+                      <textarea
+                        readOnly
+                        value={promptPreview.system_prompt}
+                        className="w-full p-2 rounded-lg text-[11px] font-mono overflow-auto bg-nofx-bg border border-purple-500/20 text-nofx-text resize-none focus:outline-none"
+                        style={{ height: '400px' }}
+                        onKeyDown={(e) => {
+                          if ((e.ctrlKey || e.metaKey) && (e.key === 'a' || e.key === 'A')) {
+                            e.preventDefault()
+                            e.currentTarget.select()
+                          }
+                        }}
+                      />
                     </div>
 
                     {/* User Prompt (Chaos Specific) */}
@@ -1396,12 +1402,18 @@ export function ChaosStudioPage() {
                                 {t('userPrompt')} (Input)
                               </span>
                             </div>
-                            <pre
-                              className="p-2 rounded-lg text-[10px] font-mono overflow-auto bg-nofx-bg border border-nofx-gold/20 text-nofx-text"
-                              style={{ maxHeight: '200px' }}
-                            >
-                              {aiTestResult.user_prompt}
-                            </pre>
+                            <textarea
+                              readOnly
+                              value={aiTestResult.user_prompt}
+                              className="w-full p-2 rounded-lg text-[10px] font-mono overflow-auto bg-nofx-bg border border-nofx-gold/20 text-nofx-text resize-none focus:outline-none"
+                              style={{ height: '200px' }}
+                              onKeyDown={(e) => {
+                                if ((e.ctrlKey || e.metaKey) && (e.key === 'a' || e.key === 'A')) {
+                                  e.preventDefault()
+                                  e.currentTarget.select()
+                                }
+                              }}
+                            />
                           </div>
                         )}
 
@@ -1455,12 +1467,18 @@ export function ChaosStudioPage() {
                                 {t('aiOutput')} (Raw)
                               </span>
                             </div>
-                            <pre
-                              className="p-2 rounded-lg text-[10px] font-mono overflow-auto whitespace-pre-wrap bg-nofx-bg border border-nofx-gold/20 text-nofx-text"
-                              style={{ maxHeight: '300px' }}
-                            >
-                              {aiTestResult.ai_response}
-                            </pre>
+                            <textarea
+                              readOnly
+                              value={aiTestResult.ai_response}
+                              className="w-full p-2 rounded-lg text-[10px] font-mono overflow-auto whitespace-pre-wrap bg-nofx-bg border border-nofx-gold/20 text-nofx-text resize-none focus:outline-none"
+                              style={{ height: '300px' }}
+                              onKeyDown={(e) => {
+                                if ((e.ctrlKey || e.metaKey) && (e.key === 'a' || e.key === 'A')) {
+                                  e.preventDefault()
+                                  e.currentTarget.select()
+                                }
+                              }}
+                            />
                           </div>
                         )}
 
