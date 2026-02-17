@@ -1,0 +1,652 @@
+// =============================================================================
+// Chaos Trading System V4 - Complete Data Format Example
+// Structural Facts Edition - 结构事实版本
+// =============================================================================
+//
+// 核心特点：
+// - 纯结构事实（无方向词）
+// - 无综合评分（无conviction_score）
+// - 完全可验证（每个值都可复算）
+// - 判断权在LLM（不预判方向）
+//
+// =============================================================================
+
+{
+  "timestamp": "2026-02-17T10:30:00Z",
+  "account": {
+    "equity": 1000.00,
+    "balance": 1000.00,
+    "pnl_pct": 0.00,
+    "margin_used_pct": 0.0,
+    "positions_count": 0
+  },
+  
+  "candidates": [
+    {
+      "symbol": "ETHUSDT",
+      "timeframes": {
+        
+        // =====================================================================
+        // 15分钟周期
+        // =====================================================================
+        "15m": {
+          
+          // ===== V4 结构化Signal（6层分层）=====
+          "signals": {
+            
+            // ----- 1. 结构层 -----
+            "structure": {
+              // Higher High / Lower Low 统计
+              "higher_high_count_5": 3,        // 最近5根创新高次数
+              "higher_high_count_10": 5,       // 最近10根创新高次数
+              "lower_low_count_5": 1,          // 最近5根创新低次数
+              "lower_low_count_10": 3,         // 最近10根创新低次数
+              
+              // 结构突破检测
+              "structure_break_high": true,    // 突破20根高点
+              "structure_break_low": false,    // 未突破20根低点
+              
+              // 区间压缩度
+              "range_compression_ratio": 1.85, // < 2.0 = 压缩
+              
+              // Swing高低点计数
+              "swing_high_count_20": 3,        // 20根内明显高点数
+              "swing_low_count_20": 2          // 20根内明显低点数
+            },
+            
+            // ----- 2. 动量层 -----
+            "momentum": {
+              // RSI状态
+              "rsi_value": 68.5,               // RSI值
+              "rsi_percentile_200": 85,        // 在过去200根的分位
+              "rsi_over_70": false,            // 是否超过70
+              "rsi_below_30": false,           // 是否低于30
+              
+              // EMA关系
+              "ema20_above_ema50": true,       // EMA20在EMA50上方
+              "ema20_slope": 42.3,             // EMA20斜率（正=向上倾斜）
+              "ema50_slope": 18.7,             // EMA50斜率
+              "ema_distance_percent": 1.8,     // EMA距离百分比
+              
+              // MACD状态
+              "macd_line_value": 38.5,         // MACD线值
+              "macd_signal_value": 32.1,       // 信号线值
+              "macd_histogram_value": 6.4,     // 柱状图值
+              "macd_histogram_positive": true, // 柱状图是否为正
+              
+              // 连续K线统计
+              "consecutive_up_bars": 3,        // 连续阳线数
+              "consecutive_down_bars": 0,      // 连续阴线数
+              "up_bars_count_10": 7,           // 最近10根阳线数
+              "down_bars_count_10": 3          // 最近10根阴线数
+            },
+            
+            // ----- 3. 波动层 -----
+            "volatility": {
+              // ATR统计
+              "atr_value": 312.5,              // ATR值
+              "atr_percentile_200": 78,        // ATR百分位
+              
+              // 实体比例
+              "body_ratio": 0.64,              // 实体占比（0-1）
+              
+              // Bollinger Bands
+              "bb_width_percent": 4.8,         // BB宽度百分比
+              "bb_width_percentile_200": 25,   // BB宽度百分位
+              "price_bb_position": 88.5        // 价格在BB中的位置（0-100）
+            },
+            
+            // ----- 4. 流动性层 -----
+            "liquidity": {
+              // 流动性扫单
+              "liquidity_sweep_high": false,   // 是否扫了高点
+              "liquidity_sweep_low": true,     // 是否扫了低点
+              
+              // 成交量统计
+              "volume_value": 1523400,         // 当前成交量
+              "volume_percentile_200": 82,     // 成交量百分位
+              "volume_spike": true,            // 是否成交量突增
+              "volume_ma_ratio": 1.68,         // 成交量/MA比率
+              
+              // 量价同步性
+              "price_volume_sync": true        // 价格和成交量方向是否一致
+            },
+            
+            // ----- 5. 持仓结构层（可选）-----
+            "positioning": {
+              // 多空比
+              "long_short_ratio": 1.85,        // 多空持仓比
+              "long_account_percent": 64.9,    // 多头账户占比
+              "short_account_percent": 35.1,   // 空头账户占比
+              
+              // 持仓量
+              "oi_value": 1234567890,          // 当前持仓量
+              "oi_change_percent": 3.4,        // 持仓量变化百分比
+              "oi_change_percentile_100": 78,  // 持仓量变化百分位
+              
+              // 资金费率
+              "funding_rate": 0.0125,          // 资金费率
+              "funding_rate_percentile_100": 85 // 资金费率百分位
+            },
+            
+            // ----- 6. 排名层（可选）-----
+            "ranking": {
+              // 成交量排名
+              "volume_rank_24h": 12,           // 24小时成交量排名
+              "volume_rank_total_symbols": 350, // 总币种数
+              
+              // 波动率排名
+              "volatility_rank_24h": 5,        // 24小时波动率排名
+              "volatility_rank_total_symbols": 350,
+              
+              // 相对强度排名
+              "relative_strength_rank_24h": 28, // 24小时涨幅排名
+              "price_change_percent_24h": 2.85  // 24小时价格变化百分比
+            }
+          },
+          
+          // ===== 标准技术指标（原始值，用于绘图）=====
+          "indicators": {
+            
+            // EMA - 最近10个值
+            "ema20": [
+              2047.61, 2047.89, 2048.47, 2048.91, 2049.43,
+              2049.84, 2050.17, 2050.43, 2050.30, 2050.18
+            ],
+            "ema50": [
+              2029.63, 2030.45, 2031.37, 2032.22, 2033.09,
+              2033.90, 2034.66, 2035.38, 2035.91, 2036.43
+            ],
+            
+            // RSI - 最近10个值
+            "rsi14": [
+              51.51, 56.00, 59.21, 57.86, 59.18,
+              58.16, 57.70, 56.97, 51.18, 51.33
+            ],
+            
+            // MACD - 最近10个值
+            "macd": {
+              "line": [12.5, 13.2, 14.1, 13.8, 13.2, 12.8, 12.3, 11.9, 11.2, 10.8],
+              "signal": [11.8, 12.1, 12.8, 13.2, 13.1, 12.9, 12.5, 12.1, 11.7, 11.3],
+              "histogram": [0.7, 1.1, 1.3, 0.6, 0.1, -0.1, -0.2, -0.2, -0.5, -0.5]
+            },
+            
+            // Bollinger Bands - 最近10个值
+            "bollinger": {
+              "upper": [2065.2, 2065.5, 2065.8, 2066.0, 2066.2, 2066.3, 2066.4, 2066.5, 2066.5, 2066.4],
+              "middle": [2050.0, 2050.1, 2050.3, 2050.4, 2050.6, 2050.7, 2050.8, 2050.9, 2050.9, 2050.9],
+              "lower": [2034.8, 2034.7, 2034.8, 2034.8, 2035.0, 2035.1, 2035.2, 2035.3, 2035.3, 2035.4]
+            },
+            
+            // ATR - 当前值
+            "atr14": 312.5,
+            
+            // Volume - 最近10个值
+            "volume": [11901, 9022, 14914, 10064, 13623, 16803, 17936, 24901, 12349, 16104]
+          },
+          
+          // ===== K线数据（紧凑格式）=====
+          "klines": {
+            "date": "2026-02-17",
+            "columns": ["time", "o", "h", "l", "c", "v"],
+            "values": [
+              ["08:00", 2047.60, 2048.92, 2044.70, 2046.94, 13623],
+              ["08:15", 2046.95, 2047.35, 2041.00, 2045.97, 16803],
+              ["08:30", 2045.97, 2050.93, 2045.17, 2050.50, 17936],
+              ["08:45", 2050.50, 2055.35, 2048.85, 2054.07, 24901],
+              ["09:00", 2054.06, 2054.06, 2049.49, 2053.01, 12349],
+              ["09:15", 2053.01, 2056.91, 2050.64, 2054.41, 16104],
+              ["09:30", 2054.40, 2056.00, 2051.84, 2053.68, 8338],
+              ["09:45", 2053.68, 2055.99, 2052.41, 2053.37, 7658],
+              ["10:00", 2053.37, 2053.63, 2050.50, 2052.90, 10257],
+              ["10:15", 2052.89, 2053.20, 2047.09, 2049.00, 15620]
+            ],
+            "current_bar_index": 9
+          }
+        },
+        
+        // =====================================================================
+        // 1小时周期
+        // =====================================================================
+        "1h": {
+          
+          "signals": {
+            "structure": {
+              "higher_high_count_5": 4,
+              "higher_high_count_10": 7,
+              "lower_low_count_5": 1,
+              "lower_low_count_10": 2,
+              "structure_break_high": true,
+              "structure_break_low": false,
+              "range_compression_ratio": 2.45,
+              "swing_high_count_20": 4,
+              "swing_low_count_20": 1
+            },
+            
+            "momentum": {
+              "rsi_value": 72.3,
+              "rsi_percentile_200": 88,
+              "rsi_over_70": true,              // 注意：超过70了
+              "rsi_below_30": false,
+              "ema20_above_ema50": true,
+              "ema20_slope": 68.5,
+              "ema50_slope": 32.1,
+              "ema_distance_percent": 2.8,
+              "macd_line_value": 52.8,
+              "macd_signal_value": 45.2,
+              "macd_histogram_value": 7.6,
+              "macd_histogram_positive": true,
+              "consecutive_up_bars": 5,
+              "consecutive_down_bars": 0,
+              "up_bars_count_10": 8,
+              "down_bars_count_10": 2
+            },
+            
+            "volatility": {
+              "atr_value": 425.8,
+              "atr_percentile_200": 82,
+              "body_ratio": 0.72,
+              "bb_width_percent": 6.2,
+              "bb_width_percentile_200": 55,
+              "price_bb_position": 92.3
+            },
+            
+            "liquidity": {
+              "liquidity_sweep_high": false,
+              "liquidity_sweep_low": false,
+              "volume_value": 2145678,
+              "volume_percentile_200": 85,
+              "volume_spike": true,
+              "volume_ma_ratio": 1.85,
+              "price_volume_sync": true
+            },
+            
+            "positioning": {
+              "long_short_ratio": 2.15,
+              "long_account_percent": 68.2,
+              "short_account_percent": 31.8,
+              "oi_value": 1345678901,
+              "oi_change_percent": 4.8,
+              "oi_change_percentile_100": 82,
+              "funding_rate": 0.0158,
+              "funding_rate_percentile_100": 88
+            },
+            
+            "ranking": {
+              "volume_rank_24h": 8,
+              "volume_rank_total_symbols": 350,
+              "volatility_rank_24h": 3,
+              "volatility_rank_total_symbols": 350,
+              "relative_strength_rank_24h": 15,
+              "price_change_percent_24h": 4.25
+            }
+          },
+          
+          "indicators": {
+            "ema20": [
+              1979.96, 1987.25, 1993.87, 1998.70, 2003.86,
+              2008.58, 2012.29, 2016.27, 2019.81, 2022.98
+            ],
+            "ema50": [
+              1970.79, 1974.16, 1977.40, 1980.03, 1982.89,
+              1985.65, 1988.08, 1990.67, 1993.13, 1995.48
+            ],
+            "rsi14": [
+              77.31, 76.39, 76.44, 70.11, 71.82,
+              71.92, 68.77, 70.34, 69.93, 69.78
+            ],
+            "macd": {
+              "line": [45.2, 48.3, 51.5, 49.8, 48.2, 46.9, 45.1, 43.8, 42.1, 40.5],
+              "signal": [42.1, 44.2, 46.8, 47.9, 47.8, 47.2, 46.3, 45.2, 43.9, 42.5],
+              "histogram": [3.1, 4.1, 4.7, 1.9, 0.4, -0.3, -1.2, -1.4, -1.8, -2.0]
+            },
+            "bollinger": {
+              "upper": [2085.5, 2088.2, 2090.8, 2092.1, 2093.5, 2094.2, 2095.0, 2095.5, 2096.0, 2096.2],
+              "middle": [2025.0, 2028.5, 2032.0, 2034.5, 2037.0, 2039.0, 2041.0, 2042.5, 2044.0, 2045.0],
+              "lower": [1964.5, 1968.8, 1973.2, 1976.9, 1980.5, 1983.8, 1987.0, 1989.5, 1992.0, 1993.8]
+            },
+            "atr14": 425.8,
+            "volume": [1035412, 892341, 1156789, 945632, 1098234, 1234567, 987654, 1123456, 856789, 923451]
+          },
+          
+          "klines": {
+            "date": "2026-02-17",
+            "columns": ["time", "o", "h", "l", "c", "v"],
+            "values": [
+              ["01:00", 1951.26, 1987.47, 1929.62, 1940.07, 1035412],
+              ["02:00", 1940.07, 1977.00, 1940.07, 1967.75, 892341],
+              ["03:00", 1967.74, 1982.36, 1952.24, 1966.97, 1156789],
+              ["04:00", 1966.97, 2000.90, 1956.19, 1987.88, 945632],
+              ["05:00", 1987.87, 1995.53, 1943.44, 1947.47, 1098234],
+              ["06:00", 1947.47, 1949.00, 1893.77, 1924.36, 1234567],
+              ["07:00", 1924.36, 1952.27, 1908.29, 1947.15, 987654],
+              ["08:00", 1947.15, 1957.94, 1926.72, 1952.49, 1123456],
+              ["09:00", 1952.49, 1954.76, 1923.29, 1934.88, 856789],
+              ["10:00", 1934.89, 1968.49, 1932.88, 1959.25, 923451]
+            ],
+            "current_bar_index": 9
+          }
+        },
+        
+        // =====================================================================
+        // 4小时周期
+        // =====================================================================
+        "4h": {
+          
+          "signals": {
+            "structure": {
+              "higher_high_count_5": 5,
+              "higher_high_count_10": 8,
+              "lower_low_count_5": 0,
+              "lower_low_count_10": 1,
+              "structure_break_high": true,
+              "structure_break_low": false,
+              "range_compression_ratio": 3.25,
+              "swing_high_count_20": 5,
+              "swing_low_count_20": 1
+            },
+            
+            "momentum": {
+              "rsi_value": 78.5,
+              "rsi_percentile_200": 92,
+              "rsi_over_70": true,
+              "rsi_below_30": false,
+              "ema20_above_ema50": true,
+              "ema20_slope": 95.2,
+              "ema50_slope": 48.7,
+              "ema_distance_percent": 4.2,
+              "macd_line_value": 85.3,
+              "macd_signal_value": 72.1,
+              "macd_histogram_value": 13.2,
+              "macd_histogram_positive": true,
+              "consecutive_up_bars": 7,
+              "consecutive_down_bars": 0,
+              "up_bars_count_10": 9,
+              "down_bars_count_10": 1
+            },
+            
+            "volatility": {
+              "atr_value": 685.2,
+              "atr_percentile_200": 88,
+              "body_ratio": 0.78,
+              "bb_width_percent": 8.5,
+              "bb_width_percentile_200": 72,
+              "price_bb_position": 95.8
+            },
+            
+            "liquidity": {
+              "liquidity_sweep_high": false,
+              "liquidity_sweep_low": false,
+              "volume_value": 3456789,
+              "volume_percentile_200": 90,
+              "volume_spike": true,
+              "volume_ma_ratio": 2.15,
+              "price_volume_sync": true
+            },
+            
+            "positioning": {
+              "long_short_ratio": 2.45,
+              "long_account_percent": 71.0,
+              "short_account_percent": 29.0,
+              "oi_value": 1456789012,
+              "oi_change_percent": 6.2,
+              "oi_change_percentile_100": 88,
+              "funding_rate": 0.0185,
+              "funding_rate_percentile_100": 92
+            },
+            
+            "ranking": {
+              "volume_rank_24h": 5,
+              "volume_rank_total_symbols": 350,
+              "volatility_rank_24h": 2,
+              "volatility_rank_total_symbols": 350,
+              "relative_strength_rank_24h": 8,
+              "price_change_percent_24h": 6.85
+            }
+          },
+          
+          "indicators": {
+            "ema20": [
+              1823.45, 1856.78, 1889.23, 1921.56, 1953.89,
+              1986.12, 2018.45, 2050.67, 2082.89, 2115.01
+            ],
+            "ema50": [
+              1798.23, 1825.67, 1852.89, 1880.12, 1907.34,
+              1934.56, 1961.78, 1988.90, 2016.12, 2043.34
+            ],
+            "rsi14": [
+              68.34, 72.56, 75.89, 78.12, 74.45,
+              70.78, 67.23, 64.56, 62.34, 60.12
+            ],
+            "macd": {
+              "line": [85.3, 92.1, 98.7, 95.2, 91.8, 88.4, 85.0, 81.6, 78.2, 74.8],
+              "signal": [78.9, 83.5, 88.1, 90.3, 89.7, 88.5, 86.8, 84.7, 82.2, 79.5],
+              "histogram": [6.4, 8.6, 10.6, 4.9, 2.1, -0.1, -1.8, -3.1, -4.0, -4.7]
+            },
+            "bollinger": {
+              "upper": [2145.6, 2158.9, 2172.3, 2185.6, 2198.9, 2212.3, 2225.6, 2238.9, 2252.3, 2265.6],
+              "middle": [1989.4, 2005.7, 2022.0, 2038.3, 2054.6, 2070.9, 2087.2, 2103.5, 2119.8, 2136.1],
+              "lower": [1833.2, 1852.5, 1871.7, 1891.0, 1910.3, 1929.5, 1948.8, 1968.1, 1987.3, 2006.6]
+            },
+            "atr14": 685.2,
+            "volume": [1299726, 666201, 470702, 535174, 781031, 1130783, 1842938, 488821, 470157, 524371]
+          },
+          
+          "klines": {
+            "date": "2026-02-17",
+            "columns": ["time", "o", "h", "l", "c", "v"],
+            "values": [
+              ["16:00", 1928.04, 1959.00, 1907.53, 1951.26, 1299726],
+              ["20:00", 1951.26, 1987.47, 1929.62, 1940.07, 666201],
+              ["00:00", 1940.07, 1977.00, 1940.07, 1967.75, 470702],
+              ["04:00", 1967.74, 1982.36, 1952.24, 1966.97, 535174],
+              ["08:00", 1966.97, 2000.90, 1956.19, 1987.88, 781031],
+              ["12:00", 1987.87, 1995.53, 1943.44, 1947.47, 1130783],
+              ["16:00", 1947.47, 1949.00, 1893.77, 1924.36, 1842938],
+              ["20:00", 1924.36, 1952.27, 1908.29, 1947.15, 488821],
+              ["00:00", 1947.15, 1957.94, 1926.72, 1952.49, 470157],
+              ["04:00", 1952.49, 1954.76, 1923.29, 1934.88, 524371]
+            ],
+            "current_bar_index": 9
+          }
+        }
+      }
+    },
+    
+    // 可以继续添加更多候选币种...
+    {
+      "symbol": "BTCUSDT",
+      "timeframes": {
+        "15m": {
+          "signals": {
+            "structure": {
+              "higher_high_count_5": 2,
+              "higher_high_count_10": 4,
+              "lower_low_count_5": 2,
+              "lower_low_count_10": 4,
+              "structure_break_high": false,
+              "structure_break_low": false,
+              "range_compression_ratio": 1.25,
+              "swing_high_count_20": 2,
+              "swing_low_count_20": 2
+            },
+            "momentum": {
+              "rsi_value": 52.3,
+              "rsi_percentile_200": 55,
+              "rsi_over_70": false,
+              "rsi_below_30": false,
+              "ema20_above_ema50": true,
+              "ema20_slope": 15.2,
+              "ema50_slope": 8.5,
+              "ema_distance_percent": 0.8,
+              "macd_line_value": 12.5,
+              "macd_signal_value": 10.8,
+              "macd_histogram_value": 1.7,
+              "macd_histogram_positive": true,
+              "consecutive_up_bars": 1,
+              "consecutive_down_bars": 0,
+              "up_bars_count_10": 5,
+              "down_bars_count_10": 5
+            },
+            "volatility": {
+              "atr_value": 285.5,
+              "atr_percentile_200": 45,
+              "body_ratio": 0.42,
+              "bb_width_percent": 3.2,
+              "bb_width_percentile_200": 18,
+              "price_bb_position": 55.2
+            },
+            "liquidity": {
+              "liquidity_sweep_high": false,
+              "liquidity_sweep_low": false,
+              "volume_value": 985234,
+              "volume_percentile_200": 52,
+              "volume_spike": false,
+              "volume_ma_ratio": 1.05,
+              "price_volume_sync": true
+            },
+            "positioning": {
+              "long_short_ratio": 1.15,
+              "long_account_percent": 53.5,
+              "short_account_percent": 46.5,
+              "oi_value": 987654321,
+              "oi_change_percent": 0.8,
+              "oi_change_percentile_100": 45,
+              "funding_rate": 0.0085,
+              "funding_rate_percentile_100": 52
+            },
+            "ranking": {
+              "volume_rank_24h": 1,
+              "volume_rank_total_symbols": 350,
+              "volatility_rank_24h": 25,
+              "volatility_rank_total_symbols": 350,
+              "relative_strength_rank_24h": 125,
+              "price_change_percent_24h": 0.85
+            }
+          },
+          "indicators": {
+            // ... 标准指标数据
+          },
+          "klines": {
+            // ... K线数据
+          }
+        }
+        // ... 其他时间周期
+      }
+    }
+  ],
+  
+  // =====================================================================
+  // Signal Meta（元数据）- 可选
+  // =====================================================================
+  "signal_meta": {
+    "version": "4.0",
+    "lookback_periods": {
+      "structure_break": 20,
+      "range_compression": 20,
+      "swing_detection": 2,
+      "liquidity_sweep": 10
+    },
+    "indicator_periods": {
+      "rsi": 14,
+      "ema_short": 20,
+      "ema_long": 50,
+      "atr": 14,
+      "bollinger": 20,
+      "macd_fast": 12,
+      "macd_slow": 26,
+      "macd_signal": 9
+    },
+    "percentile_windows": {
+      "rsi": 200,
+      "atr": 200,
+      "volume": 200,
+      "bb_width": 200,
+      "oi_change": 100,
+      "funding_rate": 100
+    },
+    "thresholds": {
+      "rsi_overbought": 70,
+      "rsi_oversold": 30,
+      "volume_spike_ratio": 1.5,
+      "range_compression_tight": 2.0,
+      "range_compression_wide": 4.0
+    }
+  }
+}
+
+// =============================================================================
+// V4 特点总结
+// =============================================================================
+/*
+
+核心差异：
+
+V2 (Rule Matcher):
+{
+  "market_regime": "trending_bullish",   // 带方向词
+  "momentum": "rising",                  // 带方向词
+  "volume_price_relationship": "bullish_confirmation"  // 带方向词
+}
+
+V3 (Score Optimizer):
+{
+  "regime_score": 0.72,                  // 综合评分
+  "momentum_score": 0.42,                // 综合评分
+  "conviction_score": 0.35               // 综合评分
+}
+
+V4 (Structural Facts):
+{
+  "structure": {
+    "higher_high_count_5": 3,            // 纯事实
+    "structure_break_high": true         // 纯事实
+  },
+  "momentum": {
+    "rsi_value": 68.5,                   // 原始值
+    "rsi_percentile_200": 85,            // 统计位置
+    "ema20_above_ema50": true            // 关系事实
+  },
+  "liquidity": {
+    "volume_spike": true,                // 行为检测
+    "liquidity_sweep_low": true          // 行为检测
+  }
+}
+
+V4的优势：
+1. 信息无损 - 不压缩成评分
+2. 判断权在LLM - 不预判方向
+3. 完全可验证 - 每个值都可复算
+4. 系统工程级 - 分层清晰
+
+LLM推理示例（基于上面ETHUSDT 15m数据）：
+
+【结构层】
+- HH_5=3 vs LL_5=1 → 最近更多创新高
+- structure_break_high=true → 突破了上方
+- range_compression=1.85 < 2.0 → 区间压缩
+
+→ 推理：从压缩中突破上方
+
+【动量层】
+- RSI=68.5, 在85%分位 → 动量较强但未超买
+- EMA20 > EMA50, slope_20=42.3 > slope_50=18.7 → 短期加速
+- 连续3根阳线，10根中7根阳线 → 持续性好
+
+→ 推理：短期动量强
+
+【流动性层】
+- liquidity_sweep_low=true → 扫了低点
+- volume在82%分位, spike=true → 成交量放大
+- price_volume_sync=true → 量价配合
+
+→ 推理：可能是止损猎杀后反转
+
+【综合推理】
+市场可能在做"假破低、真破高"的动作
+→ 考虑在回调时做多
+→ 但需要等待确认
+
+关键：LLM做了真正的结构推理，而不是简单的规则匹配或分数比较！
+
+*/
