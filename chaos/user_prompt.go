@@ -24,10 +24,10 @@ package chaos
 //   - "v1" 或 "legacy" → buildUserPromptLegacy (文本格式)
 //   - "v2" (默认)     → buildUserPromptV2 (JSON格式)
 //   - "v4"            → buildUserPromptV4 (结构事实版)
-func (e *ChaosEngine) BuildUserPromptFromChaosContext(ctx *ChaosContext) string {
+func (e *ChaosEngine) BuildUserPrompt(ctx *ChaosContext) string {
 	version := "v2" // default to v2 (stable)
-	if ctx.Config != nil && ctx.Config.PromptVersion != "" {
-		version = ctx.Config.PromptVersion
+	if ctx.Config != nil && ctx.Config.UserPromptVersion != "" {
+		version = ctx.Config.UserPromptVersion
 	}
 
 	switch version {
@@ -36,8 +36,8 @@ func (e *ChaosEngine) BuildUserPromptFromChaosContext(ctx *ChaosContext) string 
 	case "v4":
 		return e.buildUserPromptV4(ctx)
 	case "v2":
-		fallthrough
-	default:
 		return e.buildUserPromptV2(ctx)
+	default:
+		return e.buildUserPromptV4(ctx)
 	}
 }

@@ -61,10 +61,11 @@ type ChaosContext struct {
 
 // ChaosConfig mirrors the store.ChaosStrategyConfig but can be extended
 type ChaosConfig struct {
-	ChaosPrompt        string
-	RiskControl        store.RiskControlConfig
-	PromptVariant      string
-	Indicators         store.IndicatorConfig
+	ChaosPrompt         string
+	RiskControl         store.RiskControlConfig
+	SystemPromptVariant string
+	UserPromptVersion   string
+	Indicators          store.IndicatorConfig
 }
 
 

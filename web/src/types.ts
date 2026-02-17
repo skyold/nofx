@@ -492,13 +492,10 @@ export interface ChaosStrategyConfig {
   // Independent Indicators for Chaos Mode
   indicators?: IndicatorConfig;
   // Prompt variant (e.g. "s1", "t1")
-  prompt_variant?: string;
-  // Fault injection rate (0.0-1.0)
-  fault_injection_rate?: number;
-  // Data noise level (0.0-1.0)
-  data_noise_level?: number;
-  // Stress test mode
-  stress_test_mode?: boolean;
+  system_prompt_variant?: string;
+  // Prompt version: "v1" (legacy), "v2" (JSON format), "v4" (structural facts)
+  user_prompt_version?: string;
+
 }
 
 // Grid trading specific configuration

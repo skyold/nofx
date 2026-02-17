@@ -68,19 +68,16 @@ type ChaosStrategyConfig struct {
 
 	// Independent Coin Source for Chaos Mode
 	CoinSource CoinSourceConfig `json:"coin_source"`
+	
 	// Independent Indicators for Chaos Mode
 	Indicators IndicatorConfig `json:"indicators"`
-
+	
 	// Prompt variant (e.g. "s1", "t1")
-	PromptVariant string `json:"prompt_variant,omitempty"`
+	SystemPromptVariant string `json:"system_prompt_variant,omitempty"`
+	
 	// Prompt version: "v1" (legacy), "v2" (JSON format), "v4" (structural facts)
-	PromptVersion string `json:"prompt_version,omitempty"`
-	// Fault injection rate (0.0-1.0)
-	FaultInjectionRate float64 `json:"fault_injection_rate,omitempty"`
-	// Data noise level (0.0-1.0)
-	DataNoiseLevel float64 `json:"data_noise_level,omitempty"`
-	// Stress test mode
-	StressTestMode bool `json:"stress_test_mode,omitempty"`
+	UserPromptVersion string `json:"user_prompt_version,omitempty"`
+		
 }
 
 // GridStrategyConfig grid trading specific configuration

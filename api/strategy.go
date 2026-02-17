@@ -584,7 +584,9 @@ func (s *Server) handleStrategyTestRun(c *gin.Context) {
 			Config: &chaos.ChaosConfig{
 				ChaosPrompt:   req.Config.ChaosConfig.ChaosPrompt,
 				RiskControl:   req.Config.ChaosConfig.RiskControl,
-				PromptVariant: req.PromptVariant,
+				SystemPromptVariant: req.Config.ChaosConfig.SystemPromptVariant,
+				UserPromptVersion:   req.Config.ChaosConfig.UserPromptVersion,
+				
 				Indicators:    req.Config.Indicators,
 			},
 			Account: kernel.AccountInfo{
@@ -601,8 +603,8 @@ func (s *Server) handleStrategyTestRun(c *gin.Context) {
 		}
 
 		// 2. Generate prompts using Chaos native methods
-		systemPrompt = chaosEngine.BuildSystemPrompt(1000.0, req.PromptVariant)
-		userPrompt = chaosEngine.BuildUserPromptFromChaosContext_v2(chaosCtx)
+		systemPrompt = chaosEngine.BuildSystemPrompt(1000.0, req.Config.ChaosConfig.SystemPromptVariant)
+		userPrompt = chaosEngine.BuildUserPrompt(chaosCtx)
 	} else {
 		// 🛠️ Standard Mode Path
 		systemPrompt = engine.BuildSystemPrompt(1000.0, req.PromptVariant)

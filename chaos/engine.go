@@ -303,8 +303,10 @@ func (e *ChaosEngine) getOILowCoins(limit int) ([]kernel.CandidateCoin, error) {
 // Execute runs the Chaos decision process
 func (e *ChaosEngine) Execute(ctx *ChaosContext, mcpClient mcp.AIClient) (*DecisionResult, error) {
 	// 1. Build Prompts
-	systemPrompt := e.buildSystemPromptWithContext(ctx)
-	userPrompt := e.BuildUserPromptFromChaosContext(ctx)
+	systemPrompt := e.buildSystemPromptWithChaosContext(ctx)
+	userPrompt := e.BuildUserPrompt(ctx)
+
+
 
 	// 2. Call AI
 	aiCallStart := time.Now()

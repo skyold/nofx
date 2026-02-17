@@ -267,10 +267,11 @@ func (at *AutoTrader) buildChaosContext() (*chaos.ChaosContext, error) {
 		RuntimeMinutes: int(time.Since(at.startTime).Minutes()),
 		CallCount:      at.callCount,
 		Config: &chaos.ChaosConfig{
-			ChaosPrompt:   chaosConfig.ChaosPrompt,
-			RiskControl:   chaosConfig.RiskControl,
-			PromptVariant: chaosConfig.PromptVariant,
-			Indicators:    indicatorsConfig,
+			ChaosPrompt:         chaosConfig.ChaosPrompt,
+			RiskControl:         chaosConfig.RiskControl,
+			SystemPromptVariant: chaosConfig.SystemPromptVariant,
+			UserPromptVersion:   chaosConfig.UserPromptVersion,
+			Indicators:          indicatorsConfig,
 		},
 		Account: kernel.AccountInfo{
 			TotalEquity:      totalEquity,

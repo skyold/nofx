@@ -1,7 +1,7 @@
 // =============================================================================
 // Chaos Trading System - User Prompt V4 (Structural Facts Edition)
 // =============================================================================
-// 
+//
 // User Prompt 是发送给 LLM 的用户提示词的一部分。
 // 完整提示词 = System Prompt + User Prompt
 //
@@ -54,11 +54,11 @@ func (e *ChaosEngine) buildUserPromptV4(ctx *ChaosContext) string {
 	sb.WriteString("---\n\n")
 
 	// 3. 公共信息部分
-	sb.WriteString(e.buildHeader(ctx))           // 时间、周期、运行时长
-	sb.WriteString(e.buildGlobalContext(ctx))    // BTC 行情概览
-	sb.WriteString(e.buildAccountStatus(ctx))    // 账户状态
+	sb.WriteString(e.buildHeader(ctx))             // 时间、周期、运行时长
+	sb.WriteString(e.buildGlobalContext(ctx))      // BTC 行情概览
+	sb.WriteString(e.buildAccountStatus(ctx))      // 账户状态
 	sb.WriteString(e.buildTradingPerformance(ctx)) // 历史交易统计
-	sb.WriteString(e.buildPositions(ctx))        // 当前持仓
+	sb.WriteString(e.buildPositions(ctx))          // 当前持仓
 
 	// 4. 市场数据 (JSON 格式 - V4 结构事实版)
 	sb.WriteString("## 市场数据 (JSON 格式 - V4 结构事实版)\n\n")
@@ -169,29 +169,21 @@ V4: LLM作为结构推理器 → "HH=3 vs LL=1 + RSI=68 → 可能上升结构"
 // ============================================================================
 
 type V4MarketData struct {
-	Timestamp  string            `json:"timestamp"`
-	Account    V4AccountInfo     `json:"account"`
-	Candidates []V4Candidate     `json:"candidates"`
-	SignalMeta V4SignalMeta      `json:"signal_meta,omitempty"`
-}
-
-type V4AccountInfo struct {
-	Equity         float64 `json:"equity"`
-	Balance        float64 `json:"balance"`
-	PnlPct         float64 `json:"pnl_pct"`
-	MarginUsedPct  float64 `json:"margin_used_pct"`
-	PositionsCount int     `json:"positions_count"`
+	Timestamp  string        `json:"timestamp"`
+	Account    AccountInfo   `json:"account"`
+	Candidates []V4Candidate `json:"candidates"`
+	SignalMeta V4SignalMeta  `json:"signal_meta,omitempty"`
 }
 
 type V4Candidate struct {
-	Symbol     string                  `json:"symbol"`
-	Timeframes map[string]V4Timeframe  `json:"timeframes"`
+	Symbol     string                 `json:"symbol"`
+	Timeframes map[string]V4Timeframe `json:"timeframes"`
 }
 
 type V4Timeframe struct {
-	Signals    V4Signals    `json:"signals"`
-	Indicators V4Indicators `json:"indicators"`
-	Klines     V4Klines     `json:"klines"`
+	Signals    V4Signals  `json:"signals"`
+	Indicators Indicators `json:"indicators"`
+	Klines     Klines     `json:"klines"`
 }
 
 type V4Signals struct {
@@ -204,145 +196,116 @@ type V4Signals struct {
 }
 
 type V4StructureSignals struct {
-	HigherHighCount5  int     `json:"higher_high_count_5"`
-	HigherHighCount10 int     `json:"higher_high_count_10"`
-	LowerLowCount5    int     `json:"lower_low_count_5"`
-	LowerLowCount10   int     `json:"lower_low_count_10"`
-	StructureBreakHigh bool   `json:"structure_break_high"`
-	StructureBreakLow  bool   `json:"structure_break_low"`
+	HigherHighCount5      int     `json:"higher_high_count_5"`
+	HigherHighCount10     int     `json:"higher_high_count_10"`
+	LowerLowCount5        int     `json:"lower_low_count_5"`
+	LowerLowCount10       int     `json:"lower_low_count_10"`
+	StructureBreakHigh    bool    `json:"structure_break_high"`
+	StructureBreakLow     bool    `json:"structure_break_low"`
 	RangeCompressionRatio float64 `json:"range_compression_ratio"`
-	SwingHighCount20  int     `json:"swing_high_count_20"`
-	SwingLowCount20   int     `json:"swing_low_count_20"`
+	SwingHighCount20      int     `json:"swing_high_count_20"`
+	SwingLowCount20       int     `json:"swing_low_count_20"`
 }
 
 type V4MomentumSignals struct {
-	RsiValue             float64 `json:"rsi_value"`
-	RsiPercentile200     int     `json:"rsi_percentile_200"`
-	RsiOver70            bool    `json:"rsi_over_70"`
-	RsiBelow30           bool    `json:"rsi_below_30"`
-	Ema20AboveEma50      bool    `json:"ema20_above_ema50"`
-	Ema20Slope           float64 `json:"ema20_slope"`
-	Ema50Slope           float64 `json:"ema50_slope"`
-	EmaDistancePercent   float64 `json:"ema_distance_percent"`
-	MacdLineValue        float64 `json:"macd_line_value"`
-	MacdSignalValue      float64 `json:"macd_signal_value"`
-	MacdHistogramValue   float64 `json:"macd_histogram_value"`
-	MacdHistogramPositive bool   `json:"macd_histogram_positive"`
-	ConsecutiveUpBars    int     `json:"consecutive_up_bars"`
-	ConsecutiveDownBars  int     `json:"consecutive_down_bars"`
-	UpBarsCount10        int     `json:"up_bars_count_10"`
-	DownBarsCount10      int     `json:"down_bars_count_10"`
+	RsiValue              float64 `json:"rsi_value"`
+	RsiPercentile200      int     `json:"rsi_percentile_200"`
+	RsiOver70             bool    `json:"rsi_over_70"`
+	RsiBelow30            bool    `json:"rsi_below_30"`
+	Ema20AboveEma50       bool    `json:"ema20_above_ema50"`
+	Ema20Slope            float64 `json:"ema20_slope"`
+	Ema50Slope            float64 `json:"ema50_slope"`
+	EmaDistancePercent    float64 `json:"ema_distance_percent"`
+	MacdLineValue         float64 `json:"macd_line_value"`
+	MacdSignalValue       float64 `json:"macd_signal_value"`
+	MacdHistogramValue    float64 `json:"macd_histogram_value"`
+	MacdHistogramPositive bool    `json:"macd_histogram_positive"`
+	ConsecutiveUpBars     int     `json:"consecutive_up_bars"`
+	ConsecutiveDownBars   int     `json:"consecutive_down_bars"`
+	UpBarsCount10         int     `json:"up_bars_count_10"`
+	DownBarsCount10       int     `json:"down_bars_count_10"`
 }
 
 type V4VolatilitySignals struct {
-	AtrValue              float64 `json:"atr_value"`
-	AtrPercentile200      int     `json:"atr_percentile_200"`
-	BodyRatio             float64 `json:"body_ratio"`
-	BbWidthPercent        float64 `json:"bb_width_percent"`
-	BbWidthPercentile200  int     `json:"bb_width_percentile_200"`
-	PriceBbPosition       float64 `json:"price_bb_position"`
+	AtrValue             float64 `json:"atr_value"`
+	AtrPercentile200     int     `json:"atr_percentile_200"`
+	BodyRatio            float64 `json:"body_ratio"`
+	BbWidthPercent       float64 `json:"bb_width_percent"`
+	BbWidthPercentile200 int     `json:"bb_width_percentile_200"`
+	PriceBbPosition      float64 `json:"price_bb_position"`
 }
 
 type V4LiquiditySignals struct {
-	LiquiditySweepHigh   bool    `json:"liquidity_sweep_high"`
-	LiquiditySweepLow    bool    `json:"liquidity_sweep_low"`
-	VolumeValue          float64 `json:"volume_value"`
-	VolumePercentile200  int     `json:"volume_percentile_200"`
-	VolumeSpike          bool    `json:"volume_spike"`
-	VolumeMaRatio        float64 `json:"volume_ma_ratio"`
-	PriceVolumeSync      bool    `json:"price_volume_sync"`
+	LiquiditySweepHigh  bool    `json:"liquidity_sweep_high"`
+	LiquiditySweepLow   bool    `json:"liquidity_sweep_low"`
+	VolumeValue         float64 `json:"volume_value"`
+	VolumePercentile200 int     `json:"volume_percentile_200"`
+	VolumeSpike         bool    `json:"volume_spike"`
+	VolumeMaRatio       float64 `json:"volume_ma_ratio"`
+	PriceVolumeSync     bool    `json:"price_volume_sync"`
 }
 
 type V4PositioningSignals struct {
-	LongShortRatio          float64 `json:"long_short_ratio,omitempty"`
-	LongAccountPercent      float64 `json:"long_account_percent,omitempty"`
-	ShortAccountPercent     float64 `json:"short_account_percent,omitempty"`
-	OiValue                 float64 `json:"oi_value,omitempty"`
-	OiChangePercent         float64 `json:"oi_change_percent,omitempty"`
-	OiChangePercentile100   int     `json:"oi_change_percentile_100,omitempty"`
-	FundingRate             float64 `json:"funding_rate,omitempty"`
-	FundingRatePercentile100 int    `json:"funding_rate_percentile_100,omitempty"`
+	LongShortRatio           float64 `json:"long_short_ratio,omitempty"`
+	LongAccountPercent       float64 `json:"long_account_percent,omitempty"`
+	ShortAccountPercent      float64 `json:"short_account_percent,omitempty"`
+	OiValue                  float64 `json:"oi_value,omitempty"`
+	OiChangePercent          float64 `json:"oi_change_percent,omitempty"`
+	OiChangePercentile100    int     `json:"oi_change_percentile_100,omitempty"`
+	FundingRate              float64 `json:"funding_rate,omitempty"`
+	FundingRatePercentile100 int     `json:"funding_rate_percentile_100,omitempty"`
 }
 
 type V4RankingSignals struct {
-	VolumeRank24h           int     `json:"volume_rank_24h,omitempty"`
-	VolumeRankTotalSymbols  int     `json:"volume_rank_total_symbols,omitempty"`
-	VolatilityRank24h       int     `json:"volatility_rank_24h,omitempty"`
-	VolatilityRankTotalSymbols int  `json:"volatility_rank_total_symbols,omitempty"`
-	RelativeStrengthRank24h int     `json:"relative_strength_rank_24h,omitempty"`
-	PriceChangePercent24h   float64 `json:"price_change_percent_24h,omitempty"`
-}
-
-type V4Indicators struct {
-	Ema20     []float64       `json:"ema20,omitempty"`
-	Ema50     []float64       `json:"ema50,omitempty"`
-	Rsi14     []float64       `json:"rsi14,omitempty"`
-	Macd      V4MACDData      `json:"macd,omitempty"`
-	Atr14     float64         `json:"atr14,omitempty"`
-	Bollinger V4BollingerData `json:"bollinger,omitempty"`
-	Volume    []float64       `json:"volume,omitempty"`
-}
-
-type V4MACDData struct {
-	Line      []float64 `json:"line,omitempty"`
-	Signal    []float64 `json:"signal,omitempty"`
-	Histogram []float64 `json:"histogram,omitempty"`
-}
-
-type V4BollingerData struct {
-	Upper  []float64 `json:"upper,omitempty"`
-	Middle []float64 `json:"middle,omitempty"`
-	Lower  []float64 `json:"lower,omitempty"`
-}
-
-type V4Klines struct {
-	Date            string          `json:"date"`
-	Columns         []string        `json:"columns"`
-	Values          [][]interface{} `json:"values"`
-	CurrentBarIndex int             `json:"current_bar_index"`
+	VolumeRank24h              int     `json:"volume_rank_24h,omitempty"`
+	VolumeRankTotalSymbols     int     `json:"volume_rank_total_symbols,omitempty"`
+	VolatilityRank24h          int     `json:"volatility_rank_24h,omitempty"`
+	VolatilityRankTotalSymbols int     `json:"volatility_rank_total_symbols,omitempty"`
+	RelativeStrengthRank24h    int     `json:"relative_strength_rank_24h,omitempty"`
+	PriceChangePercent24h      float64 `json:"price_change_percent_24h,omitempty"`
 }
 
 type V4SignalMeta struct {
-	Version          string                    `json:"version"`
-	LookbackPeriods  V4LookbackPeriods         `json:"lookback_periods,omitempty"`
-	IndicatorPeriods V4IndicatorPeriods        `json:"indicator_periods,omitempty"`
-	PercentileWindows V4PercentileWindows      `json:"percentile_windows,omitempty"`
-	Thresholds       V4Thresholds              `json:"thresholds,omitempty"`
+	Version           string              `json:"version"`
+	LookbackPeriods   V4LookbackPeriods   `json:"lookback_periods,omitempty"`
+	IndicatorPeriods  V4IndicatorPeriods  `json:"indicator_periods,omitempty"`
+	PercentileWindows V4PercentileWindows `json:"percentile_windows,omitempty"`
+	Thresholds        V4Thresholds        `json:"thresholds,omitempty"`
 }
 
 type V4LookbackPeriods struct {
-	StructureBreak     int `json:"structure_break"`
-	RangeCompression   int `json:"range_compression"`
-	SwingDetection     int `json:"swing_detection"`
-	LiquiditySweep     int `json:"liquidity_sweep"`
+	StructureBreak   int `json:"structure_break"`
+	RangeCompression int `json:"range_compression"`
+	SwingDetection   int `json:"swing_detection"`
+	LiquiditySweep   int `json:"liquidity_sweep"`
 }
 
 type V4IndicatorPeriods struct {
-	Rsi         int `json:"rsi"`
-	EmaShort    int `json:"ema_short"`
-	EmaLong     int `json:"ema_long"`
-	Atr         int `json:"atr"`
-	Bollinger   int `json:"bollinger"`
-	MacdFast    int `json:"macd_fast"`
-	MacdSlow    int `json:"macd_slow"`
-	MacdSignal  int `json:"macd_signal"`
+	Rsi        int `json:"rsi"`
+	EmaShort   int `json:"ema_short"`
+	EmaLong    int `json:"ema_long"`
+	Atr        int `json:"atr"`
+	Bollinger  int `json:"bollinger"`
+	MacdFast   int `json:"macd_fast"`
+	MacdSlow   int `json:"macd_slow"`
+	MacdSignal int `json:"macd_signal"`
 }
 
 type V4PercentileWindows struct {
-	Rsi          int `json:"rsi"`
-	Atr          int `json:"atr"`
-	Volume       int `json:"volume"`
-	BbWidth      int `json:"bb_width"`
-	OiChange     int `json:"oi_change"`
-	FundingRate  int `json:"funding_rate"`
+	Rsi         int `json:"rsi"`
+	Atr         int `json:"atr"`
+	Volume      int `json:"volume"`
+	BbWidth     int `json:"bb_width"`
+	OiChange    int `json:"oi_change"`
+	FundingRate int `json:"funding_rate"`
 }
 
 type V4Thresholds struct {
-	RsiOverbought          float64 `json:"rsi_overbought"`
-	RsiOversold            float64 `json:"rsi_oversold"`
-	VolumeSpikeRatio       float64 `json:"volume_spike_ratio"`
-	RangeCompressionTight  float64 `json:"range_compression_tight"`
-	RangeCompressionWide   float64 `json:"range_compression_wide"`
+	RsiOverbought         float64 `json:"rsi_overbought"`
+	RsiOversold           float64 `json:"rsi_oversold"`
+	VolumeSpikeRatio      float64 `json:"volume_spike_ratio"`
+	RangeCompressionTight float64 `json:"range_compression_tight"`
+	RangeCompressionWide  float64 `json:"range_compression_wide"`
 }
 
 // BuildV4JsonMarketData generates the V4 JSON market data part of User Prompt.
@@ -372,7 +335,7 @@ func (e *ChaosEngine) BuildV4JsonMarketData(ctx *ChaosContext) string {
 func (e *ChaosEngine) buildV4CompleteMarketData(ctx *ChaosContext) V4MarketData {
 	result := V4MarketData{
 		Timestamp: ctx.CurrentTime,
-		Account: V4AccountInfo{
+		Account: AccountInfo{
 			Equity:         ctx.Account.TotalEquity,
 			Balance:        ctx.Account.AvailableBalance,
 			PnlPct:         ctx.Account.TotalPnLPct,
@@ -557,8 +520,8 @@ func (e *ChaosEngine) buildV4MomentumSignals(tf *market.TimeframeSeriesData, md 
 	if len(tf.MACDValues) >= 30 {
 		limit := 10
 		signals.MacdLineValue = roundFloat(tf.MACDValues[0:limit][limit-1], 2)
-		signals.MacdSignalValue = roundFloat(tf.MACDValues[limit:2*limit][limit-1], 2)
-		signals.MacdHistogramValue = roundFloat(tf.MACDValues[2*limit:3*limit][limit-1], 2)
+		signals.MacdSignalValue = roundFloat(tf.MACDValues[limit : 2*limit][limit-1], 2)
+		signals.MacdHistogramValue = roundFloat(tf.MACDValues[2*limit : 3*limit][limit-1], 2)
 		signals.MacdHistogramPositive = signals.MacdHistogramValue > 0
 	}
 
@@ -692,14 +655,17 @@ func (e *ChaosEngine) buildV4PositioningSignals(md *market.Data) V4PositioningSi
 func (e *ChaosEngine) buildV4RankingSignals(md *market.Data, ctx *ChaosContext) V4RankingSignals {
 	signals := V4RankingSignals{}
 
-	signals.PriceChangePercent24h = roundFloat(md.PriceChange24h*100, 2)
+	// FIXME: market.Data does not have PriceChange24h. Using PriceChange4h as a placeholder or 0.
+	// To strictly follow V4 design, we need to add 24h change to market.Data or calculate it from daily klines.
+	// For now, we use 0 to avoid compilation error.
+	signals.PriceChangePercent24h = 0 // roundFloat(md.PriceChange24h*100, 2)
 
 	return signals
 }
 
-func (e *ChaosEngine) buildV4Indicators(tf *market.TimeframeSeriesData, cfg *ChaosConfig) V4Indicators {
+func (e *ChaosEngine) buildV4Indicators(tf *market.TimeframeSeriesData, cfg *ChaosConfig) Indicators {
 	limit := 10
-	indicators := V4Indicators{}
+	indicators := Indicators{}
 
 	if cfg == nil || cfg.Indicators.EnableEMA {
 		indicators.EMA20 = getLastNFloat(tf.EMA20Values, limit)
@@ -707,13 +673,13 @@ func (e *ChaosEngine) buildV4Indicators(tf *market.TimeframeSeriesData, cfg *Cha
 	}
 
 	if cfg == nil || cfg.Indicators.EnableRSI {
-		indicators.Rsi14 = getLastNFloat(tf.RSI14Values, limit)
+		indicators.RSI14 = getLastNFloat(tf.RSI14Values, limit)
 	}
 
 	if cfg == nil || cfg.Indicators.EnableMACD {
 		macdVals := getLastNFloat(tf.MACDValues, limit*3)
 		if len(macdVals) >= limit*3 {
-			indicators.Macd = V4MACDData{
+			indicators.MACD = MACDData{
 				Line:      macdVals[0:limit],
 				Signal:    macdVals[limit : 2*limit],
 				Histogram: macdVals[2*limit : 3*limit],
@@ -722,11 +688,11 @@ func (e *ChaosEngine) buildV4Indicators(tf *market.TimeframeSeriesData, cfg *Cha
 	}
 
 	if cfg == nil || cfg.Indicators.EnableATR {
-		indicators.Atr14 = roundFloat(tf.ATR14, 2)
+		indicators.ATR14 = roundFloat(tf.ATR14, 2)
 	}
 
 	if cfg == nil || cfg.Indicators.EnableBOLL {
-		indicators.Bollinger = V4BollingerData{
+		indicators.Bollinger = BollingerData{
 			Upper:  getLastNFloat(tf.BOLLUpper, limit),
 			Middle: getLastNFloat(tf.BOLLMiddle, limit),
 			Lower:  getLastNFloat(tf.BOLLLower, limit),
@@ -746,8 +712,8 @@ func (e *ChaosEngine) buildV4Indicators(tf *market.TimeframeSeriesData, cfg *Cha
 	return indicators
 }
 
-func (e *ChaosEngine) buildV4Klines(tf *market.TimeframeSeriesData) V4Klines {
-	klines := V4Klines{
+func (e *ChaosEngine) buildV4Klines(tf *market.TimeframeSeriesData) Klines {
+	klines := Klines{
 		Columns:         []string{"time", "o", "h", "l", "c", "v"},
 		Values:          make([][]interface{}, 0),
 		CurrentBarIndex: len(tf.Klines) - 1,
@@ -783,7 +749,7 @@ func (e *ChaosEngine) buildV4Klines(tf *market.TimeframeSeriesData) V4Klines {
 // Helper Functions for V4 Calculations
 // ============================================================================
 
-func countHigherHigh(klines []market.Kline, n int) int {
+func countHigherHigh(klines []market.KlineBar, n int) int {
 	if len(klines) < n+1 {
 		return 0
 	}
@@ -796,7 +762,7 @@ func countHigherHigh(klines []market.Kline, n int) int {
 	return count
 }
 
-func countLowerLow(klines []market.Kline, n int) int {
+func countLowerLow(klines []market.KlineBar, n int) int {
 	if len(klines) < n+1 {
 		return 0
 	}
@@ -809,7 +775,7 @@ func countLowerLow(klines []market.Kline, n int) int {
 	return count
 }
 
-func countSwingHigh(klines []market.Kline, n int, lookback int) int {
+func countSwingHigh(klines []market.KlineBar, n int, lookback int) int {
 	if len(klines) < n+2*lookback {
 		return 0
 	}
@@ -828,7 +794,7 @@ func countSwingHigh(klines []market.Kline, n int, lookback int) int {
 	return count
 }
 
-func countSwingLow(klines []market.Kline, n int, lookback int) int {
+func countSwingLow(klines []market.KlineBar, n int, lookback int) int {
 	if len(klines) < n+2*lookback {
 		return 0
 	}
@@ -847,7 +813,7 @@ func countSwingLow(klines []market.Kline, n int, lookback int) int {
 	return count
 }
 
-func isSwingHigh(klines []market.Kline, i int, lookback int) bool {
+func isSwingHigh(klines []market.KlineBar, i int, lookback int) bool {
 	if i < lookback || i >= len(klines)-lookback {
 		return false
 	}
@@ -866,7 +832,7 @@ func isSwingHigh(klines []market.Kline, i int, lookback int) bool {
 	return true
 }
 
-func isSwingLow(klines []market.Kline, i int, lookback int) bool {
+func isSwingLow(klines []market.KlineBar, i int, lookback int) bool {
 	if i < lookback || i >= len(klines)-lookback {
 		return false
 	}
@@ -885,30 +851,47 @@ func isSwingLow(klines []market.Kline, i int, lookback int) bool {
 	return true
 }
 
-func countConsecutiveBars(klines []market.Kline) (up int, down int) {
-	up = 0
-	down = 0
+func countConsecutiveBars(klines []market.KlineBar) (up int, down int) {
+	if len(klines) == 0 {
+		return 0, 0
+	}
 
-	for i := len(klines) - 1; i > 0; i-- {
-		if klines[i].Close > klines[i].Open {
-			up++
-		} else if klines[i].Close < klines[i].Open {
-			down++
-		} else {
-			break
-		}
-		if up > 0 && down > 0 {
-			break
+	last := klines[len(klines)-1]
+	isUp := last.Close > last.Open
+	isDown := last.Close < last.Open
+
+	if !isUp && !isDown {
+		return 0, 0
+	}
+
+	count := 0
+	for i := len(klines) - 1; i >= 0; i-- {
+		k := klines[i]
+		currentUp := k.Close > k.Open
+		currentDown := k.Close < k.Open
+
+		if isUp {
+			if currentUp {
+				count++
+			} else {
+				break
+			}
+		} else { // isDown
+			if currentDown {
+				count++
+			} else {
+				break
+			}
 		}
 	}
 
-	if up > 0 {
-		down = 0
+	if isUp {
+		return count, 0
 	}
-	return up, down
+	return 0, count
 }
 
-func countBarsInPeriod(klines []market.Kline, n int) (up int, down int) {
+func countBarsInPeriod(klines []market.KlineBar, n int) (up int, down int) {
 	up = 0
 	down = 0
 	start := len(klines) - n

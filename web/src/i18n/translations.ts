@@ -339,7 +339,7 @@ export const translations = {
     selectTradingStrategy: 'Select Trading Strategy',
     useStrategy: 'Use Strategy',
     noStrategyManual: '-- No Strategy (Manual Configuration) --',
-    strategyActive: ' (Active)',
+    strategyActiveLabel: ' (Active)',
     default: ' [Default]',
     noStrategyHint: 'No strategies yet, please create in Strategy Studio first',
     strategyDetails: 'Strategy Details',

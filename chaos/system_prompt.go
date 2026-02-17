@@ -21,20 +21,20 @@ func (e *ChaosEngine) BuildSystemPrompt(accountEquity float64, variant string) s
 		Config: &ChaosConfig{
 			ChaosPrompt:   chaosPrompt,
 			RiskControl:   riskControl,
-			PromptVariant: variant,
+			SystemPromptVariant: variant,
 			Indicators:    indicators,
 		},
 	}
-	return e.buildSystemPromptWithContext(ctx)
+	return e.buildSystemPromptWithChaosContext(ctx)
 }
 
-// buildSystemPromptWithContext builds the system prompt for Chaos mode using context
-func (e *ChaosEngine) buildSystemPromptWithContext(ctx *ChaosContext) string {
+// buildSystemPromptWithChaosContext builds the system prompt for Chaos mode using context
+func (e *ChaosEngine) buildSystemPromptWithChaosContext(ctx *ChaosContext) string {
 	if ctx.Config != nil && ctx.Config.ChaosPrompt != "" {
 		// Use manager to build the full prompt including Contract and Footer
 		// We pass indicators config for dynamic market data generation
 		return e.manager.BuildSystemPrompt(
-			ctx.Config.PromptVariant,
+			ctx.Config.SystemPromptVariant,
 			ctx.Config.ChaosPrompt,
 			ctx.Config.Indicators,
 		)

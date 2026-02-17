@@ -250,8 +250,8 @@ export function ChaosStudioPage() {
         }
 
         // Set variant from chaos_config if available
-        if (migratedConfig.chaos_config?.prompt_variant) {
-            setSelectedVariant(migratedConfig.chaos_config.prompt_variant)
+        if (migratedConfig.chaos_config?.system_prompt_variant) {
+            setSelectedVariant(migratedConfig.chaos_config.system_prompt_variant)
         } else if (migratedConfig.prompt_variant) {
             setSelectedVariant(migratedConfig.prompt_variant)
         } else {
@@ -270,8 +270,8 @@ export function ChaosStudioPage() {
         }
 
         // Set variant from chaos_config if available
-        if (migratedConfig.chaos_config?.prompt_variant) {
-            setSelectedVariant(migratedConfig.chaos_config.prompt_variant)
+        if (migratedConfig.chaos_config?.system_prompt_variant) {
+            setSelectedVariant(migratedConfig.chaos_config.system_prompt_variant)
         } else if (migratedConfig.prompt_variant) {
             setSelectedVariant(migratedConfig.prompt_variant)
         } else {
@@ -963,8 +963,8 @@ export function ChaosStudioPage() {
                     }
 
                     // Update variant state when switching strategy
-                    if (migratedConfig.chaos_config?.prompt_variant) {
-                        setSelectedVariant(migratedConfig.chaos_config.prompt_variant)
+                    if (migratedConfig.chaos_config?.system_prompt_variant) {
+                        setSelectedVariant(migratedConfig.chaos_config.system_prompt_variant)
                     } else if (migratedConfig.prompt_variant) {
                         setSelectedVariant(migratedConfig.prompt_variant)
                     } else {
