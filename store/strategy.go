@@ -73,6 +73,8 @@ type ChaosStrategyConfig struct {
 
 	// Prompt variant (e.g. "s1", "t1")
 	PromptVariant string `json:"prompt_variant,omitempty"`
+	// Prompt version: "v1" (legacy), "v2" (JSON format), "v4" (structural facts)
+	PromptVersion string `json:"prompt_version,omitempty"`
 	// Fault injection rate (0.0-1.0)
 	FaultInjectionRate float64 `json:"fault_injection_rate,omitempty"`
 	// Data noise level (0.0-1.0)

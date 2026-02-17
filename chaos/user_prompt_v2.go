@@ -1,3 +1,19 @@
+// =============================================================================
+// Chaos Trading System - User Prompt V2 (JSON Format)
+// =============================================================================
+// 
+// User Prompt 是发送给 LLM 的用户提示词的一部分。
+// 完整提示词 = System Prompt + User Prompt
+//
+// V2 特点：
+// - JSON 格式输出
+// - 包含方向性标签（bullish/bearish）
+// - 包含技术指标参考文档
+// - Token 效率较高
+//
+// 版本切换：通过配置 prompt_version = "v2" 启用
+// =============================================================================
+
 package chaos
 
 import (
@@ -10,37 +26,39 @@ import (
 	"time"
 )
 
-// BuildUserPromptFromChaosContext_v2 使用 ChaosContext 构建 V2 版本的 User Prompt。
-// 它采用与 V1 相同的构成逻辑，但使用新的 JSON 格式。
-func (e *ChaosEngine) BuildUserPromptFromChaosContext_v2(ctx *ChaosContext) string {
+// buildUserPromptV2 使用 ChaosContext 构建 V2 版本的 User Prompt。
+// 它采用与 Legacy 相同的构成逻辑，但使用 JSON 格式。
+//
+// 构建流程：
+//  1. 技术指标参考文档 (getTechnicalIndicatorsReference)
+//  2. Header - 时间、周期、运行时长
+//  3. GlobalContext - BTC 行情概览
+//  4. AccountStatus - 账户状态
+//  5. TradingPerformance - 历史交易统计
+//  6. Positions - 当前持仓
+//  7. 市场数据 JSON - 候选币种多时间框架数据
+func (e *ChaosEngine) buildUserPromptV2(ctx *ChaosContext) string {
 	if ctx == nil {
 		return ""
 	}
 	var sb strings.Builder
 
-	// 添加 Chaos 头部以增加可见性
-	sb.WriteString("# 🌀 Chaos 模式用户提示 (V2)\n\n")
+	// 1. 标题
+	sb.WriteString("# 🌀 Chaos 模式用户提示 (V2 - JSON Format)\n\n")
 
+	// 2. 技术指标参考文档
 	sb.WriteString(e.getTechnicalIndicatorsReference())
 	sb.WriteString("\n\n")
 	sb.WriteString("---\n\n")
 
-	// 1. 系统状态与环境
-	sb.WriteString(e.buildHeader(ctx))
+	// 3. 公共信息部分
+	sb.WriteString(e.buildHeader(ctx))           // 时间、周期、运行时长
+	sb.WriteString(e.buildGlobalContext(ctx))    // BTC 行情概览
+	sb.WriteString(e.buildAccountStatus(ctx))    // 账户状态
+	sb.WriteString(e.buildTradingPerformance(ctx)) // 历史交易统计
+	sb.WriteString(e.buildPositions(ctx))        // 当前持仓
 
-	// 2. 全球市场背景 (BTC)
-	sb.WriteString(e.buildGlobalContext(ctx))
-
-	// 3. 账户信息
-	sb.WriteString(e.buildAccountStatus(ctx))
-
-	// 4. 交易表现 (统计与历史)
-	sb.WriteString(e.buildTradingPerformance(ctx))
-
-	// 5. 当前持仓
-	sb.WriteString(e.buildPositions(ctx))
-
-	// 6. 市场数据 (JSON 格式)
+	// 4. 市场数据 (JSON 格式)
 	sb.WriteString("## 市场数据 (JSON 格式)\n\n")
 	sb.WriteString(e.BuildJsonMarketData(ctx))
 
@@ -52,31 +70,20 @@ func (e *ChaosEngine) BuildUserPromptFromChaosContext_v2(ctx *ChaosContext) stri
 // BuildJsonMarketData generates the JSON market data part of User Prompt.
 func (e *ChaosEngine) BuildJsonMarketData(ctx *ChaosContext) string {
 	data := e.buildCompleteMarketData(ctx)
-	// Use json.MarshalIndent for pretty printing.
 	prettyJSON, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
 		return fmt.Sprintf("Error building JSON: %v", err)
 	}
 
-	// Compress arrays (numeric or string) to single line using regex
-	// Numeric pattern: optional sign, digits, optional decimal part, optional exponent
 	num := `-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?`
-	// String pattern: double quotes surrounding non-quote characters
 	str := `"[^"]*"`
-	// Value pattern: number or string
 	val := `(?:` + num + `|` + str + `)`
-
-	// Pattern: [ space? val (space? , space? val)* space? ]
 	pattern := `\[\s*` + val + `(?:\s*,\s*` + val + `)*\s*\]`
 	re := regexp.MustCompile(pattern)
-
-	// Regex to match newline and following indentation
 	whitespaceRe := regexp.MustCompile(`\n\s*`)
 
 	compactJSON := re.ReplaceAllStringFunc(string(prettyJSON), func(match string) string {
-		// Remove newlines and indentation, keeping value content intact
 		clean := whitespaceRe.ReplaceAllString(match, "")
-		// Add space after comma for readability (safe for these data types)
 		clean = strings.ReplaceAll(clean, ",", ", ")
 		return clean
 	})
