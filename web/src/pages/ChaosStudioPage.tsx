@@ -696,11 +696,11 @@ export function ChaosStudioPage() {
       aggressive: { zh: '激进', en: 'Aggressive' },
       conservative: { zh: '保守', en: 'Conservative' },
       none: { zh: '无 (自定义)', en: 'None (Custom)' },
-      s1: { zh: 'S1 (主力/基线)', en: 'S1 (SWING_CORE)' },
-      t1: { zh: 'T1 (慢趋势)', en: 'T1 (TREND_FOLLOW_SLOW)' },
-      d1: { zh: 'D1 (日内波段)', en: 'D1 (INTRADAY_SWING)' },
-      r1: { zh: 'R1 (震荡防御)', en: 'R1 (RANGE_DEFENSIVE)' },
-      x1: { zh: 'X1 (实验/微结构)', en: 'X1 (SCALP_EXPERIMENT)' },
+      s1: { zh: 'S1 (主力波段 | 1h/15m)', en: 'S1 (Swing Core | 1h/15m)' },
+      t1: { zh: 'T1 (慢速趋势 | 4h/1h)', en: 'T1 (Trend Slow | 4h/1h)' },
+      d1: { zh: 'D1 (日内波段 | 15m/5m)', en: 'D1 (Intraday | 15m/5m)' },
+      r1: { zh: 'R1 (震荡防御 | 30m/5m)', en: 'R1 (Range Defensive | 30m/5m)' },
+      x1: { zh: 'X1 (高频实验 | 5m/1m)', en: 'X1 (Scalp Experiment | 5m/1m)' },
       selectModel: { zh: '选择 AI 模型', en: 'Select AI Model' },
       runTest: { zh: '运行测试', en: 'Run Test' },
       running: { zh: '运行中...', en: 'Running...' },
@@ -1235,16 +1235,29 @@ export function ChaosStudioPage() {
                       </div>
                       <div className="grid grid-cols-3 gap-2 text-xs">
                         {Object.entries(promptPreview.config_summary || {}).map(
-                          ([key, value]) => (
-                            <div key={key}>
-                              <div className="text-nofx-text-muted">
-                                {key.replace(/_/g, ' ')}
+                          ([key, value]) => {
+                            const labels: Record<string, string> = {
+                              primary_tf: 'Primary TF',
+                              entry_tf: 'Entry TF',
+                              structure_tf: 'Structure TF',
+                              min_rr: 'Min RR',
+                              time_decay: 'Time Decay',
+                              coin_source: 'Coin Source',
+                              btc_eth_leverage: 'BTC/ETH Lev',
+                              altcoin_leverage: 'Altcoin Lev',
+                              max_positions: 'Max Pos',
+                            }
+                            return (
+                              <div key={key}>
+                                <div className="text-nofx-text-muted">
+                                  {labels[key] || key.replace(/_/g, ' ')}
+                                </div>
+                                <div className="text-nofx-text">
+                                  {String(value)}
+                                </div>
                               </div>
-                              <div className="text-nofx-text">
-                                {String(value)}
-                              </div>
-                            </div>
-                          )
+                            )
+                          }
                         )}
                       </div>
                     </div>

@@ -55,7 +55,67 @@ func (m *Manager) IsChaosMode(customPrompt string) bool {
 	return false
 }
 
-// BuildPrompt builds the system prompt for Chaos mode
+// GetVariantParams returns the parameters for a specific variant
+func (m *Manager) GetVariantParams(variant string) map[string]string {
+	params := make(map[string]string)
+	v := strings.ToLower(strings.TrimSpace(variant))
+
+	// Default empty params
+	params["PRIMARY_TIMEFRAME"] = "N/A"
+	params["STRUCTURE_VALIDATION_TF"] = "N/A"
+	params["ENTRY_TIMEFRAME"] = "N/A"
+	params["TIME_DECAY_N"] = "N/A"
+	params["MIN_RR"] = "N/A"
+
+	switch v {
+	case "s1", "swing_core":
+		params["PRIMARY_TIMEFRAME"] = "1h"
+		params["STRUCTURE_VALIDATION_TF"] = "4h"
+		params["ENTRY_TIMEFRAME"] = "15m"
+		params["TIME_DECAY_N"] = "5"
+		params["MIN_RR"] = "1.5"
+
+	case "t1", "trend_follow_slow":
+		params["PRIMARY_TIMEFRAME"] = "4h"
+		params["STRUCTURE_VALIDATION_TF"] = "1d"
+		params["ENTRY_TIMEFRAME"] = "1h"
+		params["TIME_DECAY_N"] = "3"
+		params["MIN_RR"] = "2.0"
+
+	case "d1", "intraday_swing":
+		params["PRIMARY_TIMEFRAME"] = "15m"
+		params["STRUCTURE_VALIDATION_TF"] = "1h"
+		params["ENTRY_TIMEFRAME"] = "5m"
+		params["TIME_DECAY_N"] = "4"
+		params["MIN_RR"] = "1.5"
+
+	case "r1", "reversal_hunter":
+		params["PRIMARY_TIMEFRAME"] = "1h"
+		params["STRUCTURE_VALIDATION_TF"] = "4h"
+		params["ENTRY_TIMEFRAME"] = "15m"
+		params["TIME_DECAY_N"] = "3"
+		params["MIN_RR"] = "2.5" // Higher RR for reversals
+
+	case "x1", "scalp_turbo":
+		params["PRIMARY_TIMEFRAME"] = "5m"
+		params["STRUCTURE_VALIDATION_TF"] = "15m"
+		params["ENTRY_TIMEFRAME"] = "1m"
+		params["TIME_DECAY_N"] = "3"
+		params["MIN_RR"] = "1.2" // Lower RR for scalping
+
+	case "default", "":
+		// Fallback to S1
+		params["PRIMARY_TIMEFRAME"] = "1h"
+		params["STRUCTURE_VALIDATION_TF"] = "4h"
+		params["ENTRY_TIMEFRAME"] = "15m"
+		params["TIME_DECAY_N"] = "5"
+		params["MIN_RR"] = "1.5"
+	}
+
+	return params
+}
+
+// BuildSystemPrompt builds the system prompt for Chaos mode
 func (m *Manager) BuildSystemPrompt(variant string, customPrompt string, indicators store.IndicatorConfig) string {
 	var sb strings.Builder
 
@@ -68,68 +128,8 @@ func (m *Manager) BuildSystemPrompt(variant string, customPrompt string, indicat
 
 	// 2. Resolve Variant Parameters
 	// Instead of appending hardcoded strings, we prepare a map of parameters to inject into the template
-	params := make(map[string]string)
+	params := m.GetVariantParams(variant)
 	v := strings.ToLower(strings.TrimSpace(variant))
-
-	// Default empty params
-	params["PRIMARY_TIMEFRAME"] = "N/A"
-	params["STRUCTURE_VALIDATION_TF"] = "N/A"
-	params["POSITION_STYLE"] = "N/A"
-	params["TIME_DECAY_N"] = "N/A"
-	params["MIN_RR"] = "N/A"
-	params["PROFILE_NAME"] = "CUSTOM"
-	params["PROFILE_DESC"] = "Custom Profile"
-
-	switch v {
-	case "s1", "swing_core":
-		params["PRIMARY_TIMEFRAME"] = "1h"
-		params["STRUCTURE_VALIDATION_TF"] = "4h"
-		params["POSITION_STYLE"] = "SWING"
-		params["TIME_DECAY_N"] = "5"
-		params["MIN_RR"] = "1.5"
-		params["PROFILE_NAME"] = "S1 — SWING_CORE"
-		params["PROFILE_DESC"] = "主力实盘账户 | 稳定性最高 | 适合长期跑"
-
-	case "t1", "trend_follow_slow":
-		params["PRIMARY_TIMEFRAME"] = "4h"
-		params["STRUCTURE_VALIDATION_TF"] = "1d"
-		params["POSITION_STYLE"] = "TREND"
-		params["TIME_DECAY_N"] = "3"
-		params["MIN_RR"] = "2.0"
-		params["PROFILE_NAME"] = "T1 — TREND_FOLLOW_SLOW"
-		params["PROFILE_DESC"] = "中长期趋势 | 牛市单边 | 极少交易"
-
-	case "d1", "intraday_swing":
-		params["PRIMARY_TIMEFRAME"] = "15m"
-		params["STRUCTURE_VALIDATION_TF"] = "1h"
-		params["POSITION_STYLE"] = "SWING"
-		params["TIME_DECAY_N"] = "4"
-		params["MIN_RR"] = "1.5"
-		params["PROFILE_NAME"] = "D1 — INTRADAY_SWING"
-		params["PROFILE_DESC"] = "日内波段 | 鲁棒性验证 | 较活跃"
-
-	case "r1", "range_defensive":
-		params["PRIMARY_TIMEFRAME"] = "30m"
-		params["STRUCTURE_VALIDATION_TF"] = "2h"
-		params["POSITION_STYLE"] = "SWING"
-		params["TIME_DECAY_N"] = "3"
-		params["MIN_RR"] = "1.2"
-		params["PROFILE_NAME"] = "R1 — RANGE_DEFENSIVE"
-		params["PROFILE_DESC"] = "震荡防御 | 盈利周期短 | Regime敏感"
-
-	case "x1", "scalp_experiment":
-		params["PRIMARY_TIMEFRAME"] = "5m"
-		params["STRUCTURE_VALIDATION_TF"] = "15m"
-		params["POSITION_STYLE"] = "SCALP"
-		params["TIME_DECAY_N"] = "2"
-		params["MIN_RR"] = "1.2"
-		params["PROFILE_NAME"] = "X1 — SCALP_EXPERIMENT"
-		params["PROFILE_DESC"] = "微结构研究 | 不稳定 | Token消耗高"
-
-	case "none", "default", "":
-		// No injection, parameters remain as defaults or placeholders
-		// This allows for pure custom prompts without forced parameter injection
-	}
 
 	// 3. Inject Parameters into Custom Prompt (Template Replacement)
 	// We replace placeholders like {PRIMARY_TIMEFRAME} with actual values
@@ -145,16 +145,16 @@ func (m *Manager) BuildSystemPrompt(variant string, customPrompt string, indicat
 
 		if !hasPlaceholders {
 			// Legacy mode: Append the profile info manually since template tags are missing
-			// We reconstruct the info string from params to keep it DRY
-			sb.WriteString(fmt.Sprintf("## Profile %s\n\n", params["PROFILE_NAME"]))
-			sb.WriteString(fmt.Sprintf("### 使用信息\n%s\n\n", params["PROFILE_DESC"]))
-			sb.WriteString("━━━━━━━━━━━━━━━━━━━━\nGLOBAL SYSTEM PARAMETERS (READ-ONLY)\n━━━━━━━━━━━━━━━━━━━━\n\n")
-			sb.WriteString(fmt.Sprintf("PRIMARY_TIMEFRAME = %s\n", params["PRIMARY_TIMEFRAME"]))
+			sb.WriteString("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
+			sb.WriteString("SYSTEM PARAMETERS — 强制执行，不可覆盖\n")
+			sb.WriteString("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n")
 			sb.WriteString(fmt.Sprintf("STRUCTURE_VALIDATION_TF = %s\n", params["STRUCTURE_VALIDATION_TF"]))
-			sb.WriteString(fmt.Sprintf("POSITION_STYLE = %s\n", params["POSITION_STYLE"]))
-			sb.WriteString(fmt.Sprintf("TIME_DECAY_N = %s\n", params["TIME_DECAY_N"]))
-			sb.WriteString(fmt.Sprintf("MIN_RR = %s\n\n", params["MIN_RR"]))
-			sb.WriteString("The LLM MUST NOT modify or reinterpret these parameters.\n\n")
+			sb.WriteString(fmt.Sprintf("PRIMARY_TIMEFRAME       = %s\n", params["PRIMARY_TIMEFRAME"]))
+			sb.WriteString(fmt.Sprintf("ENTRY_TIMEFRAME         = %s\n", params["ENTRY_TIMEFRAME"]))
+			sb.WriteString(fmt.Sprintf("TIME_DECAY_N            = %s\n", params["TIME_DECAY_N"]))
+			sb.WriteString(fmt.Sprintf("MIN_RR                  = %s\n\n", params["MIN_RR"]))
+			sb.WriteString("所有决策必须以上述参数为准。\n")
+			sb.WriteString("若市场数据与参数定义不符，以参数为准，不得自行调整。\n\n")
 		}
 	}
 

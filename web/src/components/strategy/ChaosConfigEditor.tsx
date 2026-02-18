@@ -51,14 +51,14 @@ export function ChaosConfigEditor({
 
       // Prompt Variant
       systemPromptVariant: { zh: 'System Prompt 变体', en: 'System Prompt Variant' },
-      systemPromptVariantDesc: { zh: '选择 Chaos 交易的风格变体', en: 'Select trading style variant' },
+      systemPromptVariantDesc: { zh: '选择 Chaos 交易的风格变体 (Primary/Entry)', en: 'Select trading style variant (Primary/Entry)' },
       default: { zh: 'Default (默认)', en: 'Default' },
       none: { zh: 'None (无/自定义)', en: 'None (Custom)' },
-      s1: { zh: 'S1 (主力/基线)', en: 'S1 (SWING_CORE)' },
-      t1: { zh: 'T1 (慢趋势)', en: 'T1 (TREND_FOLLOW_SLOW)' },
-      d1: { zh: 'D1 (日内波段)', en: 'D1 (INTRADAY_SWING)' },
-      r1: { zh: 'R1 (震荡防御)', en: 'R1 (RANGE_DEFENSIVE)' },
-      x1: { zh: 'X1 (实验/微结构)', en: 'X1 (SCALP_EXPERIMENT)' },
+      s1: { zh: 'S1 (主力波段 | 1h/15m)', en: 'S1 (Swing Core | 1h/15m)' },
+      t1: { zh: 'T1 (慢速趋势 | 4h/1h)', en: 'T1 (Trend Slow | 4h/1h)' },
+      d1: { zh: 'D1 (日内波段 | 15m/5m)', en: 'D1 (Intraday | 15m/5m)' },
+      r1: { zh: 'R1 (震荡防御 | 30m/5m)', en: 'R1 (Range Defensive | 30m/5m)' },
+      x1: { zh: 'X1 (高频实验 | 5m/1m)', en: 'X1 (Scalp Experiment | 5m/1m)' },
 
       // Chaos Prompt
       chaosPromptDesc: { 

@@ -420,16 +420,33 @@ func (s *Server) handlePreviewPrompt(c *gin.Context) {
 
 	systemPrompt := engine.BuildSystemPrompt(req.AccountEquity, req.PromptVariant)
 
+	// Build config summary
+	configSummary := gin.H{
+		"coin_source":      req.Config.CoinSource.SourceType,
+		"primary_tf":       req.Config.Indicators.Klines.PrimaryTimeframe,
+		"btc_eth_leverage": req.Config.RiskControl.BTCETHMaxLeverage,
+		"altcoin_leverage": req.Config.RiskControl.AltcoinMaxLeverage,
+		"max_positions":    req.Config.RiskControl.MaxPositions,
+	}
+
+	// If Chaos mode, override/enrich summary with variant parameters
+	if isChaos {
+		variantParams := chaosManager.GetVariantParams(req.PromptVariant)
+		// Override primary_tf with the one defined in the variant
+		if val, ok := variantParams["PRIMARY_TIMEFRAME"]; ok && val != "N/A" {
+			configSummary["primary_tf"] = val
+		}
+		// Add specific chaos params
+		configSummary["entry_tf"] = variantParams["ENTRY_TIMEFRAME"]
+		configSummary["structure_tf"] = variantParams["STRUCTURE_VALIDATION_TF"]
+		configSummary["min_rr"] = variantParams["MIN_RR"]
+		configSummary["time_decay"] = variantParams["TIME_DECAY_N"]
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"system_prompt":  systemPrompt,
 		"prompt_variant": req.PromptVariant,
-		"config_summary": gin.H{
-			"coin_source":      req.Config.CoinSource.SourceType,
-			"primary_tf":       req.Config.Indicators.Klines.PrimaryTimeframe,
-			"btc_eth_leverage": req.Config.RiskControl.BTCETHMaxLeverage,
-			"altcoin_leverage": req.Config.RiskControl.AltcoinMaxLeverage,
-			"max_positions":    req.Config.RiskControl.MaxPositions,
-		},
+		"config_summary": configSummary,
 	})
 }
 

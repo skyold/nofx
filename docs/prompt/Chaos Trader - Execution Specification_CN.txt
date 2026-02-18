@@ -7,7 +7,7 @@ GLOBAL SYSTEM PARAMETERS (READ-ONLY)
 
 PRIMARY_TIMEFRAME = {PRIMARY_TIMEFRAME}
 STRUCTURE_VALIDATION_TF = {STRUCTURE_VALIDATION_TF}
-POSITION_STYLE = {POSITION_STYLE}       # TREND | SWING | SCALP
+ENTRY_TIMEFRAME = {ENTRY_TIMEFRAME}
 TIME_DECAY_N = {TIME_DECAY_N}
 MIN_RR = {MIN_RR}
 
@@ -216,26 +216,14 @@ Section 3：Opportunity Evaluation Layer
 • 时机 (Timing)
 
 ────────────────────
-Scoring Emphasis by POSITION_STYLE
+Scoring Emphasis by ENTRY_TIMEFRAME
 ────────────────────
 
-POSITION_STYLE = TREND
-• Trend & Context: primary weight
-• Structural Validity: must support higher-TF continuation
-• Participation: favors sustained flow, not spikes
-• Timing: tolerance for less precise entries
+ENTRY_TIMEFRAME determines execution precision:
+• Timing: must be validated on ENTRY_TIMEFRAME
+• Structural Validity: ENTRY_TIMEFRAME confirms entry structure
+• Trend & Context: PRIMARY_TIMEFRAME remains the dominant trend
 
-POSITION_STYLE = SWING
-• Structural Validity: primary weight
-• Timing: equal importance
-• Trend & Context: medium importance
-• Participation: confirms balance shifts
-
-POSITION_STYLE = SCALP
-• Timing: primary weight
-• Structural Validity: micro-structure only
-• Participation: short-term liquidity response
-• Trend & Context: lowest importance
 
 ────────────────────
 Hard Zero Conditions (ANY → total_score = 0)
