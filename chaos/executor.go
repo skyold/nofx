@@ -528,6 +528,4 @@ func (e *ChaosExecutor) recordPositionChange(orderID, symbol, side, action strin
 	}
 }
 
-func (e *ChaosExecutor) recordOrder(orderID interface{}, symbol, action string, quantity, price float64, leverage int) {
-	// Deprecated in favor of recordAndConfirmOrder
-}
+
