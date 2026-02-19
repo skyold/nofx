@@ -222,8 +222,6 @@ func (at *AutoTrader) buildChaosContext() (*chaos.ChaosContext, error) {
 	}
 
 	symbolsToFetch := make(map[string]bool)
-	// Always fetch BTC data for global market context
-	symbolsToFetch["BTCUSDT"] = true
 	for _, p := range positionSnapshots {
 		symbolsToFetch[p.Symbol] = true
 	}
@@ -240,7 +238,7 @@ func (at *AutoTrader) buildChaosContext() (*chaos.ChaosContext, error) {
 		marketDataMap[symbol] = data
 	}
 
-	// 5. Get OI Top Data
+	// 5. Get OI Top Data (Legacy, kept for compatibility if needed)
 	oiTopMap := make(map[string]*kernel.OITopData)
 	if chaosConfig.CoinSource.UseOITop {
 		apiKey := chaosConfig.Indicators.NofxOSAPIKey
@@ -257,6 +255,71 @@ func (at *AutoTrader) buildChaosContext() (*chaos.ChaosContext, error) {
 					OIDeltaValue:      p.OIDeltaValue,
 					PriceDeltaPercent: p.PriceDeltaPercent,
 				}
+			}
+		}
+	}
+
+	// 6. Fetch Market Rankings (New NoFxOS Data)
+	// We use the strategy engine to fetch these, as it handles caching and config
+	var oiRankingData *nofxos.OIRankingData
+	var netFlowRankingData *nofxos.NetFlowRankingData
+	var priceRankingData *nofxos.PriceRankingData
+
+	if at.strategyEngine != nil {
+		oiRankingData = at.strategyEngine.FetchOIRankingData()
+		netFlowRankingData = at.strategyEngine.FetchNetFlowRankingData()
+		priceRankingData = at.strategyEngine.FetchPriceRankingData()
+	}
+
+	// 6.5 Fetch Trading History (Recent Orders & Stats)
+	var recentOrders []kernel.RecentOrder
+	var tradingStats *kernel.TradingStats
+
+	if at.store != nil {
+		// Get recent 10 closed trades for AI context
+		recentTrades, err := at.store.Position().GetRecentTrades(at.id, 10)
+		if err != nil {
+			logger.Infof("⚠️ [%s] Failed to get recent trades: %v", at.name, err)
+		} else {
+			for _, trade := range recentTrades {
+				// Convert Unix timestamps to formatted strings for AI readability
+				entryTimeStr := ""
+				if trade.EntryTime > 0 {
+					entryTimeStr = time.Unix(trade.EntryTime, 0).UTC().Format("01-02 15:04 UTC")
+				}
+				exitTimeStr := ""
+				if trade.ExitTime > 0 {
+					exitTimeStr = time.Unix(trade.ExitTime, 0).UTC().Format("01-02 15:04 UTC")
+				}
+
+				recentOrders = append(recentOrders, kernel.RecentOrder{
+					Symbol:       trade.Symbol,
+					Side:         trade.Side,
+					EntryPrice:   trade.EntryPrice,
+					ExitPrice:    trade.ExitPrice,
+					RealizedPnL:  trade.RealizedPnL,
+					PnLPct:       trade.PnLPct,
+					EntryTime:    entryTimeStr,
+					ExitTime:     exitTimeStr,
+					HoldDuration: trade.HoldDuration,
+				})
+			}
+		}
+
+		// Get trading statistics for AI context
+		stats, err := at.store.Position().GetFullStats(at.id)
+		if err != nil {
+			logger.Infof("⚠️ [%s] Failed to get trading stats: %v", at.name, err)
+		} else if stats != nil && stats.TotalTrades > 0 {
+			tradingStats = &kernel.TradingStats{
+				TotalTrades:    stats.TotalTrades,
+				WinRate:        stats.WinRate,
+				ProfitFactor:   stats.ProfitFactor,
+				SharpeRatio:    stats.SharpeRatio,
+				TotalPnL:       stats.TotalPnL,
+				AvgWin:         stats.AvgWin,
+				AvgLoss:        stats.AvgLoss,
+				MaxDrawdownPct: stats.MaxDrawdownPct,
 			}
 		}
 	}
@@ -279,10 +342,15 @@ func (at *AutoTrader) buildChaosContext() (*chaos.ChaosContext, error) {
 			UnrealizedPnL:    totalUnrealizedProfit,
 			PositionCount:    len(positionSnapshots),
 		},
-		Positions:      positionSnapshots,
-		CandidateCoins: candidateCoins,
-		MarketDataMap:  marketDataMap,
-		OITopDataMap:   oiTopMap,
+		Positions:          positionSnapshots,
+		CandidateCoins:     candidateCoins,
+		RecentOrders:       recentOrders,
+		TradingStats:       tradingStats,
+		MarketDataMap:      marketDataMap,
+		OITopDataMap:       oiTopMap,
+		OIRankingData:      oiRankingData,
+		NetFlowRankingData: netFlowRankingData,
+		PriceRankingData:   priceRankingData,
 	}
 
 	if totalEquity > 0 {

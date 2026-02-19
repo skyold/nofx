@@ -378,9 +378,9 @@ func (s *Server) handlePreviewPrompt(c *gin.Context) {
 	}
 
 	var req struct {
-		Config          store.StrategyConfig `json:"config" binding:"required"`
-		AccountEquity   float64              `json:"account_equity"`
-		PromptVariant   string               `json:"prompt_variant"`
+		Config        store.StrategyConfig `json:"config" binding:"required"`
+		AccountEquity float64              `json:"account_equity"`
+		PromptVariant string               `json:"prompt_variant"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -516,21 +516,28 @@ func (s *Server) handleStrategyTestRun(c *gin.Context) {
 		primaryTimeframe = timeframes[0]
 	}
 	if klineCount <= 0 {
-		klineCount = 30
+		klineCount = 100 // Default to 100 to support EMA50 and other indicators
 	}
 
 	fmt.Printf("📊 Using timeframes: %v, primary: %s, kline count: %d\n", timeframes, primaryTimeframe, klineCount)
 
 	// Get real market data (using multiple timeframes)
 	marketDataMap := make(map[string]*market.Data)
-	for _, coin := range candidates {
-		data, err := market.GetWithTimeframes(coin.Symbol, timeframes, primaryTimeframe, klineCount)
+
+	// Collect symbols to fetch (candidates only)
+	symbolsToFetch := make(map[string]bool)
+	for _, c := range candidates {
+		symbolsToFetch[c.Symbol] = true
+	}
+
+	for symbol := range symbolsToFetch {
+		data, err := market.GetWithTimeframes(symbol, timeframes, primaryTimeframe, klineCount)
 		if err != nil {
 			// If getting data for a coin fails, log but continue
-			fmt.Printf("⚠️  Failed to get market data for %s: %v\n", coin.Symbol, err)
+			fmt.Printf("⚠️  Failed to get market data for %s: %v\n", symbol, err)
 			continue
 		}
-		marketDataMap[coin.Symbol] = data
+		marketDataMap[symbol] = data
 	}
 
 	// Fetch quantitative data for each candidate coin
@@ -599,12 +606,12 @@ func (s *Server) handleStrategyTestRun(c *gin.Context) {
 			RuntimeMinutes: 0,
 			CallCount:      1,
 			Config: &chaos.ChaosConfig{
-				ChaosPrompt:   req.Config.ChaosConfig.ChaosPrompt,
-				RiskControl:   req.Config.ChaosConfig.RiskControl,
+				ChaosPrompt:         req.Config.ChaosConfig.ChaosPrompt,
+				RiskControl:         req.Config.ChaosConfig.RiskControl,
 				SystemPromptVariant: req.Config.ChaosConfig.SystemPromptVariant,
 				UserPromptVersion:   req.Config.ChaosConfig.UserPromptVersion,
-				
-				Indicators:    req.Config.Indicators,
+
+				Indicators: req.Config.Indicators,
 			},
 			Account: kernel.AccountInfo{
 				TotalEquity:      1000.0,
@@ -727,4 +734,3 @@ func (s *Server) runRealAITest(userID, modelID, systemPrompt, userPrompt string)
 
 	return response, nil
 }
-
