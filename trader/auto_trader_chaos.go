@@ -260,15 +260,40 @@ func (at *AutoTrader) buildChaosContext() (*chaos.ChaosContext, error) {
 	}
 
 	// 6. Fetch Market Rankings (New NoFxOS Data)
-	// We use the strategy engine to fetch these, as it handles caching and config
+	// Respect Chaos-specific indicator switches for OI/NetFlow/Price rankings
 	var oiRankingData *nofxos.OIRankingData
 	var netFlowRankingData *nofxos.NetFlowRankingData
 	var priceRankingData *nofxos.PriceRankingData
 
 	if at.strategyEngine != nil {
-		oiRankingData = at.strategyEngine.FetchOIRankingData()
-		netFlowRankingData = at.strategyEngine.FetchNetFlowRankingData()
-		priceRankingData = at.strategyEngine.FetchPriceRankingData()
+		indicators := indicatorsConfig
+
+		if indicators.EnableOIRanking {
+			logger.Infof("📊 [%s] Fetching OI ranking data (Chaos)", at.name)
+			oiRankingData = at.strategyEngine.FetchOIRankingData()
+			if oiRankingData != nil {
+				logger.Infof("📊 [%s] OI ranking data ready (Chaos): %d top, %d low positions",
+					at.name, len(oiRankingData.TopPositions), len(oiRankingData.LowPositions))
+			}
+		}
+
+		if indicators.EnableNetFlowRanking {
+			logger.Infof("💰 [%s] Fetching NetFlow ranking data (Chaos)", at.name)
+			netFlowRankingData = at.strategyEngine.FetchNetFlowRankingData()
+			if netFlowRankingData != nil {
+				logger.Infof("💰 [%s] NetFlow ranking data ready (Chaos): inst_in=%d, inst_out=%d",
+					at.name, len(netFlowRankingData.InstitutionFutureTop), len(netFlowRankingData.InstitutionFutureLow))
+			}
+		}
+
+		if indicators.EnablePriceRanking {
+			logger.Infof("📈 [%s] Fetching Price ranking data (Chaos)", at.name)
+			priceRankingData = at.strategyEngine.FetchPriceRankingData()
+			if priceRankingData != nil {
+				logger.Infof("📈 [%s] Price ranking data ready (Chaos) for %d durations",
+					at.name, len(priceRankingData.Durations))
+			}
+		}
 	}
 
 	// 6.5 Fetch Trading History (Recent Orders & Stats)

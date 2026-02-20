@@ -9,6 +9,7 @@ import (
 	"nofx/logger"
 	"nofx/market"
 	"nofx/mcp"
+	"nofx/provider/nofxos"
 	"nofx/store"
 	"time"
 
@@ -545,16 +546,42 @@ func (s *Server) handleStrategyTestRun(c *gin.Context) {
 	for _, c := range candidates {
 		symbols = append(symbols, c.Symbol)
 	}
-	quantDataMap := engine.FetchQuantDataBatch(symbols)
 
-	// Fetch OI ranking data (market-wide position changes)
-	oiRankingData := engine.FetchOIRankingData()
+	isChaos := req.Config.StrategyType == "chaos_trading" ||
+		(req.Config.ChaosConfig != nil && req.Config.ChaosConfig.ChaosPrompt != "") ||
+		chaos.NewManager().IsChaosMode(req.Config.CustomPrompt)
 
-	// Fetch NetFlow ranking data (market-wide fund flow)
-	netFlowRankingData := engine.FetchNetFlowRankingData()
+	var quantDataMap map[string]*kernel.QuantData
+	var oiRankingData *nofxos.OIRankingData
+	var netFlowRankingData *nofxos.NetFlowRankingData
+	var priceRankingData *nofxos.PriceRankingData
 
-	// Fetch Price ranking data (market-wide gainers/losers)
-	priceRankingData := engine.FetchPriceRankingData()
+	if isChaos && req.Config.ChaosConfig != nil {
+		indicators := req.Config.ChaosConfig.Indicators
+
+		if indicators.EnableQuantData {
+			quantDataMap = engine.FetchQuantDataBatch(symbols)
+		} else {
+			quantDataMap = make(map[string]*kernel.QuantData)
+		}
+
+		if indicators.EnableOIRanking {
+			oiRankingData = engine.FetchOIRankingData()
+		}
+
+		if indicators.EnableNetFlowRanking {
+			netFlowRankingData = engine.FetchNetFlowRankingData()
+		}
+
+		if indicators.EnablePriceRanking {
+			priceRankingData = engine.FetchPriceRankingData()
+		}
+	} else {
+		quantDataMap = engine.FetchQuantDataBatch(symbols)
+		oiRankingData = engine.FetchOIRankingData()
+		netFlowRankingData = engine.FetchNetFlowRankingData()
+		priceRankingData = engine.FetchPriceRankingData()
+	}
 
 	// Build real context (for generating User Prompt)
 	testContext := &kernel.Context{
@@ -581,11 +608,6 @@ func (s *Server) handleStrategyTestRun(c *gin.Context) {
 		PriceRankingData:   priceRankingData,
 	}
 
-	// Check if it's Chaos mode
-	isChaos := req.Config.StrategyType == "chaos_trading" ||
-		(req.Config.ChaosConfig != nil && req.Config.ChaosConfig.ChaosPrompt != "") ||
-		chaos.NewManager().IsChaosMode(req.Config.CustomPrompt)
-
 	var systemPrompt, userPrompt string
 
 	if isChaos {
@@ -610,8 +632,7 @@ func (s *Server) handleStrategyTestRun(c *gin.Context) {
 				RiskControl:         req.Config.ChaosConfig.RiskControl,
 				SystemPromptVariant: req.Config.ChaosConfig.SystemPromptVariant,
 				UserPromptVersion:   req.Config.ChaosConfig.UserPromptVersion,
-
-				Indicators: req.Config.Indicators,
+				Indicators:          req.Config.ChaosConfig.Indicators,
 			},
 			Account: kernel.AccountInfo{
 				TotalEquity:      1000.0,
