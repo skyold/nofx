@@ -382,24 +382,10 @@ func (m *Manager) ValidateDecision(
 		baseRiskPercent = 0.01
 	}
 
-	// Float comparison with small epsilon
-	isValidRiskR := false
-	allowedRiskRs := []float64{0, 0.25, 0.5, 0.75, 1, 1.5}
-	for _, val := range allowedRiskRs {
-		if abs(riskR-val) < 0.0001 {
-			isValidRiskR = true
-			break
-		}
-	}
-	if !isValidRiskR {
-		return 0, fmt.Errorf("%s: RiskR %.2f is not in allowed set [0, 0.25, 0.5, 0.75, 1, 1.5]", decisionInfo(), riskR)
-	}
-
-	if riskR <= 0 {
-		return 0, fmt.Errorf("%s: RiskR must be greater than 0 for open action", decisionInfo())
-	}
-	if riskR > MaxRiskR {
-		return 0, fmt.Errorf("%s: RiskR %.2f exceeds hard limit %.2f", decisionInfo(), riskR, MaxRiskR)
+	// Range validation (0.1 to 1.5)
+	const MinRiskR = 0.1
+	if riskR < MinRiskR || riskR > MaxRiskR {
+		return 0, fmt.Errorf("%s: RiskR %.2f must be between %.2f and %.2f", decisionInfo(), riskR, MinRiskR, MaxRiskR)
 	}
 
 	// 1.1 RiskR Consistency Check with Audit Path
@@ -419,24 +405,12 @@ func (m *Manager) ValidateDecision(
 			expectedStr := fmt.Sprintf("Final %.1fR", riskR)
 			expectedStr2 := fmt.Sprintf("Final %.2fR", riskR) // Also allow 2 decimal places (e.g. 0.50R)
 
-			// Handle 0.25 case which might be formatted as 0.25R
-			if riskR == 0.25 {
-				expectedStr = "Final 0.25R"
-			} else if riskR == 0 {
-				expectedStr = "Final 0.0R" // or 0R?
-			}
-
 			// If 0.5, fmt gives 0.5.
 			// Let's use flexible check or regex if needed.
 			// User example: "Final 0.5R" or "Final 0.50R"
 			if !strings.Contains(matchedOpp.AuditPath, expectedStr) && !strings.Contains(matchedOpp.AuditPath, expectedStr2) {
-				// Fallback check for integer like "Final 0R"
-				if riskR == 0 && strings.Contains(matchedOpp.AuditPath, "Final 0R") {
-					// pass
-				} else {
-					return 0, fmt.Errorf("%s: RiskR consistency check failed. Decision=%.2f, AuditPath='%s' (Expected '%s' or '%s')",
-						decisionInfo(), riskR, matchedOpp.AuditPath, expectedStr, expectedStr2)
-				}
+				return 0, fmt.Errorf("%s: RiskR consistency check failed. Decision=%.2f, AuditPath='%s' (Expected '%s' or '%s')",
+					decisionInfo(), riskR, matchedOpp.AuditPath, expectedStr, expectedStr2)
 			}
 		}
 	}

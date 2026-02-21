@@ -86,7 +86,7 @@ func GenerateOutputSchema() string {
 
 	sb.WriteString("\nCritical Field Constraints:\n")
 	sb.WriteString("- action: Must be one of [open_long, open_short, close_long, close_short, hold, wait]\n")
-	sb.WriteString("- risk_r (open_* only): Must be one of [0.25, 0.5, 0.75, 1, 1.5]\n")
+	sb.WriteString("- risk_r (open_* only): Must be a number between 0.1 and 1.5\n")
 	sb.WriteString("- open_* actions: MUST include leverage, entry, stop_loss, take_profit, risk_r, total_score\n")
 	sb.WriteString("- close_*/hold/wait actions: MUST include ONLY symbol and action\n")
 
