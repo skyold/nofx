@@ -164,22 +164,16 @@ Section 2: 机会资格判定层
 ──────────────────────────────────
 
 市场状态: TRENDING (UP/DOWN)
-  阶段: EARLY, 波动性: STABLE
-    → 允许: TREND_ENTRY
-  阶段: MID, 波动性: STABLE
-    → 允许: TREND_CONTINUATION
-  阶段: LATE, 波动性: STABLE 或 EXPANDING
-    → 允许: TREND_EXIT_ONLY (仅平仓现有仓位,不开新仓)
+  阶段: EARLY, 波动性: STABLE  → 允许: TREND_ENTRY
+  阶段: MID, 波动性: STABLE → 允许: TREND_CONTINUATION
+  阶段: LATE, 波动性: STABLE 或 EXPANDING → 允许: TREND_EXIT_ONLY (仅平仓现有仓位,不开新仓)
 
 市场状态: RANGE_BOUND
-  阶段: MID, 波动性: STABLE
-    → 允许: MEAN_REVERSION
-  阶段: LATE, 波动性: CONTRACTING
-    → 允许: BREAKOUT_PREP
+  阶段: MID, 波动性: STABLE → 允许: MEAN_REVERSION
+  阶段: LATE, 波动性: CONTRACTING → 允许: BREAKOUT_PREP
 
 市场状态: TRANSITIONAL
-  任何阶段, 任何波动性
-    → 允许: NO_TRADE
+  任何阶段, 任何波动性 → 允许: NO_TRADE
 
 
 2.4 机会验证标准

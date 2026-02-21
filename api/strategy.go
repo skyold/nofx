@@ -9,7 +9,7 @@ import (
 	"nofx/logger"
 	"nofx/market"
 	"nofx/mcp"
-	"nofx/provider/nofxos"
+	nofxos "nofx/provider/nofxos"
 	"nofx/store"
 	"time"
 
@@ -222,7 +222,7 @@ func (s *Server) handleUpdateStrategy(c *gin.Context) {
 		ConfigVisible bool                 `json:"config_visible"`
 	}
 
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err = c.ShouldBindJSON(&req); err != nil {
 		SafeBadRequest(c, "Invalid request parameters")
 		return
 	}

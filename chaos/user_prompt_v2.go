@@ -1,7 +1,7 @@
 // =============================================================================
 // Chaos Trading System - User Prompt V2 (JSON Format)
 // =============================================================================
-// 
+//
 // User Prompt 是发送给 LLM 的用户提示词的一部分。
 // 完整提示词 = System Prompt + User Prompt
 //
@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"math"
 	"nofx/market"
+	"nofx/store"
 	"regexp"
 	"strings"
 	"time"
@@ -52,11 +53,11 @@ func (e *ChaosEngine) buildUserPromptV2(ctx *ChaosContext) string {
 	sb.WriteString("---\n\n")
 
 	// 3. 公共信息部分
-	sb.WriteString(e.buildHeader(ctx))           // 时间、周期、运行时长
-	sb.WriteString(e.buildGlobalContext(ctx))    // BTC 行情概览
-	sb.WriteString(e.buildAccountStatus(ctx))    // 账户状态
+	sb.WriteString(e.buildHeader(ctx))             // 时间、周期、运行时长
+	sb.WriteString(e.buildGlobalContext(ctx))      // BTC 行情概览
+	sb.WriteString(e.buildAccountStatus(ctx))      // 账户状态
 	sb.WriteString(e.buildTradingPerformance(ctx)) // 历史交易统计
-	sb.WriteString(e.buildPositions(ctx))        // 当前持仓
+	sb.WriteString(e.buildPositions(ctx))          // 当前持仓
 
 	// 4. 市场数据 (JSON 格式)
 	sb.WriteString("## 市场数据 (JSON 格式)\n\n")
@@ -792,7 +793,12 @@ func (e *ChaosEngine) buildKlines(tf *market.TimeframeSeriesData) Klines {
 func (e *ChaosEngine) buildMarketRankings(ctx *ChaosContext) MarketRankings {
 	rankings := MarketRankings{}
 
-	if ctx.OIRankingData != nil {
+	var indicators *store.IndicatorConfig
+	if ctx.Config != nil {
+		indicators = &ctx.Config.Indicators
+	}
+
+	if (indicators == nil || indicators.EnableOIRanking) && ctx.OIRankingData != nil {
 		for _, item := range ctx.OIRankingData.TopPositions {
 			rankings.OIIncrease1h = append(rankings.OIIncrease1h, RankingItem{
 				Symbol:   item.Symbol,
@@ -811,7 +817,24 @@ func (e *ChaosEngine) buildMarketRankings(ctx *ChaosContext) MarketRankings {
 		}
 	}
 
-	if ctx.PriceRankingData != nil && ctx.PriceRankingData.Durations != nil {
+	if (indicators == nil || indicators.EnableNetFlowRanking) && ctx.NetFlowRankingData != nil {
+		for _, item := range ctx.NetFlowRankingData.InstitutionFutureTop {
+			rankings.FundInflow1h = append(rankings.FundInflow1h, RankingItem{
+				Symbol:   item.Symbol,
+				FundFlow: item.Amount,
+				Price:    item.Price,
+			})
+		}
+		for _, item := range ctx.NetFlowRankingData.InstitutionFutureLow {
+			rankings.FundOutflow1h = append(rankings.FundOutflow1h, RankingItem{
+				Symbol:   item.Symbol,
+				FundFlow: item.Amount,
+				Price:    item.Price,
+			})
+		}
+	}
+
+	if (indicators == nil || indicators.EnablePriceRanking) && ctx.PriceRankingData != nil && ctx.PriceRankingData.Durations != nil {
 		if data1h, ok := ctx.PriceRankingData.Durations["1h"]; ok {
 			for _, item := range data1h.Top {
 				rankings.TopGainers1h = append(rankings.TopGainers1h, RankingItem{
