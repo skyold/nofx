@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"net/http"
 	"nofx/logger"
 	"nofx/provider/coinank/coinank_api"
 	"nofx/provider/coinank/coinank_enum"
@@ -396,7 +397,7 @@ func GetWithTimeframes(symbol string, timeframes []string, primaryTimeframe stri
 	currentRSI7 := calculateRSI(primaryKlines, 7)
 
 	// Calculate price changes
-	priceChange1h := calculatePriceChangeByBars(primaryKlines, primaryTimeframe, 60) // 1 hour
+	priceChange1h := calculatePriceChangeByBars(primaryKlines, primaryTimeframe, 60)  // 1 hour
 	priceChange4h := calculatePriceChangeByBars(primaryKlines, primaryTimeframe, 240) // 4 hours
 
 	localSupport, localSupportTime, _ := CalculateLocalSupport(primaryKlines, count)
@@ -410,11 +411,15 @@ func GetWithTimeframes(symbol string, timeframes []string, primaryTimeframe stri
 	// Get OI data
 	oiData, err := getOpenInterestData(symbol)
 	if err != nil {
+		logger.Warnf("⚠️ Failed to get Open Interest for %s: %v", symbol, err)
 		oiData = &OIData{Latest: 0, Average: 0}
 	}
 
 	// Get Funding Rate
-	fundingRate, _ := getFundingRate(symbol)
+	fundingRate, err := getFundingRate(symbol)
+	if err != nil {
+		logger.Warnf("⚠️ Failed to get Funding Rate for %s: %v", symbol, err)
+	}
 
 	return &Data{
 		Symbol:           symbol,
@@ -972,6 +977,10 @@ func getOpenInterestData(symbol string) (*OIData, error) {
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("API returned status %d", resp.StatusCode)
+	}
+
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
@@ -987,7 +996,14 @@ func getOpenInterestData(symbol string) (*OIData, error) {
 		return nil, err
 	}
 
-	oi, _ := strconv.ParseFloat(result.OpenInterest, 64)
+	if result.OpenInterest == "" {
+		return nil, fmt.Errorf("OpenInterest field is empty in response: %s", string(body))
+	}
+
+	oi, err := strconv.ParseFloat(result.OpenInterest, 64)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse OpenInterest: %v", err)
+	}
 
 	return &OIData{
 		Latest:  oi,
@@ -1017,6 +1033,10 @@ func getFundingRate(symbol string) (float64, error) {
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode != http.StatusOK {
+		return 0, fmt.Errorf("API returned status %d", resp.StatusCode)
+	}
+
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return 0, err
@@ -1036,7 +1056,14 @@ func getFundingRate(symbol string) (float64, error) {
 		return 0, err
 	}
 
-	rate, _ := strconv.ParseFloat(result.LastFundingRate, 64)
+	if result.LastFundingRate == "" {
+		return 0, fmt.Errorf("LastFundingRate field is empty in response: %s", string(body))
+	}
+
+	rate, err := strconv.ParseFloat(result.LastFundingRate, 64)
+	if err != nil {
+		return 0, fmt.Errorf("failed to parse LastFundingRate: %v", err)
+	}
 
 	// Update cache
 	fundingRateMap.Store(symbol, &FundingRateCache{

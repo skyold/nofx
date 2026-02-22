@@ -512,9 +512,20 @@ func (s *Server) handleStrategyTestRun(c *gin.Context) {
 	}
 
 	// Get timeframe configuration
-	timeframes := req.Config.Indicators.Klines.SelectedTimeframes
-	primaryTimeframe := req.Config.Indicators.Klines.PrimaryTimeframe
-	klineCount := req.Config.Indicators.Klines.PrimaryCount
+	var timeframes []string
+	var primaryTimeframe string
+	var klineCount int
+
+	// Check if it's Chaos mode (check ChaosConfig existence)
+	if req.Config.ChaosConfig != nil {
+		timeframes = req.Config.ChaosConfig.Indicators.Klines.SelectedTimeframes
+		primaryTimeframe = req.Config.ChaosConfig.Indicators.Klines.PrimaryTimeframe
+		klineCount = req.Config.ChaosConfig.Indicators.Klines.PrimaryCount
+	} else {
+		timeframes = req.Config.Indicators.Klines.SelectedTimeframes
+		primaryTimeframe = req.Config.Indicators.Klines.PrimaryTimeframe
+		klineCount = req.Config.Indicators.Klines.PrimaryCount
+	}
 
 	// If no timeframes selected, use default values
 	if len(timeframes) == 0 {
@@ -642,6 +653,7 @@ func (s *Server) handleStrategyTestRun(c *gin.Context) {
 			CurrentTime:    testContext.CurrentTime,
 			RuntimeMinutes: 0,
 			CallCount:      1,
+			Timeframes:     timeframes,
 			Config: &chaos.ChaosConfig{
 				ChaosPrompt:         req.Config.ChaosConfig.ChaosPrompt,
 				RiskControl:         req.Config.ChaosConfig.RiskControl,
