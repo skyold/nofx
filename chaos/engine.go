@@ -62,6 +62,9 @@ func GetChaosDecisions(ctx *ChaosContext, mcpClient mcp.AIClient, engine *ChaosE
 	if engine == nil {
 		engine = NewChaosEngine(nil)
 		logger.Warnf("⚠️  ChaosEngine instantiated with nil config. This is expected if not using custom indicators.")
+	} else {
+		//打印 engine.config 的内容
+		logger.Infof("ChaosEngine config: %+v", engine.config)	
 	}
 
 	return engine.Execute(ctx, mcpClient)
