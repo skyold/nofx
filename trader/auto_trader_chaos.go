@@ -70,7 +70,7 @@ func (at *AutoTrader) RunChaosCycle() error {
 	at.saveChaosEquitySnapshot(ctx)
 
 	// 2. Execute Chaos Engine (LLM call)
-	chaosDecision, err := chaos.GetChaosDecisions(ctx, at.mcpClient)
+	chaosDecision, err := chaos.GetChaosDecisions(ctx, at.mcpClient, at.chaosEngine)
 	if err != nil {
 		logger.Errorf("❌ Chaos Engine execution failed: %v", err)
 		record.Success = false

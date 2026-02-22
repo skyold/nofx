@@ -46,7 +46,7 @@ func NewChaosEngine(config *store.StrategyConfig) *ChaosEngine {
 }
 
 // GetDecisions gets the decisions for Chaos mode
-func GetChaosDecisions(ctx *ChaosContext, mcpClient mcp.AIClient) (*DecisionResult, error) {
+func GetChaosDecisions(ctx *ChaosContext, mcpClient mcp.AIClient, engine *ChaosEngine) (*DecisionResult, error) {
 	// Create engine with context config
 	// The config is already in the context, but NewChaosEngine expects *store.StrategyConfig
 	// We need to refactor NewChaosEngine or create a temporary config adapter
@@ -59,7 +59,10 @@ func GetChaosDecisions(ctx *ChaosContext, mcpClient mcp.AIClient) (*DecisionResu
 	// But ChaosContext should have everything.
 
 	// Let's create a minimal engine instance
-	engine := NewChaosEngine(nil)
+	if engine == nil {
+		engine = NewChaosEngine(nil)
+		logger.Warnf("⚠️  ChaosEngine instantiated with nil config. This is expected if not using custom indicators.")
+	}
 
 	return engine.Execute(ctx, mcpClient)
 }
