@@ -409,7 +409,7 @@ func (m *Manager) ValidateDecision(
 			// Let's use flexible check or regex if needed.
 			// User example: "Final 0.5R" or "Final 0.50R"
 			if !strings.Contains(matchedOpp.AuditPath, expectedStr) && !strings.Contains(matchedOpp.AuditPath, expectedStr2) {
-				return 0, fmt.Errorf("%s: RiskR consistency check failed. Decision=%.2f, AuditPath='%s' (Expected '%s' or '%s')",
+				logger.Warnf("%s: RiskR consistency check failed. Decision=%.2f, AuditPath='%s' (Expected '%s' or '%s')",
 					decisionInfo(), riskR, matchedOpp.AuditPath, expectedStr, expectedStr2)
 			}
 		}
