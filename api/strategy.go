@@ -426,12 +426,23 @@ func (s *Server) handlePreviewPrompt(c *gin.Context) {
 	systemPrompt := engine.BuildSystemPrompt(req.AccountEquity, req.PromptVariant)
 
 	// Build config summary
-	configSummary := gin.H{
-		"coin_source":      req.Config.CoinSource.SourceType,
-		"primary_tf":       req.Config.Indicators.Klines.PrimaryTimeframe,
-		"btc_eth_leverage": req.Config.RiskControl.BTCETHMaxLeverage,
-		"altcoin_leverage": req.Config.RiskControl.AltcoinMaxLeverage,
-		"max_positions":    req.Config.RiskControl.MaxPositions,
+	var configSummary gin.H
+	if isChaos && req.Config.ChaosConfig != nil {
+		configSummary = gin.H{
+			"coin_source":      req.Config.ChaosConfig.CoinSource.SourceType,
+			"primary_tf":       req.Config.ChaosConfig.Indicators.Klines.PrimaryTimeframe,
+			"btc_eth_leverage": req.Config.ChaosConfig.RiskControl.BTCETHMaxLeverage,
+			"altcoin_leverage": req.Config.ChaosConfig.RiskControl.AltcoinMaxLeverage,
+			"max_positions":    req.Config.ChaosConfig.RiskControl.MaxPositions,
+		}
+	} else {
+		configSummary = gin.H{
+			"coin_source":      req.Config.CoinSource.SourceType,
+			"primary_tf":       req.Config.Indicators.Klines.PrimaryTimeframe,
+			"btc_eth_leverage": req.Config.RiskControl.BTCETHMaxLeverage,
+			"altcoin_leverage": req.Config.RiskControl.AltcoinMaxLeverage,
+			"max_positions":    req.Config.RiskControl.MaxPositions,
+		}
 	}
 
 	// If Chaos mode, override/enrich summary with variant parameters

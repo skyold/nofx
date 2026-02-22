@@ -33,6 +33,7 @@ export const defaultChaosConfig: ChaosStrategyConfig = {
   },
   coin_source: {
     source_type: "ai500",
+    static_coins: [],
     use_ai500: true,
     ai500_limit: 10,
     use_oi_top: false,
