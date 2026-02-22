@@ -1,6 +1,7 @@
 package trader
 
 import (
+	"encoding/json"
 	"fmt"
 	"nofx/chaos"
 	"nofx/kernel"
@@ -46,6 +47,23 @@ func (at *AutoTrader) RunChaosCycle() error {
 			logger.Errorf("Failed to save error decision: %v", saveErr)
 		}
 		return err
+	}
+
+	if ctxBytes, err := json.MarshalIndent(ctx, "", "  "); err == nil {
+		logger.Infof("🔍 Chaos Context Built:\n%s\n"+
+			"📊 Data Summary:\n"+
+			"- MarketDataMap Size: %d\n"+
+			"- MultiTFMarket Size: %d\n"+
+			"- OITopDataMap Size: %d\n"+
+			"- QuantDataMap Size: %d",
+			string(ctxBytes),
+			len(ctx.MarketDataMap),
+			len(ctx.MultiTFMarket),
+			len(ctx.OITopDataMap),
+			len(ctx.QuantDataMap),
+		)
+	} else {
+		logger.Errorf("Failed to marshal Chaos Context for logging: %v", err)
 	}
 
 	// Save equity snapshot (Align with nofx AutoTrader behavior)

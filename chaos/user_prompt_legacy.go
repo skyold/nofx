@@ -1,7 +1,7 @@
 // =============================================================================
 // Chaos Trading System - User Prompt Legacy (Text Format)
 // =============================================================================
-// 
+//
 // User Prompt 是发送给 LLM 的用户提示词的一部分。
 // 完整提示词 = System Prompt + User Prompt
 //
@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"nofx/kernel"
+	"nofx/logger"
 	"nofx/market"
 	"nofx/provider/nofxos"
 	"nofx/store"
@@ -47,15 +48,15 @@ func (e *ChaosEngine) buildUserPromptLegacy(ctx *ChaosContext) string {
 	sb.WriteString("# 🌀 Chaos 模式用户提示 (Legacy - Text Format)\n\n")
 
 	// 2. 公共信息部分
-	sb.WriteString(e.buildHeader(ctx))           // 时间、周期、运行时长
-	sb.WriteString(e.buildGlobalContext(ctx))    // BTC 行情概览
-	sb.WriteString(e.buildAccountStatus(ctx))    // 账户状态
+	sb.WriteString(e.buildHeader(ctx))             // 时间、周期、运行时长
+	sb.WriteString(e.buildGlobalContext(ctx))      // BTC 行情概览
+	sb.WriteString(e.buildAccountStatus(ctx))      // 账户状态
 	sb.WriteString(e.buildTradingPerformance(ctx)) // 历史交易统计
-	sb.WriteString(e.buildPositions(ctx))        // 当前持仓
+	sb.WriteString(e.buildPositions(ctx))          // 当前持仓
 
 	// 3. 市场数据 (文本格式)
-	sb.WriteString(e.buildCandidates(ctx))       // 候选币种市场数据
-	sb.WriteString(e.buildRankings(ctx))         // 排行榜数据
+	sb.WriteString(e.buildCandidates(ctx)) // 候选币种市场数据
+	sb.WriteString(e.buildRankings(ctx))   // 排行榜数据
 
 	sb.WriteString("---\n\n")
 
@@ -392,9 +393,11 @@ func (e *ChaosEngine) formatMarketData(data *market.Data) string {
 	}
 
 	if len(data.TimeframeData) > 0 {
+		logger.Infof("[PromptBuilder] Processing Multi-Timeframe Data for symbol: %s, Timeframes count: %d", data.Symbol, len(data.TimeframeData))
 		timeframeOrder := []string{"1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h", "1d", "3d", "1w"}
 		for _, tf := range timeframeOrder {
 			if tfData, ok := data.TimeframeData[tf]; ok {
+				logger.Infof("[PromptBuilder]   -> Found timeframe: %s for %s", tf, data.Symbol)
 				sb.WriteString(fmt.Sprintf("=== %s Timeframe (oldest → latest) ===\n\n", strings.ToUpper(tf)))
 				e.formatTimeframeSeriesData(&sb, tfData, indicators)
 			}
@@ -437,7 +440,9 @@ func (e *ChaosEngine) formatMarketData(data *market.Data) string {
 			}
 		}
 	} else {
+		logger.Infof("[PromptBuilder] Processing Legacy Intraday Series for symbol: %s", data.Symbol)
 		if data.IntradaySeries != nil {
+			logger.Infof("[PromptBuilder]   -> IntradaySeries found with %d mid prices", len(data.IntradaySeries.MidPrices))
 			klineConfig := indicators.Klines
 			sb.WriteString(fmt.Sprintf("Intraday series (%s intervals, oldest → latest):\n\n", klineConfig.PrimaryTimeframe))
 
@@ -504,6 +509,7 @@ func (e *ChaosEngine) formatMarketData(data *market.Data) string {
 
 func (e *ChaosEngine) formatTimeframeSeriesData(sb *strings.Builder, data *market.TimeframeSeriesData, indicators store.IndicatorConfig) {
 	if len(data.Klines) > 0 {
+		logger.Infof("[PromptBuilder]     -> Formatting Klines, count: %d", len(data.Klines))
 		sb.WriteString("Time(UTC)      Open      High      Low       Close     Volume\n")
 		for i, k := range data.Klines {
 			t := time.Unix(k.Time/1000, 0).UTC()
@@ -517,42 +523,61 @@ func (e *ChaosEngine) formatTimeframeSeriesData(sb *strings.Builder, data *marke
 		}
 		sb.WriteString("\n")
 	} else if len(data.MidPrices) > 0 {
+		logger.Infof("[PromptBuilder]     -> Formatting MidPrices, count: %d", len(data.MidPrices))
 		sb.WriteString(fmt.Sprintf("Mid prices: %s\n\n", formatFloatSlice(data.MidPrices)))
 		if indicators.EnableVolume && len(data.Volume) > 0 {
+			logger.Infof("[PromptBuilder]     -> Formatting Volume, count: %d", len(data.Volume))
 			sb.WriteString(fmt.Sprintf("Volume: %s\n\n", formatFloatSlice(data.Volume)))
 		}
 	}
 
 	if indicators.EnableEMA {
 		if len(data.EMA20Values) > 0 {
+			logger.Infof("[PromptBuilder]     -> Formatting EMA20, count: %d", len(data.EMA20Values))
 			sb.WriteString(fmt.Sprintf("EMA20: %s\n", formatFloatSlice(data.EMA20Values)))
 		}
 		if len(data.EMA50Values) > 0 {
+			logger.Infof("[PromptBuilder]     -> Formatting EMA50, count: %d", len(data.EMA50Values))
 			sb.WriteString(fmt.Sprintf("EMA50: %s\n", formatFloatSlice(data.EMA50Values)))
 		}
+	} else {
+		logger.Infof("[PromptBuilder]     -> EMA indicator disabled")
 	}
 
 	if indicators.EnableMACD && len(data.MACDValues) > 0 {
+		logger.Infof("[PromptBuilder]     -> Formatting MACD, count: %d", len(data.MACDValues))
 		sb.WriteString(fmt.Sprintf("MACD: %s\n", formatFloatSlice(data.MACDValues)))
+	} else if !indicators.EnableMACD {
+		logger.Infof("[PromptBuilder]     -> MACD indicator disabled")
 	}
 
 	if indicators.EnableRSI {
 		if len(data.RSI7Values) > 0 {
+			logger.Infof("[PromptBuilder]     -> Formatting RSI7, count: %d", len(data.RSI7Values))
 			sb.WriteString(fmt.Sprintf("RSI7: %s\n", formatFloatSlice(data.RSI7Values)))
 		}
 		if len(data.RSI14Values) > 0 {
+			logger.Infof("[PromptBuilder]     -> Formatting RSI14, count: %d", len(data.RSI14Values))
 			sb.WriteString(fmt.Sprintf("RSI14: %s\n", formatFloatSlice(data.RSI14Values)))
 		}
+	} else {
+		logger.Infof("[PromptBuilder]     -> RSI indicator disabled")
 	}
 
 	if indicators.EnableATR && data.ATR14 > 0 {
+		logger.Infof("[PromptBuilder]     -> Formatting ATR14: %.4f", data.ATR14)
 		sb.WriteString(fmt.Sprintf("ATR14: %.4f\n", data.ATR14))
+	} else if !indicators.EnableATR {
+		logger.Infof("[PromptBuilder]     -> ATR indicator disabled")
 	}
 
 	if indicators.EnableBOLL && len(data.BOLLUpper) > 0 {
+		logger.Infof("[PromptBuilder]     -> Formatting BOLL, count: %d", len(data.BOLLUpper))
 		sb.WriteString(fmt.Sprintf("BOLL Upper: %s\n", formatFloatSlice(data.BOLLUpper)))
 		sb.WriteString(fmt.Sprintf("BOLL Middle: %s\n", formatFloatSlice(data.BOLLMiddle)))
 		sb.WriteString(fmt.Sprintf("BOLL Lower: %s\n", formatFloatSlice(data.BOLLLower)))
+	} else if !indicators.EnableBOLL {
+		logger.Infof("[PromptBuilder]     -> BOLL indicator disabled")
 	}
 
 	sb.WriteString("\n")
