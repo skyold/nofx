@@ -264,9 +264,19 @@ func (at *AutoTrader) buildChaosContext() (*chaos.ChaosContext, error) {
 	var oiRankingData *nofxos.OIRankingData
 	var netFlowRankingData *nofxos.NetFlowRankingData
 	var priceRankingData *nofxos.PriceRankingData
+	var quantDataMap map[string]*kernel.QuantData
 
 	if at.strategyEngine != nil {
 		indicators := indicatorsConfig
+
+		if indicators.EnableQuantData {
+			symbols := make([]string, 0, len(symbolsToFetch))
+			for s := range symbolsToFetch {
+				symbols = append(symbols, s)
+			}
+			logger.Infof("📊 [%s] Fetching Quant Data for %d symbols", at.name, len(symbols))
+			quantDataMap = at.strategyEngine.FetchQuantDataBatch(symbols)
+		}
 
 		if indicators.EnableOIRanking {
 			logger.Infof("📊 [%s] Fetching OI ranking data (Chaos)", at.name)
@@ -354,6 +364,7 @@ func (at *AutoTrader) buildChaosContext() (*chaos.ChaosContext, error) {
 		CurrentTime:    time.Now().Format("2006-01-02 15:04:05"),
 		RuntimeMinutes: int(time.Since(at.startTime).Minutes()),
 		CallCount:      at.callCount,
+		Timeframes:     indicatorsConfig.Klines.SelectedTimeframes,
 		Config: &chaos.ChaosConfig{
 			ChaosPrompt:         chaosConfig.ChaosPrompt,
 			RiskControl:         chaosConfig.RiskControl,
@@ -372,6 +383,7 @@ func (at *AutoTrader) buildChaosContext() (*chaos.ChaosContext, error) {
 		RecentOrders:       recentOrders,
 		TradingStats:       tradingStats,
 		MarketDataMap:      marketDataMap,
+		QuantDataMap:       quantDataMap,
 		OITopDataMap:       oiTopMap,
 		OIRankingData:      oiRankingData,
 		NetFlowRankingData: netFlowRankingData,
