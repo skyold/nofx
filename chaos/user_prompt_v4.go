@@ -688,7 +688,7 @@ func (e *ChaosEngine) buildV4Indicators(tf *market.TimeframeSeriesData, cfg *Cha
 	}
 
 	if cfg == nil || cfg.Indicators.EnableATR {
-		indicators.ATR14 = roundFloat(tf.ATR14, 2)
+		indicators.ATR14 = getLastNFloat(tf.ATR14Values, limit)
 	}
 
 	if cfg == nil || cfg.Indicators.EnableBOLL {

@@ -564,10 +564,15 @@ func (e *ChaosEngine) formatTimeframeSeriesData(sb *strings.Builder, data *marke
 		logger.Infof("[PromptBuilder]     -> RSI indicator disabled")
 	}
 
-	if indicators.EnableATR && data.ATR14 > 0 {
-		logger.Infof("[PromptBuilder]     -> Formatting ATR14: %.4f", data.ATR14)
-		sb.WriteString(fmt.Sprintf("ATR14: %.4f\n", data.ATR14))
-	} else if !indicators.EnableATR {
+	if indicators.EnableATR {
+		if len(data.ATR14Values) > 0 {
+			logger.Infof("[PromptBuilder]     -> Formatting ATR14, count: %d", len(data.ATR14Values))
+			sb.WriteString(fmt.Sprintf("ATR14: %s\n", formatFloatSlice(data.ATR14Values)))
+		} else if data.ATR14 > 0 {
+			logger.Infof("[PromptBuilder]     -> Formatting ATR14: %.4f", data.ATR14)
+			sb.WriteString(fmt.Sprintf("ATR14: %.4f\n", data.ATR14))
+		}
+	} else {
 		logger.Infof("[PromptBuilder]     -> ATR indicator disabled")
 	}
 

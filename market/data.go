@@ -454,6 +454,7 @@ func calculateTimeframeSeries(klines []Kline, timeframe string, count int) *Time
 		RSI7Values:  make([]float64, 0, count),
 		RSI14Values: make([]float64, 0, count),
 		Volume:      make([]float64, 0, count),
+		ATR14Values: make([]float64, 0, count),
 		BOLLUpper:   make([]float64, 0, count),
 		BOLLMiddle:  make([]float64, 0, count),
 		BOLLLower:   make([]float64, 0, count),
@@ -506,6 +507,12 @@ func calculateTimeframeSeries(klines []Kline, timeframe string, count int) *Time
 		if i >= 14 {
 			rsi14 := calculateRSI(klines[:i+1], 14)
 			data.RSI14Values = append(data.RSI14Values, rsi14)
+		}
+
+		// Calculate ATR for each point
+		if i >= 14 {
+			atr14 := calculateATR(klines[:i+1], 14)
+			data.ATR14Values = append(data.ATR14Values, atr14)
 		}
 
 		// Calculate Bollinger Bands (period 20, std dev multiplier 2)

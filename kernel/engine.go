@@ -1542,8 +1542,12 @@ func (e *StrategyEngine) formatTimeframeSeriesData(sb *strings.Builder, data *ma
 		}
 	}
 
-	if indicators.EnableATR && data.ATR14 > 0 {
-		sb.WriteString(fmt.Sprintf("ATR14: %.4f\n", data.ATR14))
+	if indicators.EnableATR {
+		if len(data.ATR14Values) > 0 {
+			sb.WriteString(fmt.Sprintf("ATR14: %s\n", formatFloatSlice(data.ATR14Values)))
+		} else if data.ATR14 > 0 {
+			sb.WriteString(fmt.Sprintf("ATR14: %.4f\n", data.ATR14))
+		}
 	}
 
 	if indicators.EnableBOLL && len(data.BOLLUpper) > 0 {

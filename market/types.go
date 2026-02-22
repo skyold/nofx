@@ -46,7 +46,8 @@ type TimeframeSeriesData struct {
 	RSI7Values  []float64  `json:"rsi7_values"`  // RSI7 series
 	RSI14Values []float64  `json:"rsi14_values"` // RSI14 series
 	Volume      []float64  `json:"volume"`       // Volume series (deprecated, use Klines)
-	ATR14       float64    `json:"atr14"`        // ATR14
+	ATR14       float64    `json:"atr14"`        // ATR14 (Current value)
+	ATR14Values []float64  `json:"atr14_values"` // ATR14 series
 	// Bollinger Bands (period 20, std dev multiplier 2)
 	BOLLUpper  []float64 `json:"boll_upper"`  // Upper band
 	BOLLMiddle []float64 `json:"boll_middle"` // Middle band (SMA)
@@ -237,11 +238,11 @@ const (
 type GridDirection string
 
 const (
-	GridDirectionNeutral   GridDirection = "neutral"     // 50% buy + 50% sell
-	GridDirectionLong      GridDirection = "long"        // 100% buy
-	GridDirectionShort     GridDirection = "short"       // 100% sell
-	GridDirectionLongBias  GridDirection = "long_bias"   // 70% buy + 30% sell (default)
-	GridDirectionShortBias GridDirection = "short_bias"  // 30% buy + 70% sell (default)
+	GridDirectionNeutral   GridDirection = "neutral"    // 50% buy + 50% sell
+	GridDirectionLong      GridDirection = "long"       // 100% buy
+	GridDirectionShort     GridDirection = "short"      // 100% sell
+	GridDirectionLongBias  GridDirection = "long_bias"  // 70% buy + 30% sell (default)
+	GridDirectionShortBias GridDirection = "short_bias" // 30% buy + 70% sell (default)
 )
 
 // GetBuySellRatio returns the buy and sell ratio for this direction

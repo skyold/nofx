@@ -359,7 +359,7 @@ type Indicators struct {
 	RSI7      []float64     `json:"rsi7,omitempty"`
 	RSI14     []float64     `json:"rsi14,omitempty"`
 	MACD      MACDData      `json:"macd,omitempty"`
-	ATR14     float64       `json:"atr14,omitempty"`
+	ATR14     []float64     `json:"atr14,omitempty"`
 	Bollinger BollingerData `json:"bollinger,omitempty"`
 	Volume    []float64     `json:"volume,omitempty"`
 }
@@ -726,7 +726,7 @@ func (e *ChaosEngine) buildIndicators(tf *market.TimeframeSeriesData, cfg *Chaos
 	}
 
 	if cfg == nil || cfg.Indicators.EnableATR {
-		indicators.ATR14 = roundFloat(tf.ATR14, 4)
+		indicators.ATR14 = getLastN(tf.ATR14Values, limit)
 	}
 
 	if cfg == nil || cfg.Indicators.EnableBOLL {
