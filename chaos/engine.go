@@ -63,8 +63,11 @@ func GetChaosDecisions(ctx *ChaosContext, mcpClient mcp.AIClient, engine *ChaosE
 		engine = NewChaosEngine(nil)
 		logger.Warnf("⚠️  ChaosEngine instantiated with nil config. This is expected if not using custom indicators.")
 	} else {
-		//打印 engine.config 的内容
-		logger.Infof("ChaosEngine config: %+v", engine.config)	
+		if engine.config.ChaosConfig != nil {
+			logger.Infof("ChaosEngine config: %+v", *engine.config.ChaosConfig)
+		} else {
+			logger.Infof("ChaosEngine config: <nil>")
+		}
 	}
 
 	return engine.Execute(ctx, mcpClient)
@@ -311,8 +314,6 @@ func (e *ChaosEngine) Execute(ctx *ChaosContext, mcpClient mcp.AIClient) (*Decis
 	// 1. Build Prompts
 	systemPrompt := e.buildSystemPromptWithChaosContext(ctx)
 	userPrompt := e.BuildUserPrompt(ctx)
-
-
 
 	// 2. Call AI
 	aiCallStart := time.Now()
