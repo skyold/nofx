@@ -164,6 +164,8 @@ func (s *Server) handleCreateStrategy(c *gin.Context) {
 		return
 	}
 
+	logger.Info("Creating strategy config: ", string(configJSON))
+
 	strategy := &store.Strategy{
 		ID:          uuid.New().String(),
 		UserID:      userID,
@@ -233,6 +235,8 @@ func (s *Server) handleUpdateStrategy(c *gin.Context) {
 		SafeInternalError(c, "Serialize configuration", err)
 		return
 	}
+
+	logger.Info("Updating strategy config: ", string(configJSON))
 
 	strategy := &store.Strategy{
 		ID:            strategyID,
