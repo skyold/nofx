@@ -402,42 +402,92 @@ func (e *ChaosEngine) formatMarketData(data *market.Data) string {
 				e.formatTimeframeSeriesData(&sb, tfData, indicators)
 			}
 		}
-		anchors := market.ComputeAnchors(data.TimeframeData)
-		if len(anchors) > 0 {
-			sb.WriteString("### 物理结构锚点 (Physical Structural Anchors):\n")
-			for _, a := range anchors {
-				priceStr := formatPriceForPrompt(a.Price)
-				t := time.Unix(a.Time/1000, 0).UTC().Format("01-02 15:04")
-				src := ""
-				switch a.Timeframe {
-				case "1d":
-					if a.Type == "Major Support" {
-						src = "24H Daily Low"
-					} else {
-						src = "24H Daily High"
+		var mainTf string
+		if _, ok := data.TimeframeData["1h"]; ok {
+			mainTf = "1h"
+		} else if _, ok := data.TimeframeData["4h"]; ok {
+			mainTf = "4h"
+		}
+
+		// 1. Structural Anchors (Swings with Topology)
+		if mainTf != "" {
+			tfData := data.TimeframeData[mainTf]
+			// Use window 3 for better sensitivity with limited data
+			features := GenerateTechnicalFeatures(tfData.Klines, 3)
+			sb.WriteString(features.FormatFeaturesToText(5))
+		}
+
+		// 2. Major Boundaries (Daily Levels)
+		if tf1d, ok := data.TimeframeData["1d"]; ok && len(tf1d.Klines) > 0 {
+			last := tf1d.Klines[len(tf1d.Klines)-1]
+			sb.WriteString("### Range Boundaries & Tests:\n")
+
+			// Daily Low (Major Support)
+			supportLevel := last.Low
+			supportTests := 0
+			if mainTf != "" {
+				// Count tests on the main timeframe (e.g. 1h)
+				supportTests = countLevelTests(supportLevel, SwingLow, data.TimeframeData[mainTf].Klines, 0, 0.002)
+			}
+			sb.WriteString(fmt.Sprintf("- [Major Support]: %s | Tested: %d times (24H Daily Low)\n",
+				formatPriceForPrompt(supportLevel), supportTests))
+
+			// Daily High (Major Resistance)
+			resistanceLevel := last.High
+			resistanceTests := 0
+			if mainTf != "" {
+				resistanceTests = countLevelTests(resistanceLevel, SwingHigh, data.TimeframeData[mainTf].Klines, 0, 0.002)
+			}
+			sb.WriteString(fmt.Sprintf("- [Major Resistance]: %s | Tested: %d times (24H Daily High)\n",
+				formatPriceForPrompt(resistanceLevel), resistanceTests))
+
+			sb.WriteString("\n")
+		} else {
+			// Fallback: use existing ComputeAnchors if explicit feature generation failed or no 1d data?
+			// But ComputeAnchors also depends on data.
+			// If we entered here, we might have skipped GenerateTechnicalFeatures if no 1h/4h.
+			// Let's keep the old logic as a fallback if mainTf is empty.
+			if mainTf == "" {
+				anchors := market.ComputeAnchors(data.TimeframeData)
+				if len(anchors) > 0 {
+					sb.WriteString("### 物理结构锚点 (Physical Structural Anchors):\n")
+					for _, a := range anchors {
+						priceStr := formatPriceForPrompt(a.Price)
+						t := time.Unix(a.Time/1000, 0).UTC().Format("01-02 15:04")
+						src := ""
+						switch a.Timeframe {
+						case "1d":
+							if a.Type == "Major Support" {
+								src = "24H Daily Low"
+							} else {
+								src = "24H Daily High"
+							}
+						case "1h", "4h":
+							src = a.Timeframe + " Structure"
+						default:
+							src = a.Timeframe + " Pivot"
+						}
+						sb.WriteString(fmt.Sprintf("- [%s]: %s (%s, %s)\n", a.Type, priceStr, src, t))
 					}
-				case "1h", "4h":
-					src = a.Timeframe + " Structure"
-				default:
-					src = a.Timeframe + " Pivot"
+					sb.WriteString("\n")
 				}
-				sb.WriteString(fmt.Sprintf("- [%s]: %s (%s, %s)\n", a.Type, priceStr, src, t))
+			}
+		}
+
+		// Dynamic References (BB, EMA)
+		refParts := []string{}
+		if tf, ok := data.TimeframeData["5m"]; ok && len(tf.BOLLLower) > 0 {
+			refParts = append(refParts, fmt.Sprintf("BB_Lower (5M): %s", formatPriceForPrompt(tf.BOLLLower[len(tf.BOLLLower)-1])))
+		}
+		if tf, ok := data.TimeframeData["1h"]; ok && len(tf.EMA50Values) > 0 {
+			refParts = append(refParts, fmt.Sprintf("EMA50 (1H): %.4f", tf.EMA50Values[len(tf.EMA50Values)-1]))
+		}
+		if len(refParts) > 0 {
+			sb.WriteString("### 动态参考 (Dynamic References):\n")
+			for _, p := range refParts {
+				sb.WriteString(fmt.Sprintf("- %s\n", p))
 			}
 			sb.WriteString("\n")
-			refParts := []string{}
-			if tf, ok := data.TimeframeData["5m"]; ok && len(tf.BOLLLower) > 0 {
-				refParts = append(refParts, fmt.Sprintf("BB_Lower (5M): %s", formatPriceForPrompt(tf.BOLLLower[len(tf.BOLLLower)-1])))
-			}
-			if tf, ok := data.TimeframeData["1h"]; ok && len(tf.EMA50Values) > 0 {
-				refParts = append(refParts, fmt.Sprintf("EMA50 (1H): %.4f", tf.EMA50Values[len(tf.EMA50Values)-1]))
-			}
-			if len(refParts) > 0 {
-				sb.WriteString("### 动态参考 (Dynamic References):\n")
-				for _, p := range refParts {
-					sb.WriteString(fmt.Sprintf("- %s\n", p))
-				}
-				sb.WriteString("\n")
-			}
 		}
 	} else {
 		logger.Infof("[PromptBuilder] Processing Legacy Intraday Series for symbol: %s", data.Symbol)
