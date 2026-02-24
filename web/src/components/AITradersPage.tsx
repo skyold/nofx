@@ -106,6 +106,11 @@ const AI_PROVIDER_CONFIG: Record<string, {
     apiUrl: 'https://platform.moonshot.ai/console/api-keys',
     apiName: 'Moonshot',
   },
+  ollama: {
+    defaultModel: 'llama3',
+    apiUrl: 'http://localhost:11434',
+    apiName: 'Ollama (Local)',
+  },
   virtual: {
     defaultModel: 'virtual-model',
     apiUrl: '',

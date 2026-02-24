@@ -768,6 +768,9 @@ func (s *Server) runRealAITest(userID, modelID, systemPrompt, userPrompt string)
 	case "openai":
 		aiClient = mcp.NewOpenAIClient()
 		aiClient.SetAPIKey(apiKey, model.CustomAPIURL, model.CustomModelName)
+	case "ollama":
+		aiClient = mcp.NewOllamaClient()
+		aiClient.SetAPIKey(apiKey, model.CustomAPIURL, model.CustomModelName)
 	default:
 		// Use generic client
 		aiClient = mcp.NewClient()

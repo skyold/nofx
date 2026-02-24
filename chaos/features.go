@@ -80,11 +80,23 @@ func findSwingPoints(klines []market.KlineBar, window int) []SwingPoint {
 			if i == j {
 				continue
 			}
-			if klines[j].High >= currentHigh {
-				isHigh = false
-			}
-			if klines[j].Low <= currentLow {
-				isLow = false
+			// Left side: Strict inequality
+			if j < i {
+				if klines[j].High > currentHigh {
+					isHigh = false
+				}
+				if klines[j].Low < currentLow {
+					isLow = false
+				}
+			} else {
+				// Right side: Strict inequality + Equality (prioritize most recent peak)
+				// If currentHigh == rightHigh, we fail current (so right one can be picked later)
+				if klines[j].High >= currentHigh {
+					isHigh = false
+				}
+				if klines[j].Low <= currentLow {
+					isLow = false
+				}
 			}
 		}
 
@@ -220,7 +232,7 @@ func countLevelTests(level float64, sType SwingType, klines []market.KlineBar, s
 }
 
 func analyzeTrend(swings []SwingPoint) string {
-	if len(swings) < 4 {
+	if len(swings) < 3 {
 		return "Insufficient data"
 	}
 	
@@ -259,6 +271,23 @@ func analyzeTrend(swings []SwingPoint) string {
 	}
 	if lh >= 1 && ll >= 1 {
 		return "Downtrend Structure (LH+LL)"
+	}
+	
+	// Early signal detection for 3 points (e.g. H -> L -> LH)
+	if len(swings) == 3 {
+		last := swings[len(swings)-1]
+		if last.Label == "LH" {
+			return "Potential Downtrend (Lower High observed)"
+		}
+		if last.Label == "LL" {
+			return "Potential Downtrend (Lower Low observed)"
+		}
+		if last.Label == "HH" {
+			return "Potential Uptrend (Higher High observed)"
+		}
+		if last.Label == "HL" {
+			return "Potential Uptrend (Higher Low observed)"
+		}
 	}
 	
 	return "Mixed/Consolidation"

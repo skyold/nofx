@@ -419,7 +419,18 @@ func (e *ChaosEngine) formatMarketData(data *market.Data) string {
 
 		// 2. Major Boundaries (Daily Levels)
 		if tf1d, ok := data.TimeframeData["1d"]; ok && len(tf1d.Klines) > 0 {
-			last := tf1d.Klines[len(tf1d.Klines)-1]
+			// Use yesterday's completed candle if available (more reliable "Major" level)
+			var last market.KlineBar
+			var dayDesc string
+
+			if len(tf1d.Klines) >= 2 {
+				last = tf1d.Klines[len(tf1d.Klines)-2]
+				dayDesc = "Yesterday's Daily"
+			} else {
+				last = tf1d.Klines[len(tf1d.Klines)-1]
+				dayDesc = "Today's Intraday"
+			}
+
 			sb.WriteString("### Range Boundaries & Tests:\n")
 
 			// Daily Low (Major Support)
@@ -429,8 +440,8 @@ func (e *ChaosEngine) formatMarketData(data *market.Data) string {
 				// Count tests on the main timeframe (e.g. 1h)
 				supportTests = countLevelTests(supportLevel, SwingLow, data.TimeframeData[mainTf].Klines, 0, 0.002)
 			}
-			sb.WriteString(fmt.Sprintf("- [Major Support]: %s | Tested: %d times (24H Daily Low)\n",
-				formatPriceForPrompt(supportLevel), supportTests))
+			sb.WriteString(fmt.Sprintf("- [Major Support]: %s | Tested: %d times (%s Low)\n",
+				formatPriceForPrompt(supportLevel), supportTests, dayDesc))
 
 			// Daily High (Major Resistance)
 			resistanceLevel := last.High
@@ -438,8 +449,8 @@ func (e *ChaosEngine) formatMarketData(data *market.Data) string {
 			if mainTf != "" {
 				resistanceTests = countLevelTests(resistanceLevel, SwingHigh, data.TimeframeData[mainTf].Klines, 0, 0.002)
 			}
-			sb.WriteString(fmt.Sprintf("- [Major Resistance]: %s | Tested: %d times (24H Daily High)\n",
-				formatPriceForPrompt(resistanceLevel), resistanceTests))
+			sb.WriteString(fmt.Sprintf("- [Major Resistance]: %s | Tested: %d times (%s High)\n",
+				formatPriceForPrompt(resistanceLevel), resistanceTests, dayDesc))
 
 			sb.WriteString("\n")
 		} else {

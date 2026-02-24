@@ -89,6 +89,8 @@ func (e *DebateEngine) InitializeClients(participants []*store.DebateParticipant
 			client = mcp.NewQwenClient()
 		case "openai":
 			client = mcp.NewOpenAIClient()
+		case "ollama":
+			client = mcp.NewOllamaClient()
 		case "claude":
 			client = mcp.NewClaudeClient()
 		case "gemini":
