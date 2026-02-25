@@ -1,7 +1,7 @@
 // =============================================================================
 // Chaos Trading System - User Prompt Entry Point
 // =============================================================================
-// 
+//
 // User Prompt 是发送给 LLM 的用户提示词的一部分。
 // 完整提示词 = System Prompt + User Prompt
 //
@@ -24,7 +24,7 @@ package chaos
 //   - "v1" 或 "legacy" → buildUserPromptLegacy (文本格式)
 //   - "v2" (默认)     → buildUserPromptV2 (JSON格式)
 //   - "v4"            → buildUserPromptV4 (结构事实版)
-func (e *ChaosEngine) BuildUserPrompt(ctx *ChaosContext) string {
+func (m *Manager) BuildUserPrompt(ctx *ChaosContext) string {
 	version := "v2" // default to v2 (stable)
 	if ctx.Config != nil && ctx.Config.UserPromptVersion != "" {
 		version = ctx.Config.UserPromptVersion
@@ -32,12 +32,12 @@ func (e *ChaosEngine) BuildUserPrompt(ctx *ChaosContext) string {
 
 	switch version {
 	case "v1", "legacy":
-		return e.buildUserPromptLegacy(ctx)
+		return m.buildUserPromptLegacy(ctx)
 	case "v4":
-		return e.buildUserPromptV4(ctx)
+		return m.buildUserPromptV4(ctx)
 	case "v2":
-		return e.buildUserPromptV2(ctx)
+		return m.buildUserPromptV2(ctx)
 	default:
-		return e.buildUserPromptV4(ctx)
+		return m.buildUserPromptV4(ctx)
 	}
 }

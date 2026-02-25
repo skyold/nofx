@@ -47,8 +47,8 @@ func NewChaosExecutor(trader TraderInterface, store *store.Store, traderID, exch
 	}
 }
 
-// Execute executes a list of decisions
-func (e *ChaosExecutor) Execute(decisions []Decision) ([]store.DecisionAction, []string) {
+// ExecuteDecisions executes a list of decisions
+func (e *ChaosExecutor) ExecuteDecisions(decisions []Decision) ([]store.DecisionAction, []string) {
 	// Sort decisions (close first)
 	sorted := e.sortDecisions(decisions)
 	var results []store.DecisionAction
@@ -527,5 +527,3 @@ func (e *ChaosExecutor) recordPositionChange(orderID, symbol, side, action strin
 		}
 	}
 }
-
-

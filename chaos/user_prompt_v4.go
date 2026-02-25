@@ -39,7 +39,7 @@ import (
 //  5. TradingPerformance - 历史交易统计
 //  6. Positions - 当前持仓
 //  7. 市场数据 JSON (V4) - 候选币种多时间框架数据 + 6层结构事实 Signals
-func (e *ChaosEngine) buildUserPromptV4(ctx *ChaosContext) string {
+func (m *Manager) buildUserPromptV4(ctx *ChaosContext) string {
 	if ctx == nil {
 		return ""
 	}
@@ -49,20 +49,20 @@ func (e *ChaosEngine) buildUserPromptV4(ctx *ChaosContext) string {
 	sb.WriteString("# 🌀 Chaos 模式用户提示 (V4 - Structural Facts Edition)\n\n")
 
 	// 2. V4 技术指标参考文档 (6层 Signals 结构说明)
-	sb.WriteString(e.getV4TechnicalIndicatorsReference())
+	sb.WriteString(m.getV4TechnicalIndicatorsReference())
 	sb.WriteString("\n\n")
 	sb.WriteString("---\n\n")
 
 	// 3. 公共信息部分
-	sb.WriteString(e.buildHeader(ctx))             // 时间、周期、运行时长
-	sb.WriteString(e.buildGlobalContext(ctx))      // BTC 行情概览
-	sb.WriteString(e.buildAccountStatus(ctx))      // 账户状态
-	sb.WriteString(e.buildTradingPerformance(ctx)) // 历史交易统计
-	sb.WriteString(e.buildPositions(ctx))          // 当前持仓
+	sb.WriteString(m.buildHeader(ctx))             // 时间、周期、运行时长
+	sb.WriteString(m.buildGlobalContext(ctx))      // BTC 行情概览
+	sb.WriteString(m.buildAccountStatus(ctx))      // 账户状态
+	sb.WriteString(m.buildTradingPerformance(ctx)) // 历史交易统计
+	sb.WriteString(m.buildPositions(ctx))          // 当前持仓
 
 	// 4. 市场数据 (JSON 格式 - V4 结构事实版)
 	sb.WriteString("## 市场数据 (JSON 格式 - V4 结构事实版)\n\n")
-	sb.WriteString(e.BuildV4JsonMarketData(ctx))
+	sb.WriteString(m.BuildV4JsonMarketData(ctx))
 
 	sb.WriteString("---\n\n")
 
@@ -70,7 +70,7 @@ func (e *ChaosEngine) buildUserPromptV4(ctx *ChaosContext) string {
 }
 
 // getV4TechnicalIndicatorsReference returns the V4 technical indicators reference documentation.
-func (e *ChaosEngine) getV4TechnicalIndicatorsReference() string {
+func (m *Manager) getV4TechnicalIndicatorsReference() string {
 	return `# Chaos Trading System V4 - 技术指标参考
 ## Structural Facts Edition (结构事实版本)
 
@@ -309,8 +309,8 @@ type V4Thresholds struct {
 }
 
 // BuildV4JsonMarketData generates the V4 JSON market data part of User Prompt.
-func (e *ChaosEngine) BuildV4JsonMarketData(ctx *ChaosContext) string {
-	data := e.buildV4CompleteMarketData(ctx)
+func (m *Manager) BuildV4JsonMarketData(ctx *ChaosContext) string {
+	data := m.buildV4CompleteMarketData(ctx)
 	prettyJSON, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
 		return fmt.Sprintf("Error building JSON: %v", err)
@@ -332,7 +332,7 @@ func (e *ChaosEngine) BuildV4JsonMarketData(ctx *ChaosContext) string {
 	return compactJSON
 }
 
-func (e *ChaosEngine) buildV4CompleteMarketData(ctx *ChaosContext) V4MarketData {
+func (m *Manager) buildV4CompleteMarketData(ctx *ChaosContext) V4MarketData {
 	result := V4MarketData{
 		Timestamp: ctx.CurrentTime,
 		Account: AccountInfo{
@@ -343,7 +343,7 @@ func (e *ChaosEngine) buildV4CompleteMarketData(ctx *ChaosContext) V4MarketData 
 			PositionsCount: ctx.Account.PositionCount,
 		},
 		Candidates: []V4Candidate{},
-		SignalMeta: e.buildV4SignalMeta(),
+		SignalMeta: m.buildV4SignalMeta(),
 	}
 
 	positionSymbols := make(map[string]bool)
@@ -378,9 +378,9 @@ func (e *ChaosEngine) buildV4CompleteMarketData(ctx *ChaosContext) V4MarketData 
 		for _, tf := range targetTimeframes {
 			if tfData, hasData := marketData.TimeframeData[tf]; hasData {
 				candidate.Timeframes[tf] = V4Timeframe{
-					Signals:    e.buildV4Signals(marketData, tfData, ctx),
-					Indicators: e.buildV4Indicators(tfData, ctx.Config),
-					Klines:     e.buildV4Klines(tfData),
+					Signals:    m.buildV4Signals(marketData, tfData, ctx),
+					Indicators: m.buildV4Indicators(tfData, ctx.Config),
+					Klines:     m.buildV4Klines(tfData),
 				}
 			}
 		}
@@ -393,7 +393,7 @@ func (e *ChaosEngine) buildV4CompleteMarketData(ctx *ChaosContext) V4MarketData 
 	return result
 }
 
-func (e *ChaosEngine) buildV4SignalMeta() V4SignalMeta {
+func (m *Manager) buildV4SignalMeta() V4SignalMeta {
 	return V4SignalMeta{
 		Version: "4.0",
 		LookbackPeriods: V4LookbackPeriods{
@@ -430,18 +430,18 @@ func (e *ChaosEngine) buildV4SignalMeta() V4SignalMeta {
 	}
 }
 
-func (e *ChaosEngine) buildV4Signals(md *market.Data, tf *market.TimeframeSeriesData, ctx *ChaosContext) V4Signals {
+func (m *Manager) buildV4Signals(md *market.Data, tf *market.TimeframeSeriesData, ctx *ChaosContext) V4Signals {
 	return V4Signals{
-		Structure:   e.buildV4StructureSignals(tf),
-		Momentum:    e.buildV4MomentumSignals(tf, md),
-		Volatility:  e.buildV4VolatilitySignals(tf, md),
-		Liquidity:   e.buildV4LiquiditySignals(tf, md),
-		Positioning: e.buildV4PositioningSignals(md),
-		Ranking:     e.buildV4RankingSignals(md, ctx),
+		Structure:   m.buildV4StructureSignals(tf),
+		Momentum:    m.buildV4MomentumSignals(tf, md),
+		Volatility:  m.buildV4VolatilitySignals(tf, md),
+		Liquidity:   m.buildV4LiquiditySignals(tf, md),
+		Positioning: m.buildV4PositioningSignals(md),
+		Ranking:     m.buildV4RankingSignals(md, ctx),
 	}
 }
 
-func (e *ChaosEngine) buildV4StructureSignals(tf *market.TimeframeSeriesData) V4StructureSignals {
+func (m *Manager) buildV4StructureSignals(tf *market.TimeframeSeriesData) V4StructureSignals {
 	signals := V4StructureSignals{}
 
 	if len(tf.Klines) < 5 {
@@ -484,7 +484,7 @@ func (e *ChaosEngine) buildV4StructureSignals(tf *market.TimeframeSeriesData) V4
 	return signals
 }
 
-func (e *ChaosEngine) buildV4MomentumSignals(tf *market.TimeframeSeriesData, md *market.Data) V4MomentumSignals {
+func (m *Manager) buildV4MomentumSignals(tf *market.TimeframeSeriesData, md *market.Data) V4MomentumSignals {
 	signals := V4MomentumSignals{}
 
 	if len(tf.RSI14Values) > 0 {
@@ -533,7 +533,7 @@ func (e *ChaosEngine) buildV4MomentumSignals(tf *market.TimeframeSeriesData, md 
 	return signals
 }
 
-func (e *ChaosEngine) buildV4VolatilitySignals(tf *market.TimeframeSeriesData, md *market.Data) V4VolatilitySignals {
+func (m *Manager) buildV4VolatilitySignals(tf *market.TimeframeSeriesData, md *market.Data) V4VolatilitySignals {
 	signals := V4VolatilitySignals{}
 
 	if tf.ATR14 > 0 {
@@ -578,7 +578,7 @@ func (e *ChaosEngine) buildV4VolatilitySignals(tf *market.TimeframeSeriesData, m
 	return signals
 }
 
-func (e *ChaosEngine) buildV4LiquiditySignals(tf *market.TimeframeSeriesData, md *market.Data) V4LiquiditySignals {
+func (m *Manager) buildV4LiquiditySignals(tf *market.TimeframeSeriesData, md *market.Data) V4LiquiditySignals {
 	signals := V4LiquiditySignals{}
 
 	lookback := 10
@@ -635,7 +635,7 @@ func (e *ChaosEngine) buildV4LiquiditySignals(tf *market.TimeframeSeriesData, md
 	return signals
 }
 
-func (e *ChaosEngine) buildV4PositioningSignals(md *market.Data) V4PositioningSignals {
+func (m *Manager) buildV4PositioningSignals(md *market.Data) V4PositioningSignals {
 	signals := V4PositioningSignals{}
 
 	if md.OpenInterest != nil {
@@ -652,7 +652,7 @@ func (e *ChaosEngine) buildV4PositioningSignals(md *market.Data) V4PositioningSi
 	return signals
 }
 
-func (e *ChaosEngine) buildV4RankingSignals(md *market.Data, ctx *ChaosContext) V4RankingSignals {
+func (m *Manager) buildV4RankingSignals(md *market.Data, ctx *ChaosContext) V4RankingSignals {
 	signals := V4RankingSignals{}
 
 	// FIXME: market.Data does not have PriceChange24h. Using PriceChange4h as a placeholder or 0.
@@ -663,7 +663,7 @@ func (e *ChaosEngine) buildV4RankingSignals(md *market.Data, ctx *ChaosContext) 
 	return signals
 }
 
-func (e *ChaosEngine) buildV4Indicators(tf *market.TimeframeSeriesData, cfg *ChaosConfig) Indicators {
+func (m *Manager) buildV4Indicators(tf *market.TimeframeSeriesData, cfg *ChaosConfig) Indicators {
 	limit := 10
 	indicators := Indicators{}
 
@@ -712,7 +712,7 @@ func (e *ChaosEngine) buildV4Indicators(tf *market.TimeframeSeriesData, cfg *Cha
 	return indicators
 }
 
-func (e *ChaosEngine) buildV4Klines(tf *market.TimeframeSeriesData) Klines {
+func (m *Manager) buildV4Klines(tf *market.TimeframeSeriesData) Klines {
 	klines := Klines{
 		Columns:         []string{"time", "o", "h", "l", "c", "v"},
 		Values:          make([][]interface{}, 0),

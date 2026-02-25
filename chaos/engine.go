@@ -393,3 +393,8 @@ func (e *ChaosEngine) ValidateDecisions(decisions []Decision, reasoning *Reasoni
 	}
 	return validated, nil
 }
+
+// BuildUserPrompt delegates to Manager to build User Prompt
+func (e *ChaosEngine) BuildUserPrompt(ctx *ChaosContext) string {
+return e.manager.BuildUserPrompt(ctx)
+}

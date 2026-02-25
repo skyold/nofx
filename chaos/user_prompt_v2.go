@@ -38,7 +38,7 @@ import (
 //  5. TradingPerformance - 历史交易统计
 //  6. Positions - 当前持仓
 //  7. 市场数据 JSON - 候选币种多时间框架数据
-func (e *ChaosEngine) buildUserPromptV2(ctx *ChaosContext) string {
+func (m *Manager) buildUserPromptV2(ctx *ChaosContext) string {
 	if ctx == nil {
 		return ""
 	}
@@ -48,20 +48,20 @@ func (e *ChaosEngine) buildUserPromptV2(ctx *ChaosContext) string {
 	sb.WriteString("# 🌀 Chaos 模式用户提示 (V2 - JSON Format)\n\n")
 
 	// 2. 技术指标参考文档
-	sb.WriteString(e.getTechnicalIndicatorsReference())
+	sb.WriteString(m.getTechnicalIndicatorsReference())
 	sb.WriteString("\n\n")
 	sb.WriteString("---\n\n")
 
 	// 3. 公共信息部分
-	sb.WriteString(e.buildHeader(ctx))             // 时间、周期、运行时长
-	sb.WriteString(e.buildGlobalContext(ctx))      // BTC 行情概览
-	sb.WriteString(e.buildAccountStatus(ctx))      // 账户状态
-	sb.WriteString(e.buildTradingPerformance(ctx)) // 历史交易统计
-	sb.WriteString(e.buildPositions(ctx))          // 当前持仓
+	sb.WriteString(m.buildHeader(ctx))             // 时间、周期、运行时长
+	sb.WriteString(m.buildGlobalContext(ctx))      // BTC 行情概览
+	sb.WriteString(m.buildAccountStatus(ctx))      // 账户状态
+	sb.WriteString(m.buildTradingPerformance(ctx)) // 历史交易统计
+	sb.WriteString(m.buildPositions(ctx))          // 当前持仓
 
 	// 4. 市场数据 (JSON 格式)
 	sb.WriteString("## 市场数据 (JSON 格式)\n\n")
-	sb.WriteString(e.BuildJsonMarketData(ctx))
+	sb.WriteString(m.BuildJsonMarketData(ctx))
 
 	sb.WriteString("---\n\n")
 
@@ -69,8 +69,8 @@ func (e *ChaosEngine) buildUserPromptV2(ctx *ChaosContext) string {
 }
 
 // BuildJsonMarketData generates the JSON market data part of User Prompt.
-func (e *ChaosEngine) BuildJsonMarketData(ctx *ChaosContext) string {
-	data := e.buildCompleteMarketData(ctx)
+func (m *Manager) BuildJsonMarketData(ctx *ChaosContext) string {
+	data := m.buildCompleteMarketData(ctx)
 	prettyJSON, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
 		return fmt.Sprintf("Error building JSON: %v", err)
@@ -93,7 +93,7 @@ func (e *ChaosEngine) BuildJsonMarketData(ctx *ChaosContext) string {
 }
 
 // getTechnicalIndicatorsReference returns the technical indicators reference documentation.
-func (e *ChaosEngine) getTechnicalIndicatorsReference() string {
+func (m *Manager) getTechnicalIndicatorsReference() string {
 	return `# Chaos Trading System - 技术指标参考
 
 ---
@@ -409,7 +409,7 @@ type RankingItem struct {
 // Builder Logic
 // ============================================================================
 
-func (e *ChaosEngine) buildCompleteMarketData(ctx *ChaosContext) MarketData {
+func (m *Manager) buildCompleteMarketData(ctx *ChaosContext) MarketData {
 	result := MarketData{
 		Timestamp: ctx.CurrentTime,
 		Account: AccountInfo{
@@ -455,9 +455,9 @@ func (e *ChaosEngine) buildCompleteMarketData(ctx *ChaosContext) MarketData {
 		for _, tf := range targetTimeframes {
 			if tfData, hasData := marketData.TimeframeData[tf]; hasData {
 				candidate.Timeframes[tf] = Timeframe{
-					Signals:    e.buildSignals(marketData, tfData, ctx.Config),
-					Indicators: e.buildIndicators(tfData, ctx.Config),
-					Klines:     e.buildKlines(tfData),
+					Signals:    m.buildSignals(marketData, tfData, ctx.Config),
+					Indicators: m.buildIndicators(tfData, ctx.Config),
+					Klines:     m.buildKlines(tfData),
 				}
 			}
 		}
@@ -467,12 +467,12 @@ func (e *ChaosEngine) buildCompleteMarketData(ctx *ChaosContext) MarketData {
 		}
 	}
 
-	result.MarketRankings = e.buildMarketRankings(ctx)
+	result.MarketRankings = m.buildMarketRankings(ctx)
 
 	return result
 }
 
-func (e *ChaosEngine) buildSignals(md *market.Data, tf *market.TimeframeSeriesData, cfg *ChaosConfig) Signals {
+func (m *Manager) buildSignals(md *market.Data, tf *market.TimeframeSeriesData, cfg *ChaosConfig) Signals {
 	signals := Signals{}
 
 	enableEMA := cfg == nil || cfg.Indicators.EnableEMA
@@ -503,7 +503,7 @@ func (e *ChaosEngine) buildSignals(md *market.Data, tf *market.TimeframeSeriesDa
 
 	if enableRSI {
 		if len(tf.Klines) >= 10 && tf.ATR14 > 0 {
-			signals.Momentum = e.calculateMomentum(tf)
+			signals.Momentum = m.calculateMomentum(tf)
 		} else {
 			if md.PriceChange1h > 0.5 {
 				signals.Momentum = "rising"
@@ -515,7 +515,7 @@ func (e *ChaosEngine) buildSignals(md *market.Data, tf *market.TimeframeSeriesDa
 		}
 	}
 
-	signals.VolumePriceRelationship = e.calculateVolumePriceRelationship(tf)
+	signals.VolumePriceRelationship = m.calculateVolumePriceRelationship(tf)
 
 	if len(tf.Klines) >= 20 {
 		high20 := 0.0
@@ -541,14 +541,14 @@ func (e *ChaosEngine) buildSignals(md *market.Data, tf *market.TimeframeSeriesDa
 		}
 	}
 
-	signals.VolatilityState = e.calculateVolatilityState(tf)
+	signals.VolatilityState = m.calculateVolatilityState(tf)
 
-	signals.KeyLevels = e.buildKeyLevels(md, tf)
+	signals.KeyLevels = m.buildKeyLevels(md, tf)
 
 	return signals
 }
 
-func (e *ChaosEngine) calculateMomentum(tf *market.TimeframeSeriesData) string {
+func (m *Manager) calculateMomentum(tf *market.TimeframeSeriesData) string {
 	if len(tf.Klines) < 10 || tf.ATR14 <= 0 {
 		return "choppy"
 	}
@@ -582,7 +582,7 @@ func (e *ChaosEngine) calculateMomentum(tf *market.TimeframeSeriesData) string {
 	}
 }
 
-func (e *ChaosEngine) calculateVolumePriceRelationship(tf *market.TimeframeSeriesData) string {
+func (m *Manager) calculateVolumePriceRelationship(tf *market.TimeframeSeriesData) string {
 	if len(tf.Klines) < 2 {
 		return "neutral"
 	}
@@ -613,7 +613,7 @@ func (e *ChaosEngine) calculateVolumePriceRelationship(tf *market.TimeframeSerie
 	}
 }
 
-func (e *ChaosEngine) calculateVolatilityState(tf *market.TimeframeSeriesData) VolatilityState {
+func (m *Manager) calculateVolatilityState(tf *market.TimeframeSeriesData) VolatilityState {
 	state := VolatilityState{
 		Classification: "medium",
 		Trend:          "stable",
@@ -658,7 +658,7 @@ func (e *ChaosEngine) calculateVolatilityState(tf *market.TimeframeSeriesData) V
 	return state
 }
 
-func (e *ChaosEngine) buildKeyLevels(md *market.Data, tf *market.TimeframeSeriesData) KeyLevels {
+func (m *Manager) buildKeyLevels(md *market.Data, tf *market.TimeframeSeriesData) KeyLevels {
 	keyLevels := KeyLevels{
 		CurrentPrice: md.CurrentPrice,
 	}
@@ -700,7 +700,7 @@ func (e *ChaosEngine) buildKeyLevels(md *market.Data, tf *market.TimeframeSeries
 	return keyLevels
 }
 
-func (e *ChaosEngine) buildIndicators(tf *market.TimeframeSeriesData, cfg *ChaosConfig) Indicators {
+func (m *Manager) buildIndicators(tf *market.TimeframeSeriesData, cfg *ChaosConfig) Indicators {
 	limit := 10
 	indicators := Indicators{}
 
@@ -757,7 +757,7 @@ func (e *ChaosEngine) buildIndicators(tf *market.TimeframeSeriesData, cfg *Chaos
 	return indicators
 }
 
-func (e *ChaosEngine) buildKlines(tf *market.TimeframeSeriesData) Klines {
+func (m *Manager) buildKlines(tf *market.TimeframeSeriesData) Klines {
 	klines := Klines{
 		Columns:         []string{"time", "o", "h", "l", "c", "v"},
 		Values:          make([][]interface{}, 0),
@@ -790,7 +790,7 @@ func (e *ChaosEngine) buildKlines(tf *market.TimeframeSeriesData) Klines {
 	return klines
 }
 
-func (e *ChaosEngine) buildMarketRankings(ctx *ChaosContext) MarketRankings {
+func (m *Manager) buildMarketRankings(ctx *ChaosContext) MarketRankings {
 	rankings := MarketRankings{}
 
 	var indicators *store.IndicatorConfig

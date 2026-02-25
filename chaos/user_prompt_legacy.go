@@ -38,7 +38,7 @@ import (
 //  5. Positions - 当前持仓
 //  6. Candidates - 候选币种市场数据 (文本格式)
 //  7. Rankings - 排行榜数据 (OI、资金流向、涨跌幅)
-func (e *ChaosEngine) buildUserPromptLegacy(ctx *ChaosContext) string {
+func (m *Manager) buildUserPromptLegacy(ctx *ChaosContext) string {
 	if ctx == nil {
 		return ""
 	}
@@ -48,27 +48,27 @@ func (e *ChaosEngine) buildUserPromptLegacy(ctx *ChaosContext) string {
 	sb.WriteString("# 🌀 Chaos 模式用户提示 (Legacy - Text Format)\n\n")
 
 	// 2. 公共信息部分
-	sb.WriteString(e.buildHeader(ctx))             // 时间、周期、运行时长
-	sb.WriteString(e.buildGlobalContext(ctx))      // BTC 行情概览
-	sb.WriteString(e.buildAccountStatus(ctx))      // 账户状态
-	sb.WriteString(e.buildTradingPerformance(ctx)) // 历史交易统计
-	sb.WriteString(e.buildPositions(ctx))          // 当前持仓
+	sb.WriteString(m.buildHeader(ctx))             // 时间、周期、运行时长
+	sb.WriteString(m.buildGlobalContext(ctx))      // BTC 行情概览
+	sb.WriteString(m.buildAccountStatus(ctx))      // 账户状态
+	sb.WriteString(m.buildTradingPerformance(ctx)) // 历史交易统计
+	sb.WriteString(m.buildPositions(ctx))          // 当前持仓
 
 	// 3. 市场数据 (文本格式)
-	sb.WriteString(e.buildCandidates(ctx)) // 候选币种市场数据
-	sb.WriteString(e.buildRankings(ctx))   // 排行榜数据
+	sb.WriteString(m.buildCandidates(ctx)) // 候选币种市场数据
+	sb.WriteString(m.buildRankings(ctx))   // 排行榜数据
 
 	sb.WriteString("---\n\n")
 
 	return sb.String()
 }
 
-func (e *ChaosEngine) buildHeader(ctx *ChaosContext) string {
+func (m *Manager) buildHeader(ctx *ChaosContext) string {
 	return fmt.Sprintf("Time: %s | Period: #%d | Runtime: %d minutes\n\n",
 		ctx.CurrentTime, ctx.CallCount, ctx.RuntimeMinutes)
 }
 
-func (e *ChaosEngine) buildGlobalContext(ctx *ChaosContext) string {
+func (m *Manager) buildGlobalContext(ctx *ChaosContext) string {
 	var sb strings.Builder
 	if btcData, hasBTC := ctx.MarketDataMap["BTCUSDT"]; hasBTC {
 		sb.WriteString(fmt.Sprintf("BTC: %.2f (1h: %+.2f%%, 4h: %+.2f%%) | MACD: %.4f | RSI: %.2f\n\n",
@@ -78,7 +78,7 @@ func (e *ChaosEngine) buildGlobalContext(ctx *ChaosContext) string {
 	return sb.String()
 }
 
-func (e *ChaosEngine) buildAccountStatus(ctx *ChaosContext) string {
+func (m *Manager) buildAccountStatus(ctx *ChaosContext) string {
 	return fmt.Sprintf("Account: Equity %.2f | Balance %.2f (%.1f%%) | PnL %+.2f%% | Margin %.1f%% | Positions %d\n\n",
 		ctx.Account.TotalEquity,
 		ctx.Account.AvailableBalance,
@@ -88,14 +88,14 @@ func (e *ChaosEngine) buildAccountStatus(ctx *ChaosContext) string {
 		ctx.Account.PositionCount)
 }
 
-func (e *ChaosEngine) buildTradingPerformance(ctx *ChaosContext) string {
+func (m *Manager) buildTradingPerformance(ctx *ChaosContext) string {
 	var sb strings.Builder
-	sb.WriteString(e.buildHistoricalStats(ctx))
-	sb.WriteString(e.buildRecentTrades(ctx))
+	sb.WriteString(m.buildHistoricalStats(ctx))
+	sb.WriteString(m.buildRecentTrades(ctx))
 	return sb.String()
 }
 
-func (e *ChaosEngine) buildRecentTrades(ctx *ChaosContext) string {
+func (m *Manager) buildRecentTrades(ctx *ChaosContext) string {
 	if len(ctx.RecentOrders) == 0 {
 		return ""
 	}
@@ -116,7 +116,7 @@ func (e *ChaosEngine) buildRecentTrades(ctx *ChaosContext) string {
 	return sb.String()
 }
 
-func (e *ChaosEngine) buildHistoricalStats(ctx *ChaosContext) string {
+func (m *Manager) buildHistoricalStats(ctx *ChaosContext) string {
 	if ctx.TradingStats == nil || ctx.TradingStats.TotalTrades == 0 {
 		return ""
 	}
@@ -178,12 +178,12 @@ func (e *ChaosEngine) buildHistoricalStats(ctx *ChaosContext) string {
 	return sb.String()
 }
 
-func (e *ChaosEngine) buildPositions(ctx *ChaosContext) string {
+func (m *Manager) buildPositions(ctx *ChaosContext) string {
 	var sb strings.Builder
 	if len(ctx.Positions) > 0 {
 		sb.WriteString("## Current Positions\n")
 		for i, pos := range ctx.Positions {
-			sb.WriteString(e.formatPositionInfoFromContext(i+1, pos, ctx))
+			sb.WriteString(m.formatPositionInfoFromContext(i+1, pos, ctx))
 		}
 	} else {
 		sb.WriteString("Current Positions: None\n\n")
@@ -191,7 +191,7 @@ func (e *ChaosEngine) buildPositions(ctx *ChaosContext) string {
 	return sb.String()
 }
 
-func (e *ChaosEngine) formatPositionInfoFromContext(index int, pos kernel.PositionInfo, ctx *ChaosContext) string {
+func (m *Manager) formatPositionInfoFromContext(index int, pos kernel.PositionInfo, ctx *ChaosContext) string {
 	var sb strings.Builder
 
 	holdingDuration := ""
@@ -218,11 +218,11 @@ func (e *ChaosEngine) formatPositionInfoFromContext(index int, pos kernel.Positi
 		pos.Leverage, pos.MarginUsed, pos.LiquidationPrice, holdingDuration))
 
 	if marketData, ok := ctx.MarketDataMap[pos.Symbol]; ok {
-		sb.WriteString(e.formatMarketData(marketData))
+		sb.WriteString(m.formatMarketData(marketData, ctx.Config.Indicators))
 
 		if ctx.QuantDataMap != nil {
 			if quantData, hasQuant := ctx.QuantDataMap[pos.Symbol]; hasQuant {
-				sb.WriteString(e.formatQuantData(quantData))
+				sb.WriteString(m.formatQuantData(quantData, ctx.Config.Indicators))
 			}
 		}
 		sb.WriteString("\n")
@@ -231,7 +231,7 @@ func (e *ChaosEngine) formatPositionInfoFromContext(index int, pos kernel.Positi
 	return sb.String()
 }
 
-func (e *ChaosEngine) buildCandidates(ctx *ChaosContext) string {
+func (m *Manager) buildCandidates(ctx *ChaosContext) string {
 	var sb strings.Builder
 
 	positionSymbols := make(map[string]bool)
@@ -254,13 +254,13 @@ func (e *ChaosEngine) buildCandidates(ctx *ChaosContext) string {
 		}
 		displayedCount++
 
-		sourceTags := e.formatCoinSourceTag(coin.Sources)
+		sourceTags := m.formatCoinSourceTag(coin.Sources)
 		sb.WriteString(fmt.Sprintf("### %d. %s%s\n\n", displayedCount, coin.Symbol, sourceTags))
-		sb.WriteString(e.formatMarketData(marketData))
+		sb.WriteString(m.formatMarketData(marketData, ctx.Config.Indicators))
 
 		if ctx.QuantDataMap != nil {
 			if quantData, hasQuant := ctx.QuantDataMap[coin.Symbol]; hasQuant {
-				sb.WriteString(e.formatQuantData(quantData))
+				sb.WriteString(m.formatQuantData(quantData, ctx.Config.Indicators))
 			}
 		}
 		sb.WriteString("\n")
@@ -269,7 +269,7 @@ func (e *ChaosEngine) buildCandidates(ctx *ChaosContext) string {
 	return sb.String()
 }
 
-func (e *ChaosEngine) buildRankings(ctx *ChaosContext) string {
+func (m *Manager) buildRankings(ctx *ChaosContext) string {
 	var sb strings.Builder
 	nofxosLang := nofxos.LangEnglish
 
@@ -287,7 +287,7 @@ func (e *ChaosEngine) buildRankings(ctx *ChaosContext) string {
 	return sb.String()
 }
 
-func (e *ChaosEngine) formatCoinSourceTag(sources []string) string {
+func (m *Manager) formatCoinSourceTag(sources []string) string {
 	if len(sources) > 1 {
 		hasAI500 := false
 		hasOITop := false
@@ -331,12 +331,9 @@ func (e *ChaosEngine) formatCoinSourceTag(sources []string) string {
 // Market Data Formatting
 // ============================================================================
 
-func (e *ChaosEngine) formatMarketData(data *market.Data) string {
+func (m *Manager) formatMarketData(data *market.Data, indicators store.IndicatorConfig) string {
 	var sb strings.Builder
-	var indicators store.IndicatorConfig
-	if e.config != nil && e.config.ChaosConfig != nil {
-		indicators = e.config.ChaosConfig.Indicators
-	}
+	// indicators are passed as argument
 
 	sb.WriteString(fmt.Sprintf("=== %s Market Data ===\n\n", data.Symbol))
 	sb.WriteString(fmt.Sprintf("current_price = %.4f", data.CurrentPrice))
@@ -399,7 +396,7 @@ func (e *ChaosEngine) formatMarketData(data *market.Data) string {
 			if tfData, ok := data.TimeframeData[tf]; ok {
 				logger.Infof("[PromptBuilder]   -> Found timeframe: %s for %s", tf, data.Symbol)
 				sb.WriteString(fmt.Sprintf("=== %s Timeframe (oldest → latest) ===\n\n", strings.ToUpper(tf)))
-				e.formatTimeframeSeriesData(&sb, tfData, indicators)
+				m.formatTimeframeSeriesData(&sb, tfData, indicators)
 			}
 		}
 		var mainTf string
@@ -568,7 +565,7 @@ func (e *ChaosEngine) formatMarketData(data *market.Data) string {
 	return sb.String()
 }
 
-func (e *ChaosEngine) formatTimeframeSeriesData(sb *strings.Builder, data *market.TimeframeSeriesData, indicators store.IndicatorConfig) {
+func (m *Manager) formatTimeframeSeriesData(sb *strings.Builder, data *market.TimeframeSeriesData, indicators store.IndicatorConfig) {
 	if len(data.Klines) > 0 {
 		logger.Infof("[PromptBuilder]     -> Formatting Klines, count: %d", len(data.Klines))
 		sb.WriteString("Time(UTC)      Open      High      Low       Close     Volume\n")
@@ -649,14 +646,9 @@ func (e *ChaosEngine) formatTimeframeSeriesData(sb *strings.Builder, data *marke
 	sb.WriteString("\n")
 }
 
-func (e *ChaosEngine) formatQuantData(data *kernel.QuantData) string {
+func (m *Manager) formatQuantData(data *kernel.QuantData, indicators store.IndicatorConfig) string {
 	if data == nil {
 		return ""
-	}
-
-	var indicators store.IndicatorConfig
-	if e.config != nil && e.config.ChaosConfig != nil {
-		indicators = e.config.ChaosConfig.Indicators
 	}
 
 	if !indicators.EnableQuantOI && !indicators.EnableQuantNetflow {

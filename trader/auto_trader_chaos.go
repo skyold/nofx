@@ -546,7 +546,7 @@ func (at *AutoTrader) executeChaosDecision(result *chaos.DecisionResult, ctx *ch
 		at.exchangeID,
 		ctx.Config,
 	)
-	actionRecord, executionLogs = executor.Execute(result.Decisions)
+	actionRecord, executionLogs = executor.ExecuteDecisions(result.Decisions)
 
 	return actionRecord, executionLogs
 }
