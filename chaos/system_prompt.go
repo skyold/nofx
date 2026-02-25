@@ -25,11 +25,11 @@ func (e *ChaosEngine) BuildSystemPrompt(accountEquity float64, variant string) s
 			Indicators:    indicators,
 		},
 	}
-	return e.buildSystemPromptWithChaosContext(ctx)
+	return e.BuildSystemPromptWithContext(ctx)
 }
 
 // buildSystemPromptWithChaosContext builds the system prompt for Chaos mode using context
-func (e *ChaosEngine) buildSystemPromptWithChaosContext(ctx *ChaosContext) string {
+func (e *ChaosEngine) BuildSystemPromptWithContext(ctx *ChaosContext) string {
 	if ctx.Config != nil && ctx.Config.ChaosPrompt != "" {
 		// Use manager to build the full prompt including Contract and Footer
 		// We pass indicators config for dynamic market data generation

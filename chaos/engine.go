@@ -309,10 +309,15 @@ func (e *ChaosEngine) getOILowCoins(limit int) ([]kernel.CandidateCoin, error) {
 	return candidates, nil
 }
 
+// ExtractCoTTrace extracts the Chain of Thought from the AI response
+func (e *ChaosEngine) ExtractCoTTrace(response string) string {
+	return e.manager.ExtractReasoning(response)
+}
+
 // Execute runs the Chaos decision process
 func (e *ChaosEngine) Execute(ctx *ChaosContext, mcpClient mcp.AIClient) (*DecisionResult, error) {
 	// 1. Build Prompts
-	systemPrompt := e.buildSystemPromptWithChaosContext(ctx)
+	systemPrompt := e.BuildSystemPromptWithContext(ctx)
 	userPrompt := e.BuildUserPrompt(ctx)
 
 	// 2. Call AI
@@ -324,7 +329,7 @@ func (e *ChaosEngine) Execute(ctx *ChaosContext, mcpClient mcp.AIClient) (*Decis
 	}
 
 	// 3. Parse & Validate
-	decisions, decisionJSON, err := extractDecisions(aiResponse)
+	decisions, decisionJSON, err := ExtractDecisions(aiResponse)
 
 	// Create result structure
 	result := &DecisionResult{
@@ -351,10 +356,10 @@ func (e *ChaosEngine) Execute(ctx *ChaosContext, mcpClient mcp.AIClient) (*Decis
 	result.RawDecisions = decisions
 
 	// Extract Reasoning for validation
-	reasoning, _ := extractReasoningJSON(aiResponse)
+	reasoning, _ := ExtractReasoningJSON(aiResponse)
 
 	// Validate decisions
-	validatedDecisions, err := e.validateDecisions(decisions, reasoning, ctx)
+	validatedDecisions, err := e.ValidateDecisions(decisions, reasoning, ctx)
 	if err != nil {
 		return result, fmt.Errorf("content audit failed: %w", err)
 	}
@@ -364,7 +369,7 @@ func (e *ChaosEngine) Execute(ctx *ChaosContext, mcpClient mcp.AIClient) (*Decis
 	return result, nil
 }
 
-func (e *ChaosEngine) validateDecisions(decisions []Decision, reasoning *Reasoning, ctx *ChaosContext) ([]Decision, error) {
+func (e *ChaosEngine) ValidateDecisions(decisions []Decision, reasoning *Reasoning, ctx *ChaosContext) ([]Decision, error) {
 	// Implement validation using ctx.Config.RiskControl
 	// This logic mirrors the kernel validation but uses Chaos structures
 

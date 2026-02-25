@@ -48,7 +48,7 @@ type Opportunity struct {
 	AuditPath string
 }
 
-func extractDecisions(response string) ([]Decision, string, error) {
+func ExtractDecisions(response string) ([]Decision, string, error) {
 	s := removeInvisibleRunes(response)
 	s = strings.TrimSpace(s)
 	s = fixMissingQuotes(s)
@@ -98,7 +98,7 @@ func extractDecisions(response string) ([]Decision, string, error) {
 	return convertDecisions(rawDecisions), jsonContent, nil
 }
 
-func extractReasoningJSON(response string) (*Reasoning, error) {
+func ExtractReasoningJSON(response string) (*Reasoning, error) {
 	s := removeInvisibleRunes(response)
 	var jsonContent string
 

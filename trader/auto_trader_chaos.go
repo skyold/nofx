@@ -69,18 +69,101 @@ func (at *AutoTrader) RunChaosCycle() error {
 	// Save equity snapshot (Align with nofx AutoTrader behavior)
 	at.saveChaosEquitySnapshot(ctx)
 
-	// 2. Execute Chaos Engine (LLM call)
-	chaosDecision, err := chaos.GetChaosDecisions(ctx, at.mcpClient, at.chaosEngine)
+	// 2. Execute Chaos Engine (Decomposed)
+
+	// Step 1: Build Prompts
+	systemPrompt := at.chaosEngine.BuildSystemPromptWithContext(ctx)
+	userPrompt := at.chaosEngine.BuildUserPrompt(ctx)
+
+	// Step 2: Call AI
+	aiCallStart := time.Now()
+	aiResponse, err := at.mcpClient.CallWithMessages(systemPrompt, userPrompt)
+	aiCallDuration := time.Since(aiCallStart)
+
 	if err != nil {
-		logger.Errorf("❌ Chaos Engine execution failed: %v", err)
+		logger.Errorf("❌ Chaos Engine execution failed (LLM Call): %v", err)
 		record.Success = false
-		record.ErrorMessage = fmt.Sprintf("Chaos Engine execution failed: %v", err)
-		record.ExecutionLog = append(record.ExecutionLog, fmt.Sprintf("❌ Engine Error: %v", err))
+		record.ErrorMessage = fmt.Sprintf("LLM Call failed: %v", err)
+		record.ExecutionLog = append(record.ExecutionLog, fmt.Sprintf("❌ LLM Error: %v", err))
 		if saveErr := at.saveDecision(record); saveErr != nil {
 			logger.Errorf("Failed to save error decision: %v", saveErr)
 		}
 		return err
 	}
+
+	// Step 3: Parse & Extract
+	decisions, decisionJSON, extractErr := chaos.ExtractDecisions(aiResponse)
+
+	reasoning, _ := chaos.ExtractReasoningJSON(aiResponse)
+	cotTrace := at.chaosEngine.ExtractCoTTrace(aiResponse)
+
+	// Construct initial result for logging/error handling
+	chaosDecision := &chaos.DecisionResult{
+		SystemPrompt:        systemPrompt,
+		UserPrompt:          userPrompt,
+		CoTTrace:            cotTrace,
+		Decisions:           nil, // Will be filled after validation
+		RawDecisions:        decisions,
+		DecisionJSON:        decisionJSON,
+		RawResponse:         aiResponse,
+		Timestamp:           time.Now(),
+		AIRequestDurationMs: aiCallDuration.Milliseconds(),
+	}
+
+	if extractErr != nil {
+		logger.Errorf("❌ Chaos Engine execution failed (Format Audit): %v", extractErr)
+		record.Success = false
+		record.ErrorMessage = fmt.Sprintf("Format Audit failed: %v", extractErr)
+		record.ExecutionLog = append(record.ExecutionLog, fmt.Sprintf("❌ Format Error: %v", extractErr))
+
+		// Save record with available info
+		record.SystemPrompt = chaosDecision.SystemPrompt
+		record.InputPrompt = chaosDecision.UserPrompt
+		record.CoTTrace = chaosDecision.CoTTrace
+		record.RawResponse = chaosDecision.RawResponse
+		record.AIRequestDurationMs = chaosDecision.AIRequestDurationMs
+		record.DecisionJSON = chaosDecision.DecisionJSON
+
+		if saveErr := at.saveDecision(record); saveErr != nil {
+			logger.Errorf("Failed to save error decision: %v", saveErr)
+		}
+		return extractErr
+	}
+
+	// Step 4: Validate
+	// Manually validate decisions to handle errors gracefully (partial failure)
+	manager := chaos.NewManager()
+	var validatedDecisions []chaos.Decision
+	var failedDecisions []store.DecisionAction
+	riskConfig := ctx.Config.RiskControl
+
+	for _, d := range decisions {
+		positionSizeUSD, err := manager.ValidateDecision(&d, reasoning, ctx.Account.TotalEquity, riskConfig)
+		if err != nil {
+			logger.Warnf("⚠️ Chaos decision validation failed for %s: %v", d.Symbol, err)
+
+			// Create failed action record
+			failedAction := store.DecisionAction{
+				Symbol:    d.Symbol,
+				Action:    "wait",
+				Timestamp: time.Now().UTC(),
+				Success:   false,
+				Error:     err.Error(),
+				Reasoning: fmt.Sprintf("Validation failed: %v", err),
+			}
+			if d.TotalScore != nil {
+				failedAction.Confidence = *d.TotalScore
+			}
+			failedDecisions = append(failedDecisions, failedAction)
+			continue
+		}
+
+		// Store validated position size
+		d.PositionSizeUSD = &positionSizeUSD
+		validatedDecisions = append(validatedDecisions, d)
+	}
+
+	chaosDecision.Decisions = validatedDecisions
 
 	// Fill record with AI decision results
 	record.SystemPrompt = chaosDecision.SystemPrompt
@@ -90,8 +173,18 @@ func (at *AutoTrader) RunChaosCycle() error {
 	record.AIRequestDurationMs = chaosDecision.AIRequestDurationMs
 	record.DecisionJSON = chaosDecision.DecisionJSON
 
-	// 3. Execute Decisions
+	// Step 5: Execute Decisions
 	actionRecord, executionLogs := at.executeChaosDecision(chaosDecision, ctx)
+
+	// Append failed validation actions to record and logs
+	if len(failedDecisions) > 0 {
+		actionRecord = append(actionRecord, failedDecisions...)
+		for _, fd := range failedDecisions {
+			errMsg := fmt.Sprintf("❌ Validation failed (%s): %s", fd.Symbol, fd.Error)
+			executionLogs = append(executionLogs, errMsg)
+		}
+	}
+
 	record.Decisions = actionRecord
 	record.ExecutionLog = append(record.ExecutionLog, executionLogs...)
 
