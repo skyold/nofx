@@ -6,11 +6,9 @@
 // 完整提示词 = System Prompt + User Prompt
 //
 // 此文件作为 User Prompt 的入口，根据配置选择对应版本：
-// - legacy/v1: 文本格式 (user_prompt_legacy.go)
-// - v2: JSON格式 (user_prompt_v2.go) - 默认版本
-// - v4: 结构事实版 (user_prompt_v4.go)
-//
-// 与 system_prompt.go 对应，engine.go 只需调用 BuildUserPromptFromChaosContext
+// - legacy/v1: 文本格式 (prompt_user_legacy.go)
+// - v2: JSON格式 (prompt_user_v2.go) - 默认版本
+// - v4: 结构事实版 (prompt_user_v4.go)
 //
 // 版本切换：通过配置 prompt_version 字段切换
 // =============================================================================

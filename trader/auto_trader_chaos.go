@@ -92,9 +92,9 @@ func (at *AutoTrader) RunChaosCycle() error {
 	}
 
 	// Step 3: Parse & Extract
-	decisions, decisionJSON, extractErr := chaos.ExtractDecisions(aiResponse)
+	decisions, decisionJSON, extractErr := at.chaosEngine.ExtractDecisions(aiResponse)
 
-	reasoning, _ := chaos.ExtractReasoningJSON(aiResponse)
+	reasoning, _ := at.chaosEngine.ExtractReasoningJSON(aiResponse)
 	cotTrace := at.chaosEngine.ExtractCoTTrace(aiResponse)
 
 	// Construct initial result for logging/error handling
@@ -132,13 +132,12 @@ func (at *AutoTrader) RunChaosCycle() error {
 
 	// Step 4: Validate
 	// Manually validate decisions to handle errors gracefully (partial failure)
-	manager := chaos.NewManager()
 	var validatedDecisions []chaos.Decision
 	var failedDecisions []store.DecisionAction
 	riskConfig := ctx.Config.RiskControl
 
 	for _, d := range decisions {
-		positionSizeUSD, err := manager.ValidateDecision(&d, reasoning, ctx.Account.TotalEquity, riskConfig)
+		positionSizeUSD, err := at.chaosEngine.ValidateDecision(&d, reasoning, ctx.Account.TotalEquity, riskConfig)
 		if err != nil {
 			logger.Warnf("⚠️ Chaos decision validation failed for %s: %v", d.Symbol, err)
 

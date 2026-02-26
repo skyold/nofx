@@ -407,20 +407,27 @@ func (s *Server) handlePreviewPrompt(c *gin.Context) {
 	}
 
 	var engine PromptBuilder
-	chaosManager := chaos.NewManager()
+	var chaosEngine *chaos.ChaosEngine
 
 	// Check if it's Chaos mode
 	// Support both explicit StrategyType (new way) and prompt content detection (legacy way)
 	isChaos := req.Config.StrategyType == "chaos_trading" ||
-		(req.Config.ChaosConfig != nil && req.Config.ChaosConfig.ChaosPrompt != "") ||
-		chaosManager.IsChaosMode(req.Config.CustomPrompt)
+		(req.Config.ChaosConfig != nil && req.Config.ChaosConfig.ChaosPrompt != "")
 
 	if isChaos {
 		// Chaos Mode
-		engine = chaos.NewChaosEngine(&req.Config)
+		chaosEngine = chaos.NewChaosEngine(&req.Config)
+		engine = chaosEngine
 	} else {
-		// Standard Mode
-		engine = kernel.NewStrategyEngine(&req.Config)
+		// Standard Mode - but also check legacy prompt detection
+		tempEngine := chaos.NewChaosEngine(nil)
+		if tempEngine.IsChaosMode(req.Config.CustomPrompt) {
+			isChaos = true
+			chaosEngine = chaos.NewChaosEngine(&req.Config)
+			engine = chaosEngine
+		} else {
+			engine = kernel.NewStrategyEngine(&req.Config)
+		}
 	}
 
 	systemPrompt := engine.BuildSystemPrompt(req.AccountEquity, req.PromptVariant)
@@ -446,8 +453,8 @@ func (s *Server) handlePreviewPrompt(c *gin.Context) {
 	}
 
 	// If Chaos mode, override/enrich summary with variant parameters
-	if isChaos {
-		variantParams := chaosManager.GetVariantParams(req.PromptVariant)
+	if isChaos && chaosEngine != nil {
+		variantParams := chaosEngine.GetVariantParams(req.PromptVariant)
 		// Override primary_tf with the one defined in the variant
 		if val, ok := variantParams["PRIMARY_TIMEFRAME"]; ok && val != "N/A" {
 			configSummary["primary_tf"] = val
@@ -574,8 +581,18 @@ func (s *Server) handleStrategyTestRun(c *gin.Context) {
 	}
 
 	isChaos := req.Config.StrategyType == "chaos_trading" ||
-		(req.Config.ChaosConfig != nil && req.Config.ChaosConfig.ChaosPrompt != "") ||
-		chaos.NewManager().IsChaosMode(req.Config.CustomPrompt)
+		(req.Config.ChaosConfig != nil && req.Config.ChaosConfig.ChaosPrompt != "")
+
+	var chaosEngine *chaos.ChaosEngine
+	if isChaos {
+		chaosEngine = chaos.NewChaosEngine(&req.Config)
+	} else {
+		tempEngine := chaos.NewChaosEngine(nil)
+		if tempEngine.IsChaosMode(req.Config.CustomPrompt) {
+			isChaos = true
+			chaosEngine = chaos.NewChaosEngine(&req.Config)
+		}
+	}
 
 	var quantDataMap map[string]*kernel.QuantData
 	var oiRankingData *nofxos.OIRankingData
@@ -636,9 +653,8 @@ func (s *Server) handleStrategyTestRun(c *gin.Context) {
 
 	var systemPrompt, userPrompt string
 
-	if isChaos {
+	if isChaos && chaosEngine != nil {
 		// 🌀 Chaos Mode Dedicated Path
-		chaosEngine := chaos.NewChaosEngine(&req.Config)
 
 		// 1. Build Chaos Context natively
 		var chaosCandidates []kernel.CandidateCoin

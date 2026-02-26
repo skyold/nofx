@@ -396,5 +396,30 @@ func (e *ChaosEngine) ValidateDecisions(decisions []Decision, reasoning *Reasoni
 
 // BuildUserPrompt delegates to Manager to build User Prompt
 func (e *ChaosEngine) BuildUserPrompt(ctx *ChaosContext) string {
-return e.manager.BuildUserPrompt(ctx)
+	return e.manager.BuildUserPrompt(ctx)
+}
+
+// IsChaosMode checks if the current prompt indicates Chaos mode
+func (e *ChaosEngine) IsChaosMode(customPrompt string) bool {
+	return e.manager.IsChaosMode(customPrompt)
+}
+
+// ValidateDecision validates a single decision and returns position size
+func (e *ChaosEngine) ValidateDecision(d *Decision, reasoning *Reasoning, accountEquity float64, riskConfig store.RiskControlConfig) (float64, error) {
+	return e.manager.ValidateDecision(d, reasoning, accountEquity, riskConfig)
+}
+
+// GetVariantParams returns the parameters for a specific variant
+func (e *ChaosEngine) GetVariantParams(variant string) map[string]string {
+	return e.manager.GetVariantParams(variant)
+}
+
+// ExtractDecisions extracts decisions from AI response
+func (e *ChaosEngine) ExtractDecisions(aiResponse string) ([]Decision, string, error) {
+	return ExtractDecisions(aiResponse)
+}
+
+// ExtractReasoningJSON extracts reasoning from AI response
+func (e *ChaosEngine) ExtractReasoningJSON(aiResponse string) (*Reasoning, error) {
+	return ExtractReasoningJSON(aiResponse)
 }
