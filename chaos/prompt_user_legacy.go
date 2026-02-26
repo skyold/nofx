@@ -38,7 +38,7 @@ import (
 //  5. Positions - 当前持仓
 //  6. Candidates - 候选币种市场数据 (文本格式)
 //  7. Rankings - 排行榜数据 (OI、资金流向、涨跌幅)
-func (m *Manager) buildUserPromptLegacy(ctx *ChaosContext) string {
+func (m *Manager) buildUserPromptV1(ctx *ChaosContext) string {
 	if ctx == nil {
 		return ""
 	}

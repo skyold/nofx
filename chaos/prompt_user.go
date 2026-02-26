@@ -23,19 +23,19 @@ package chaos
 //   - "v2" (默认)     → buildUserPromptV2 (JSON格式)
 //   - "v4"            → buildUserPromptV4 (结构事实版)
 func (m *Manager) BuildUserPrompt(ctx *ChaosContext) string {
-	version := "v2" // default to v2 (stable)
+	version := "v1" // default to v2 (stable)
 	if ctx.Config != nil && ctx.Config.UserPromptVersion != "" {
 		version = ctx.Config.UserPromptVersion
 	}
 
 	switch version {
 	case "v1", "legacy":
-		return m.buildUserPromptLegacy(ctx)
+		return m.buildUserPromptV1(ctx)
 	case "v4":
 		return m.buildUserPromptV4(ctx)
 	case "v2":
 		return m.buildUserPromptV2(ctx)
 	default:
-		return m.buildUserPromptV4(ctx)
+		return m.buildUserPromptV1(ctx)
 	}
 }
