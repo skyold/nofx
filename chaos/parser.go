@@ -173,6 +173,28 @@ func ExtractReasoningJSON(response string) (*Reasoning, error) {
 	return reasoning, nil
 }
 
+
+// ExtractReasoning extracts the Chain of Thought from the AI response
+// Supports both <reasoning> and <execution_reasoning> tags for backward compatibility
+func ExtractReasoning(response string) string {
+	reReasoningTag := regexp.MustCompile(`(?s)<(execution_)?reasoning>(.*?)</(execution_)?reasoning>`)
+	if match := reReasoningTag.FindStringSubmatch(response); match != nil && len(match) > 2 {
+		return strings.TrimSpace(match[2])
+	}
+
+	if decisionIdx := strings.Index(response, "<decision>"); decisionIdx > 0 {
+		return strings.TrimSpace(response[:decisionIdx])
+	}
+
+	jsonStart := strings.Index(response, "[")
+	if jsonStart > 0 {
+		return strings.TrimSpace(response[:jsonStart])
+	}
+
+	return strings.TrimSpace(response)
+}
+
+
 func convertDecisions(raw []RawDecision) []Decision {
 	decisions := make([]Decision, len(raw))
 	for i, r := range raw {

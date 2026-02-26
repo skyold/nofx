@@ -3,7 +3,6 @@ package chaos
 import (
 	"fmt"
 	"strings"
-
 	"nofx/logger"
 	"nofx/store"
 )
@@ -113,12 +112,8 @@ func (m *Manager) GetVariantParams(variant string) map[string]string {
 // =============================================================================
 
 // ValidateDecision validates a decision made in Chaos mode
-func (m *Manager) ValidateDecision(
-	d *Decision,
-	reasoning *Reasoning,
-	accountEquity float64,
-	riskConfig store.RiskControlConfig,
-) (float64, error) {
+func (m *Manager) ValidateDecision(d *Decision, reasoning *Reasoning, accountEquity float64,riskConfig store.RiskControlConfig) (float64, error) {
+	
 	decisionInfo := func() string {
 		score := 0
 		if d.TotalScore != nil {

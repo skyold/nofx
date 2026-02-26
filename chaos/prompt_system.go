@@ -12,7 +12,7 @@ package chaos
 
 import (
 	"fmt"
-	"regexp"
+
 	"strings"
 
 	"nofx/store"
@@ -118,21 +118,4 @@ func (m *Manager) BuildSystemPrompt(variant string, customPrompt string, indicat
 	return sb.String()
 }
 
-// ExtractReasoning extracts the Chain of Thought from the AI response
-func (m *Manager) ExtractReasoning(response string) string {
-	reReasoningTag := regexp.MustCompile(`(?s)<reasoning>(.*?)</reasoning>`)
-	if match := reReasoningTag.FindStringSubmatch(response); match != nil && len(match) > 1 {
-		return strings.TrimSpace(match[1])
-	}
 
-	if decisionIdx := strings.Index(response, "<decision>"); decisionIdx > 0 {
-		return strings.TrimSpace(response[:decisionIdx])
-	}
-
-	jsonStart := strings.Index(response, "[")
-	if jsonStart > 0 {
-		return strings.TrimSpace(response[:jsonStart])
-	}
-
-	return strings.TrimSpace(response)
-}

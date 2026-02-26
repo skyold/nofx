@@ -132,8 +132,9 @@ func (e *ChaosEngine) ExtractReasoningJSON(aiResponse string) (*Reasoning, error
 }
 
 // ExtractCoTTrace extracts the Chain of Thought from the AI response
+// 无论是否有 JSON 格式，都只处理最外层的<execution>标签
 func (e *ChaosEngine) ExtractCoTTrace(response string) string {
-	return e.manager.ExtractReasoning(response)
+	return ExtractReasoning(response)
 }
 
 // =============================================================================
@@ -164,12 +165,20 @@ func (e *ChaosEngine) Execute(ctx *ChaosContext, mcpClient mcp.AIClient) (*Decis
 		return nil, fmt.Errorf("AI API call failed: %w", err)
 	}
 
-	decisions, decisionJSON, err := ExtractDecisions(aiResponse)
+	reasoning, err := e.ExtractReasoningJSON(aiResponse)
+	if err != nil {
+		return nil, fmt.Errorf("failed to extract reasoning: %w", err)
+	}
+
+	decisions, decisionJSON, err := e.ExtractDecisions(aiResponse)
+	if err != nil {
+		return nil, fmt.Errorf("failed to extract decisions: %w", err)
+	}
 
 	result := &DecisionResult{
 		SystemPrompt:        systemPrompt,
 		UserPrompt:          userPrompt,
-		CoTTrace:            e.manager.ExtractReasoning(aiResponse),
+		CoTTrace:            ExtractReasoning(aiResponse),
 		DecisionJSON:        decisionJSON,
 		RawResponse:         aiResponse,
 		Timestamp:           time.Now(),
@@ -182,7 +191,7 @@ func (e *ChaosEngine) Execute(ctx *ChaosContext, mcpClient mcp.AIClient) (*Decis
 
 	result.RawDecisions = decisions
 
-	reasoning, _ := ExtractReasoningJSON(aiResponse)
+	
 
 	validatedDecisions, err := e.ValidateDecisions(decisions, reasoning, ctx)
 	if err != nil {
