@@ -259,6 +259,7 @@ func (at *AutoTrader) buildChaosContext() (*chaos.ChaosContext, error) {
 
 	// 将持仓转换为混沌格式
 	var positionSnapshots []kernel.PositionInfo
+	currentPositionKeys := make(map[string]bool)
 	for _, pos := range positions {
 		symbol := pos["symbol"].(string)
 		side := pos["side"].(string)
@@ -291,6 +292,38 @@ func (at *AutoTrader) buildChaosContext() (*chaos.ChaosContext, error) {
 			pnlPct = (unrealizedPnl / marginUsed) * 100
 		}
 
+		// 获取持仓开仓时间，优先从交易所获取，其次从本地缓存获取
+		posKey := symbol + "_" + side
+		currentPositionKeys[posKey] = true
+
+		var updateTime int64
+		// Priority 1: Get from database (trader_positions table) - most accurate
+		if at.store != nil {
+			if dbPos, err := at.store.Position().GetOpenPositionBySymbol(at.id, symbol, side); err == nil && dbPos != nil {
+				if dbPos.EntryTime > 0 {
+					updateTime = dbPos.EntryTime
+				}
+			}
+		}
+		// Priority 2: Get from exchange API (Bybit: createdTime, OKX: createdTime)
+		if updateTime == 0 {
+			if createdTime, ok := pos["createdTime"].(int64); ok && createdTime > 0 {
+				updateTime = createdTime
+			}
+		}
+		// Priority 3: Fallback to local tracking
+		if updateTime == 0 {
+			if _, exists := at.positionFirstSeenTime[posKey]; !exists {
+				at.positionFirstSeenTime[posKey] = time.Now().UnixMilli()
+			}
+			updateTime = at.positionFirstSeenTime[posKey]
+		}
+
+		// 获取这个持仓的峰值盈利率
+		at.peakPnLCacheMutex.RLock()
+		peakPnlPct := at.peakPnLCache[posKey]
+		at.peakPnLCacheMutex.RUnlock()
+
 		// 构建持仓快照对象
 		positionSnapshots = append(positionSnapshots, kernel.PositionInfo{
 			Symbol:           symbol,
@@ -301,11 +334,18 @@ func (at *AutoTrader) buildChaosContext() (*chaos.ChaosContext, error) {
 			Leverage:         leverage,
 			UnrealizedPnL:    unrealizedPnl,
 			UnrealizedPnLPct: pnlPct,
-			PeakPnLPct:       pnlPct, // 暂时用当前盈亏近似
+			PeakPnLPct:       peakPnlPct,
 			MarginUsed:       marginUsed,
 			LiquidationPrice: liquidationPrice,
-			UpdateTime:       time.Now().UnixMilli(), // 近似值
+			UpdateTime:       updateTime,
 		})
+	}
+
+	// 清理已平仓的持仓记录
+	for key := range at.positionFirstSeenTime {
+		if !currentPositionKeys[key] {
+			delete(at.positionFirstSeenTime, key)
+		}
 	}
 
 	// ========================================
