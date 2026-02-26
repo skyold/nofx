@@ -491,6 +491,7 @@ type UpdateExchangeConfigRequest struct {
 		Passphrase              string `json:"passphrase"` // OKX specific
 		Testnet                 bool   `json:"testnet"`
 		HyperliquidWalletAddr   string `json:"hyperliquid_wallet_addr"`
+		HyperliquidUnifiedAcct  bool   `json:"hyperliquid_unified_account"` // Unified Account mode
 		AsterUser               string `json:"aster_user"`
 		AsterSigner             string `json:"aster_signer"`
 		AsterPrivateKey         string `json:"aster_private_key"`
@@ -607,6 +608,7 @@ func (s *Server) handleCreateTrader(c *gin.Context) {
 				string(exchangeCfg.APIKey), // private key
 				exchangeCfg.HyperliquidWalletAddr,
 				exchangeCfg.Testnet,
+				exchangeCfg.HyperliquidUnifiedAcct,
 			)
 		case "aster":
 			tempTrader, createErr = aster.NewAsterTrader(
@@ -1183,6 +1185,7 @@ func (s *Server) handleSyncBalance(c *gin.Context) {
 			string(exchangeCfg.APIKey),
 			exchangeCfg.HyperliquidWalletAddr,
 			exchangeCfg.Testnet,
+			exchangeCfg.HyperliquidUnifiedAcct,
 		)
 	case "aster":
 		tempTrader, createErr = aster.NewAsterTrader(
@@ -1348,6 +1351,7 @@ func (s *Server) handleClosePosition(c *gin.Context) {
 			string(exchangeCfg.APIKey),
 			exchangeCfg.HyperliquidWalletAddr,
 			exchangeCfg.Testnet,
+			exchangeCfg.HyperliquidUnifiedAcct,
 		)
 	case "aster":
 		tempTrader, createErr = aster.NewAsterTrader(
@@ -1766,7 +1770,7 @@ func (s *Server) handleUpdateExchangeConfigs(c *gin.Context) {
 			tradersToReload[t.ID] = true
 		}
 
-		err := s.store.Exchange().Update(userID, exchangeID, exchangeData.Enabled, exchangeData.APIKey, exchangeData.SecretKey, exchangeData.Passphrase, exchangeData.Testnet, exchangeData.HyperliquidWalletAddr, exchangeData.AsterUser, exchangeData.AsterSigner, exchangeData.AsterPrivateKey, exchangeData.LighterWalletAddr, exchangeData.LighterPrivateKey, exchangeData.LighterAPIKeyPrivateKey, exchangeData.LighterAPIKeyIndex)
+		err := s.store.Exchange().Update(userID, exchangeID, exchangeData.Enabled, exchangeData.APIKey, exchangeData.SecretKey, exchangeData.Passphrase, exchangeData.Testnet, exchangeData.HyperliquidWalletAddr, exchangeData.HyperliquidUnifiedAcct, exchangeData.AsterUser, exchangeData.AsterSigner, exchangeData.AsterPrivateKey, exchangeData.LighterWalletAddr, exchangeData.LighterPrivateKey, exchangeData.LighterAPIKeyPrivateKey, exchangeData.LighterAPIKeyIndex)
 		if err != nil {
 			SafeInternalError(c, fmt.Sprintf("Update exchange %s", exchangeID), err)
 			return
@@ -1800,6 +1804,7 @@ type CreateExchangeRequest struct {
 	Passphrase              string `json:"passphrase"`
 	Testnet                 bool   `json:"testnet"`
 	HyperliquidWalletAddr   string `json:"hyperliquid_wallet_addr"`
+	HyperliquidUnifiedAcct  bool   `json:"hyperliquid_unified_account"` // Unified Account mode: Spot as Perp collateral
 	AsterUser               string `json:"aster_user"`
 	AsterSigner             string `json:"aster_signer"`
 	AsterPrivateKey         string `json:"aster_private_key"`
@@ -1875,7 +1880,8 @@ func (s *Server) handleCreateExchange(c *gin.Context) {
 	id, err := s.store.Exchange().Create(
 		userID, req.ExchangeType, req.AccountName, req.Enabled,
 		req.APIKey, req.SecretKey, req.Passphrase, req.Testnet,
-		req.HyperliquidWalletAddr, req.AsterUser, req.AsterSigner, req.AsterPrivateKey,
+		req.HyperliquidWalletAddr, req.HyperliquidUnifiedAcct,
+		req.AsterUser, req.AsterSigner, req.AsterPrivateKey,
 		req.LighterWalletAddr, req.LighterPrivateKey, req.LighterAPIKeyPrivateKey, req.LighterAPIKeyIndex,
 	)
 	if err != nil {
