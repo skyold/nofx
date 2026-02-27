@@ -22,13 +22,37 @@ import (
 	"time"
 
 	"nofx/kernel"
-	"nofx/logger"
 	"nofx/market"
 	"nofx/provider/nofxos"
 	"nofx/store"
 )
 
-// buildUserPromptLegacy builds User Prompt using ChaosContext (Legacy Version)
+const (
+	sourceAI500        = "ai500"
+	sourceOITop        = "oi_top"
+	sourceOILow        = "oi_low"
+	sourceStatic       = "static"
+	langEnglish        = "en"
+	langChinese        = "zh"
+	timeFormatUTC      = "01-02 15:04"
+	timeFormatTime     = "15:04"
+	mainTF1h           = "1h"
+	mainTF4h           = "4h"
+	mainTF1d           = "1d"
+	mainTF5m           = "5m"
+	winLossRatioMin    = 0.0
+	levelTestThreshold = 0.002
+	swingWindowSize    = 3
+	maxSwingFeatures   = 5
+)
+
+// buildUserPromptV1 使用 ChaosContext 构建用户提示词（Legacy 版本）
+//
+// 参数说明:
+//   - ctx: ChaosContext 上下文对象，包含所有交易相关数据
+//
+// 返回值:
+//   - 完整的用户提示词字符串，包含所有市场数据、账户信息和交易统计
 //
 // 构建流程：
 //  1. Header - 时间、周期、运行时长
@@ -63,11 +87,25 @@ func (m *Manager) buildUserPromptV1(ctx *ChaosContext) string {
 	return sb.String()
 }
 
+// buildHeader 构建头部信息，包含时间、调用次数和运行时长
+//
+// 参数说明:
+//   - ctx: ChaosContext 上下文对象
+//
+// 返回值:
+//   - 格式化的头部信息字符串
 func (m *Manager) buildHeader(ctx *ChaosContext) string {
 	return fmt.Sprintf("Time: %s | Period: #%d | Runtime: %d minutes\n\n",
 		ctx.CurrentTime, ctx.CallCount, ctx.RuntimeMinutes)
 }
 
+// buildGlobalContext 构建 BTC 全局行情概览
+//
+// 参数说明:
+//   - ctx: ChaosContext 上下文对象
+//
+// 返回值:
+//   - BTC 行情概览字符串（如果有 BTC 数据）
 func (m *Manager) buildGlobalContext(ctx *ChaosContext) string {
 	var sb strings.Builder
 	if btcData, hasBTC := ctx.MarketDataMap["BTCUSDT"]; hasBTC {
@@ -78,16 +116,34 @@ func (m *Manager) buildGlobalContext(ctx *ChaosContext) string {
 	return sb.String()
 }
 
+// buildAccountStatus 构建账户状态信息
+//
+// 参数说明:
+//   - ctx: ChaosContext 上下文对象
+//
+// 返回值:
+//   - 包含账户权益、余额、盈亏、保证金和持仓数量的字符串
 func (m *Manager) buildAccountStatus(ctx *ChaosContext) string {
+	balancePercent := 0.0
+	if ctx.Account.TotalEquity > 0 {
+		balancePercent = (ctx.Account.AvailableBalance / ctx.Account.TotalEquity) * 100
+	}
 	return fmt.Sprintf("Account: Equity %.2f | Balance %.2f (%.1f%%) | PnL %+.2f%% | Margin %.1f%% | Positions %d\n\n",
 		ctx.Account.TotalEquity,
 		ctx.Account.AvailableBalance,
-		(ctx.Account.AvailableBalance/ctx.Account.TotalEquity)*100,
+		balancePercent,
 		ctx.Account.TotalPnLPct,
 		ctx.Account.MarginUsedPct,
 		ctx.Account.PositionCount)
 }
 
+// buildTradingPerformance 构建交易性能统计
+//
+// 参数说明:
+//   - ctx: ChaosContext 上下文对象
+//
+// 返回值:
+//   - 包含历史统计和最近交易的字符串
 func (m *Manager) buildTradingPerformance(ctx *ChaosContext) string {
 	var sb strings.Builder
 	sb.WriteString(m.buildHistoricalStats(ctx))
@@ -95,6 +151,13 @@ func (m *Manager) buildTradingPerformance(ctx *ChaosContext) string {
 	return sb.String()
 }
 
+// buildRecentTrades 构建最近完成的交易列表
+//
+// 参数说明:
+//   - ctx: ChaosContext 上下文对象
+//
+// 返回值:
+//   - 最近交易列表字符串（如果有交易）
 func (m *Manager) buildRecentTrades(ctx *ChaosContext) string {
 	if len(ctx.RecentOrders) == 0 {
 		return ""
@@ -116,6 +179,13 @@ func (m *Manager) buildRecentTrades(ctx *ChaosContext) string {
 	return sb.String()
 }
 
+// buildHistoricalStats 构建历史交易统计
+//
+// 参数说明:
+//   - ctx: ChaosContext 上下文对象
+//
+// 返回值:
+//   - 历史交易统计字符串（支持中英文）
 func (m *Manager) buildHistoricalStats(ctx *ChaosContext) string {
 	if ctx.TradingStats == nil || ctx.TradingStats.TotalTrades == 0 {
 		return ""
@@ -178,6 +248,13 @@ func (m *Manager) buildHistoricalStats(ctx *ChaosContext) string {
 	return sb.String()
 }
 
+// buildPositions 构建当前持仓列表
+//
+// 参数说明:
+//   - ctx: ChaosContext 上下文对象
+//
+// 返回值:
+//   - 当前持仓列表字符串
 func (m *Manager) buildPositions(ctx *ChaosContext) string {
 	var sb strings.Builder
 	if len(ctx.Positions) > 0 {
@@ -191,6 +268,15 @@ func (m *Manager) buildPositions(ctx *ChaosContext) string {
 	return sb.String()
 }
 
+// formatPositionInfoFromContext 格式化单个持仓信息
+//
+// 参数说明:
+//   - index: 持仓索引（从 1 开始）
+//   - pos: 持仓信息对象
+//   - ctx: ChaosContext 上下文对象
+//
+// 返回值:
+//   - 格式化的持仓信息字符串，包含价格、数量、盈亏、杠杆等
 func (m *Manager) formatPositionInfoFromContext(index int, pos kernel.PositionInfo, ctx *ChaosContext) string {
 	var sb strings.Builder
 
@@ -231,6 +317,13 @@ func (m *Manager) formatPositionInfoFromContext(index int, pos kernel.PositionIn
 	return sb.String()
 }
 
+// buildCandidates 构建候选币种列表
+//
+// 参数说明:
+//   - ctx: ChaosContext 上下文对象
+//
+// 返回值:
+//   - 候选币种的市场数据字符串（排除已有持仓的币种）
 func (m *Manager) buildCandidates(ctx *ChaosContext) string {
 	var sb strings.Builder
 
@@ -269,6 +362,13 @@ func (m *Manager) buildCandidates(ctx *ChaosContext) string {
 	return sb.String()
 }
 
+// buildRankings 构建排行榜数据
+//
+// 参数说明:
+//   - ctx: ChaosContext 上下文对象
+//
+// 返回值:
+//   - OI、资金流向和价格涨跌幅排行榜数据字符串
 func (m *Manager) buildRankings(ctx *ChaosContext) string {
 	var sb strings.Builder
 	nofxosLang := nofxos.LangEnglish
@@ -287,6 +387,13 @@ func (m *Manager) buildRankings(ctx *ChaosContext) string {
 	return sb.String()
 }
 
+// formatCoinSourceTag 格式化币种来源标签
+//
+// 参数说明:
+//   - sources: 来源字符串数组
+//
+// 返回值:
+//   - 格式化的来源标签字符串，如 (AI500)、(OI_Top 持仓增加) 等
 func (m *Manager) formatCoinSourceTag(sources []string) string {
 	if len(sources) > 1 {
 		hasAI500 := false
@@ -294,11 +401,11 @@ func (m *Manager) formatCoinSourceTag(sources []string) string {
 		hasOILow := false
 		for _, s := range sources {
 			switch s {
-			case "ai500":
+			case sourceAI500:
 				hasAI500 = true
-			case "oi_top":
+			case sourceOITop:
 				hasOITop = true
-			case "oi_low":
+			case sourceOILow:
 				hasOILow = true
 			}
 		}
@@ -314,13 +421,13 @@ func (m *Manager) formatCoinSourceTag(sources []string) string {
 		return " (Multiple sources)"
 	} else if len(sources) == 1 {
 		switch sources[0] {
-		case "ai500":
+		case sourceAI500:
 			return " (AI500)"
-		case "oi_top":
+		case sourceOITop:
 			return " (OI_Top 持仓增加)"
-		case "oi_low":
+		case sourceOILow:
 			return " (OI_Low 持仓减少)"
-		case "static":
+		case sourceStatic:
 			return " (Manual selection)"
 		}
 	}
@@ -331,6 +438,14 @@ func (m *Manager) formatCoinSourceTag(sources []string) string {
 // Market Data Formatting
 // ============================================================================
 
+// formatMarketData 格式化市场数据
+//
+// 参数说明:
+//   - data: 市场数据对象
+//   - indicators: 指标配置
+//
+// 返回值:
+//   - 格式化的市场数据字符串，包含价格、技术指标、K线等
 func (m *Manager) formatMarketData(data *market.Data, indicators store.IndicatorConfig) string {
 	var sb strings.Builder
 	// indicators are passed as argument
@@ -390,32 +505,31 @@ func (m *Manager) formatMarketData(data *market.Data, indicators store.Indicator
 	}
 
 	if len(data.TimeframeData) > 0 {
-		logger.Infof("[PromptBuilder] Processing Multi-Timeframe Data for symbol: %s, Timeframes count: %d", data.Symbol, len(data.TimeframeData))
 		timeframeOrder := []string{"1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h", "1d", "3d", "1w"}
 		for _, tf := range timeframeOrder {
 			if tfData, ok := data.TimeframeData[tf]; ok {
-				logger.Infof("[PromptBuilder]   -> Found timeframe: %s for %s", tf, data.Symbol)
 				sb.WriteString(fmt.Sprintf("=== %s Timeframe (oldest → latest) ===\n\n", strings.ToUpper(tf)))
 				m.formatTimeframeSeriesData(&sb, tfData, indicators)
 			}
 		}
 		var mainTf string
-		if _, ok := data.TimeframeData["1h"]; ok {
-			mainTf = "1h"
-		} else if _, ok := data.TimeframeData["4h"]; ok {
-			mainTf = "4h"
+		if _, ok := data.TimeframeData[mainTF1h]; ok {
+			mainTf = mainTF1h
+		} else if _, ok := data.TimeframeData[mainTF4h]; ok {
+			mainTf = mainTF4h
 		}
 
 		// 1. Structural Anchors (Swings with Topology)
 		if mainTf != "" {
 			tfData := data.TimeframeData[mainTf]
 			// Use window 3 for better sensitivity with limited data
-			features := GenerateTechnicalFeatures(tfData.Klines, 3)
-			sb.WriteString(features.FormatFeaturesToText(5))
+			features := GenerateTechnicalFeatures(tfData.Klines, swingWindowSize)
+			sb.WriteString(features.FormatFeaturesToText(maxSwingFeatures))
 		}
 
 		// 2. Major Boundaries (Daily Levels)
-		if tf1d, ok := data.TimeframeData["1d"]; ok && len(tf1d.Klines) > 0 {
+		tf1d, ok := data.TimeframeData[mainTF1d]
+		if ok && len(tf1d.Klines) > 0 {
 			// Use yesterday's completed candle if available (more reliable "Major" level)
 			var last market.KlineBar
 			var dayDesc string
@@ -435,7 +549,7 @@ func (m *Manager) formatMarketData(data *market.Data, indicators store.Indicator
 			supportTests := 0
 			if mainTf != "" {
 				// Count tests on the main timeframe (e.g. 1h)
-				supportTests = countLevelTests(supportLevel, SwingLow, data.TimeframeData[mainTf].Klines, 0, 0.002)
+				supportTests = countLevelTests(supportLevel, SwingLow, data.TimeframeData[mainTf].Klines, 0, levelTestThreshold)
 			}
 			sb.WriteString(fmt.Sprintf("- [Major Support]: %s | Tested: %d times (%s Low)\n",
 				formatPriceForPrompt(supportLevel), supportTests, dayDesc))
@@ -444,7 +558,7 @@ func (m *Manager) formatMarketData(data *market.Data, indicators store.Indicator
 			resistanceLevel := last.High
 			resistanceTests := 0
 			if mainTf != "" {
-				resistanceTests = countLevelTests(resistanceLevel, SwingHigh, data.TimeframeData[mainTf].Klines, 0, 0.002)
+				resistanceTests = countLevelTests(resistanceLevel, SwingHigh, data.TimeframeData[mainTf].Klines, 0, levelTestThreshold)
 			}
 			sb.WriteString(fmt.Sprintf("- [Major Resistance]: %s | Tested: %d times (%s High)\n",
 				formatPriceForPrompt(resistanceLevel), resistanceTests, dayDesc))
@@ -484,10 +598,10 @@ func (m *Manager) formatMarketData(data *market.Data, indicators store.Indicator
 
 		// Dynamic References (BB, EMA)
 		refParts := []string{}
-		if tf, ok := data.TimeframeData["5m"]; ok && len(tf.BOLLLower) > 0 {
+		if tf, ok := data.TimeframeData[mainTF5m]; ok && len(tf.BOLLLower) > 0 {
 			refParts = append(refParts, fmt.Sprintf("BB_Lower (5M): %s", formatPriceForPrompt(tf.BOLLLower[len(tf.BOLLLower)-1])))
 		}
-		if tf, ok := data.TimeframeData["1h"]; ok && len(tf.EMA50Values) > 0 {
+		if tf, ok := data.TimeframeData[mainTF1h]; ok && len(tf.EMA50Values) > 0 {
 			refParts = append(refParts, fmt.Sprintf("EMA50 (1H): %.4f", tf.EMA50Values[len(tf.EMA50Values)-1]))
 		}
 		if len(refParts) > 0 {
@@ -498,9 +612,7 @@ func (m *Manager) formatMarketData(data *market.Data, indicators store.Indicator
 			sb.WriteString("\n")
 		}
 	} else {
-		logger.Infof("[PromptBuilder] Processing Legacy Intraday Series for symbol: %s", data.Symbol)
 		if data.IntradaySeries != nil {
-			logger.Infof("[PromptBuilder]   -> IntradaySeries found with %d mid prices", len(data.IntradaySeries.MidPrices))
 			klineConfig := indicators.Klines
 			sb.WriteString(fmt.Sprintf("Intraday series (%s intervals, oldest → latest):\n\n", klineConfig.PrimaryTimeframe))
 
@@ -565,13 +677,18 @@ func (m *Manager) formatMarketData(data *market.Data, indicators store.Indicator
 	return sb.String()
 }
 
+// formatTimeframeSeriesData 格式化单个时间周期的序列数据
+//
+// 参数说明:
+//   - sb: strings.Builder 对象，用于写入格式化后的数据
+//   - data: 时间周期序列数据
+//   - indicators: 指标配置
 func (m *Manager) formatTimeframeSeriesData(sb *strings.Builder, data *market.TimeframeSeriesData, indicators store.IndicatorConfig) {
 	if len(data.Klines) > 0 {
-		logger.Infof("[PromptBuilder]     -> Formatting Klines, count: %d", len(data.Klines))
 		sb.WriteString("Time(UTC)      Open      High      Low       Close     Volume\n")
 		for i, k := range data.Klines {
 			t := time.Unix(k.Time/1000, 0).UTC()
-			timeStr := t.Format("01-02 15:04")
+			timeStr := t.Format(timeFormatUTC)
 			marker := ""
 			if i == len(data.Klines)-1 {
 				marker = "  <- current"
@@ -581,71 +698,59 @@ func (m *Manager) formatTimeframeSeriesData(sb *strings.Builder, data *market.Ti
 		}
 		sb.WriteString("\n")
 	} else if len(data.MidPrices) > 0 {
-		logger.Infof("[PromptBuilder]     -> Formatting MidPrices, count: %d", len(data.MidPrices))
 		sb.WriteString(fmt.Sprintf("Mid prices: %s\n\n", formatFloatSlice(data.MidPrices)))
 		if indicators.EnableVolume && len(data.Volume) > 0 {
-			logger.Infof("[PromptBuilder]     -> Formatting Volume, count: %d", len(data.Volume))
 			sb.WriteString(fmt.Sprintf("Volume: %s\n\n", formatFloatSlice(data.Volume)))
 		}
 	}
 
 	if indicators.EnableEMA {
 		if len(data.EMA20Values) > 0 {
-			logger.Infof("[PromptBuilder]     -> Formatting EMA20, count: %d", len(data.EMA20Values))
 			sb.WriteString(fmt.Sprintf("EMA20: %s\n", formatFloatSlice(data.EMA20Values)))
 		}
 		if len(data.EMA50Values) > 0 {
-			logger.Infof("[PromptBuilder]     -> Formatting EMA50, count: %d", len(data.EMA50Values))
 			sb.WriteString(fmt.Sprintf("EMA50: %s\n", formatFloatSlice(data.EMA50Values)))
 		}
-	} else {
-		logger.Infof("[PromptBuilder]     -> EMA indicator disabled")
 	}
 
 	if indicators.EnableMACD && len(data.MACDValues) > 0 {
-		logger.Infof("[PromptBuilder]     -> Formatting MACD, count: %d", len(data.MACDValues))
 		sb.WriteString(fmt.Sprintf("MACD: %s\n", formatFloatSlice(data.MACDValues)))
-	} else if !indicators.EnableMACD {
-		logger.Infof("[PromptBuilder]     -> MACD indicator disabled")
 	}
 
 	if indicators.EnableRSI {
 		if len(data.RSI7Values) > 0 {
-			logger.Infof("[PromptBuilder]     -> Formatting RSI7, count: %d", len(data.RSI7Values))
 			sb.WriteString(fmt.Sprintf("RSI7: %s\n", formatFloatSlice(data.RSI7Values)))
 		}
 		if len(data.RSI14Values) > 0 {
-			logger.Infof("[PromptBuilder]     -> Formatting RSI14, count: %d", len(data.RSI14Values))
 			sb.WriteString(fmt.Sprintf("RSI14: %s\n", formatFloatSlice(data.RSI14Values)))
 		}
-	} else {
-		logger.Infof("[PromptBuilder]     -> RSI indicator disabled")
 	}
 
 	if indicators.EnableATR {
 		if len(data.ATR14Values) > 0 {
-			logger.Infof("[PromptBuilder]     -> Formatting ATR14, count: %d", len(data.ATR14Values))
 			sb.WriteString(fmt.Sprintf("ATR14: %s\n", formatFloatSlice(data.ATR14Values)))
 		} else if data.ATR14 > 0 {
-			logger.Infof("[PromptBuilder]     -> Formatting ATR14: %.4f", data.ATR14)
 			sb.WriteString(fmt.Sprintf("ATR14: %.4f\n", data.ATR14))
 		}
-	} else {
-		logger.Infof("[PromptBuilder]     -> ATR indicator disabled")
 	}
 
 	if indicators.EnableBOLL && len(data.BOLLUpper) > 0 {
-		logger.Infof("[PromptBuilder]     -> Formatting BOLL, count: %d", len(data.BOLLUpper))
 		sb.WriteString(fmt.Sprintf("BOLL Upper: %s\n", formatFloatSlice(data.BOLLUpper)))
 		sb.WriteString(fmt.Sprintf("BOLL Middle: %s\n", formatFloatSlice(data.BOLLMiddle)))
 		sb.WriteString(fmt.Sprintf("BOLL Lower: %s\n", formatFloatSlice(data.BOLLLower)))
-	} else if !indicators.EnableBOLL {
-		logger.Infof("[PromptBuilder]     -> BOLL indicator disabled")
 	}
 
 	sb.WriteString("\n")
 }
 
+// formatQuantData 格式化量化数据
+//
+// 参数说明:
+//   - data: 量化数据对象
+//   - indicators: 指标配置
+//
+// 返回值:
+//   - 格式化的量化数据字符串，包含价格变化、资金流向、持仓量变化等
 func (m *Manager) formatQuantData(data *kernel.QuantData, indicators store.IndicatorConfig) string {
 	if data == nil {
 		return ""
@@ -730,6 +835,13 @@ func (m *Manager) formatQuantData(data *kernel.QuantData, indicators store.Indic
 	return sb.String()
 }
 
+// formatFlowValue 格式化资金流向数值（带单位）
+//
+// 参数说明:
+//   - v: 资金流向数值
+//
+// 返回值:
+//   - 格式化的字符串，如 +1.23M、-45.67K 等
 func formatFlowValue(v float64) string {
 	sign := ""
 	if v >= 0 {
@@ -749,6 +861,13 @@ func formatFlowValue(v float64) string {
 	return fmt.Sprintf("%s%.2f", sign, v)
 }
 
+// formatPriceForPrompt 根据价格大小格式化价格字符串
+//
+// 参数说明:
+//   - price: 价格数值
+//
+// 返回值:
+//   - 根据价格范围返回不同精度的格式化字符串
 func formatPriceForPrompt(price float64) string {
 	switch {
 	case price < 0.0001:
@@ -766,6 +885,13 @@ func formatPriceForPrompt(price float64) string {
 	}
 }
 
+// formatFloatSlice 格式化浮点数数组
+//
+// 参数说明:
+//   - values: 浮点数数组
+//
+// 返回值:
+//   - 格式化为 [1.2345, 6.7890, ...] 形式的字符串
 func formatFloatSlice(values []float64) string {
 	strValues := make([]string, len(values))
 	for i, v := range values {
