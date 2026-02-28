@@ -2,6 +2,7 @@ package chaos
 
 import (
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -9,49 +10,379 @@ import (
 )
 
 // =============================================================================
-// Feature Engineering: Swing Topology & Level Testing
+// 特征工程：摆动点拓扑结构 & 支撑阻力位测试
+// =============================================================================
+//
+// 主要功能：
+// 1. 摆动点检测：识别局部高点和低点
+// 2. 拓扑标记：HH/HL/LH/LL 标记
+// 3. 支撑阻力位测试次数统计
+// 4. 机构市场状态分类：识别机构主导的市场状态
+// 5. 特征格式化：生成用于 LLM 的文本格式化输出
 // =============================================================================
 
+// =============================================================================
+// 摆动点相关类型定义
+// =============================================================================
+
+// SwingType 摆动点类型枚举
 type SwingType int
 
 const (
+	// SwingHigh 高点摆动点（局部高点）
 	SwingHigh SwingType = iota
+	// SwingLow 低点摆动点（局部低点）
 	SwingLow
 )
 
+// SwingPoint 摆动点结构
+// 描述价格波动中的局部高点或低点
 type SwingPoint struct {
-	Price     float64
-	Time      int64     // Unix timestamp (ms)
-	Index     int       // Index in the source Kline slice
-	Type      SwingType // High or Low
-	Label     string    // HH, LH, HL, LL
-	TestCount int       // Number of times this level was tested
+	Price     float64   // 价格
+	Time      int64     // Unix 时间戳（毫秒）
+	Index     int       // 在 K线切片中的索引
+	Type      SwingType // 类型：高点或低点
+	Label     string    // 拓扑标签：HH, LH, HL, LL, High, Low
+	TestCount int       // 该价位被测试的次数
 }
 
-// TechnicalFeatures encapsulates the results of the feature engineering process
+// =============================================================================
+// 机构市场状态信号
+// =============================================================================
+
+// InstitutionalRegimeSignal 机构市场状态信号
+// 用于识别当前市场处于哪种机构主导状态
+type InstitutionalRegimeSignal struct {
+	// 动力学因子
+	Ema20AboveEma50Count20 int     // 最近 20 根 K 线中 EMA20 高于 EMA50 的次数
+	OiChangePercent5       float64 // 近 5 周期持仓量（OI）变化百分比
+	AtrPct                 float64 // ATR（平均真实波幅）百分比
+
+	// 价格结构
+	PriceMakingHigh50 bool    // 当前价格是否创 50 周期新高
+	BoxHeight50       float64 // 50 周期价格区间高度（相对百分比）
+
+	// 衍生品状态
+	FundingRate        float64 // 资金费率
+	FundingRateExtreme bool    // 资金费率是否极端（超过阈值）
+
+	// 状态分类
+	RegimeClassification string // 市场状态分类结果
+}
+
+// TechnicalFeatures 技术特征
+// 封装特征工程过程的所有结果
 type TechnicalFeatures struct {
-	SwingPoints []SwingPoint
-	Trend       string // Simple trend description based on topology
+	SwingPoints         []SwingPoint               // 摆动点列表
+	Trend               string                     // 基于拓扑结构的简单趋势描述
+	InstitutionalRegime *InstitutionalRegimeSignal // 机构市场状态信号
 }
 
-// GenerateTechnicalFeatures performs the full feature extraction pipeline
+// =============================================================================
+// 机构市场状态信号生成
+// =============================================================================
+
+// GenerateInstitutionalRegimeSignal 计算机构市场状态信号
+//
+// 参数说明：
+//   - klines: K 线数据列表
+//   - ema20Values: EMA20 指标值列表
+//   - ema50Values: EMA50 指标值列表
+//   - atr14Values: ATR14 指标值列表
+//   - oiLatest: 最新持仓量（OI）
+//   - oiAverage: 平均持仓量（OI）
+//   - fundingRate: 当前资金费率
+//
+// 返回值：
+//   - 机构市场状态信号对象
+//
+// 分类结果：
+//   - TRENDING_UP_STRONG：机构驱动的强趋势
+//   - TRENDING_UP_OVERHEATED：散户驱动的过热趋势
+//   - REVERSING_POTENTIAL_TOP：潜在反转
+//   - RANGE_BOUND：区间震荡
+//   - TRANSITIONAL：模糊过渡状态
+func GenerateInstitutionalRegimeSignal(
+	klines []market.KlineBar,
+	ema20Values []float64,
+	ema50Values []float64,
+	atr14Values []float64,
+	oiLatest float64,
+	oiAverage float64,
+	fundingRate float64,
+) *InstitutionalRegimeSignal {
+	signal := &InstitutionalRegimeSignal{
+		FundingRate: fundingRate, // 保存资金费率，后续用于简报
+	}
+
+	const (
+		oiGrowthThreshold = 0.05   // OI 增长阈值（5%）
+		fundingExtreme    = 0.0003 // 资金费率极端阈值（0.03%）
+	)
+
+	// 计算持仓量（OI）变化率
+	// 计算：(最新值 - 平均值) / 平均值
+	if oiAverage > 0 {
+		signal.OiChangePercent5 = (oiLatest - oiAverage) / oiAverage
+	}
+
+	// 判断资金费率是否极端
+	signal.FundingRateExtreme = math.Abs(fundingRate) > fundingExtreme
+
+	// 计算最近 20 根 K 线中 EMA20 > EMA50 的次数
+	// 16/20 = 80% 以上为强趋势
+	if len(ema20Values) >= 20 && len(ema50Values) >= 20 {
+		count := 0
+		start := len(ema20Values) - 20
+		for i := start; i < len(ema20Values); i++ {
+			if ema20Values[i] > ema50Values[i] {
+				count++
+			}
+		}
+		signal.Ema20AboveEma50Count20 = count
+	}
+
+	// 计算价格结构和 ATR 百分比
+	// 需要至少 50 根 K 线
+	if len(klines) >= 50 && len(atr14Values) > 0 {
+		// 计算 50 周期价格区间
+		lookback50 := klines[len(klines)-50:]
+		high50 := 0.0
+		low50 := math.MaxFloat64
+		for _, k := range lookback50 {
+			if k.High > high50 {
+				high50 = k.High
+			}
+			if k.Low < low50 {
+				low50 = k.Low
+			}
+		}
+		// 判断是否创 50 周期新高
+		currentHigh := klines[len(klines)-1].High
+		signal.PriceMakingHigh50 = currentHigh >= high50
+
+		// 计算 50 周期价格区间高度（相对）
+		if low50 > 0 {
+			signal.BoxHeight50 = (high50 - low50) / low50
+		}
+
+		// 计算 ATR 百分比（相对于当前价格）
+		currentPrice := klines[len(klines)-1].Close
+		if currentPrice > 0 {
+			signal.AtrPct = atr14Values[len(atr14Values)-1] / currentPrice
+		}
+	}
+
+	// 市场状态分类逻辑
+	// 根据多种因子组合判断
+	isEmaUp := signal.Ema20AboveEma50Count20 >= 16
+	isOiConfirmed := signal.OiChangePercent5 > oiGrowthThreshold
+	oiStable := math.Abs(signal.OiChangePercent5) < oiGrowthThreshold
+	oiDroppingFast := signal.OiChangePercent5 < -oiGrowthThreshold
+
+	switch {
+	case isEmaUp && isOiConfirmed:
+		// EMA 向上且 OI 确认
+		if fundingRate < fundingExtreme {
+			signal.RegimeClassification = "TRENDING_UP_STRONG"
+		} else {
+			signal.RegimeClassification = "TRENDING_UP_OVERHEATED"
+		}
+	case signal.PriceMakingHigh50 && (oiDroppingFast || signal.FundingRateExtreme):
+		// 价格新高但 OI 快速下降或资金费率极端
+		signal.RegimeClassification = "REVERSING_POTENTIAL_TOP"
+	case signal.BoxHeight50 < signal.AtrPct*3 && oiStable:
+		// 区间小且 OI 稳定
+		signal.RegimeClassification = "RANGE_BOUND"
+	default:
+		// 其他情况为过渡状态
+		signal.RegimeClassification = "TRANSITIONAL"
+	}
+
+	return signal
+}
+
+// =============================================================================
+// 格式化输出函数
+// =============================================================================
+
+// FormatToText 格式化机构市场状态信号为文本（简洁版）
+//
+// 返回值：
+//   - 简洁的机构市场状态信号文本，适合放在 LLM
+func (s *InstitutionalRegimeSignal) FormatToText() string {
+	if s == nil {
+		return ""
+	}
+
+	var sb strings.Builder
+
+	sb.WriteString("### Institutional Regime Classifier:\n")
+
+	// 分类结果
+	sb.WriteString(fmt.Sprintf("- Regime: %s\n", s.RegimeClassification))
+
+	// 动力学因子
+	sb.WriteString(fmt.Sprintf("- EMA20 > EMA50 (last 20): %d/20\n", s.Ema20AboveEma50Count20))
+	sb.WriteString(fmt.Sprintf("- OI Change (5-period): %.2f%%\n", s.OiChangePercent5*100))
+
+	// 异常分析
+	anomalies := []string{}
+	if strings.Contains(s.RegimeClassification, "TRENDING_UP") && s.OiChangePercent5 < 0 {
+		anomalies = append(anomalies, "- 价格上涨但持仓量 (OI) 下降，暗示上涨动力来自【空头平仓】，而非新多头入场。")
+	}
+	if s.FundingRateExtreme {
+		anomalies = append(anomalies, "- 资金费率过高，多头杠杆极度拥挤，注意【多杀多/闪崩】风险。")
+	}
+
+	if len(anomalies) > 0 {
+		sb.WriteString("\n** Anomalies Detected **\n")
+		for _, a := range anomalies {
+			sb.WriteString(a + "\n")
+		}
+	}
+
+	sb.WriteString("\n")
+	return sb.String()
+}
+
+// =============================================================================
+// LLM 战术简报
+// =============================================================================
+
+// GenerateLLMBriefing 生成给 LLM 的战术简报（详细版）
+//
+// 参数说明：
+//   - symbol: 交易对名称（如 BTCUSDT）
+//   - currentPrice: 当前价格
+//   - cvdSlope: CVD 斜率（暂时跳过，传 0 即可）
+//
+// 返回值：
+//   - 格式化的 LLM 战术简报字符串
+//
+// 简报结构：
+//  1. 核心观测数据：价格、OI 变化、CVD 趋势、资金费率
+//  2. 算法诊断：分类结果和异常分析
+//  3. 复核需求：引导 LLM 进一步思考
+func (s *InstitutionalRegimeSignal) GenerateLLMBriefing(symbol string, currentPrice float64, cvdSlope float64) string {
+	if s == nil {
+		return ""
+	}
+
+	var sb strings.Builder
+
+	// 标题
+	sb.WriteString(fmt.Sprintf("### 📊 市场战术简报 | 资产：%s | 当前状态：**%s**\n\n", symbol, s.RegimeClassification))
+
+	// 1. 核心观测数据
+	sb.WriteString("**1. 核心观测数据：\n")
+	sb.WriteString(fmt.Sprintf("- **当前价格：%.2f\n", currentPrice))
+	sb.WriteString(fmt.Sprintf("- **持仓量 (OI) 变化：%.2f%% (近 5 周期)\n", s.OiChangePercent5*100))
+
+	// CVD 方向（暂时跳过，预留接口）
+	cvdDir := "流入 (买方主动)"
+	if cvdSlope < 0 {
+		cvdDir = "流出 (卖方主动)"
+	}
+	sb.WriteString(fmt.Sprintf("- **主动成交 (CVD) 趋势：%s\n", cvdDir))
+	sb.WriteString(fmt.Sprintf("- **资金费率：%.4f%% (当前周期)\n\n", s.FundingRate*100))
+
+	// 2. 算法诊断
+	sb.WriteString("**2. 算法诊断：\n")
+	sb.WriteString(fmt.Sprintf("由逻辑分类器判定当前市场处于 **%s**。\n", s.RegimeClassification))
+
+	// 异常分析
+	anomalies := s.detectAnomalies(cvdSlope)
+	if len(anomalies) > 0 {
+		for _, a := range anomalies {
+			sb.WriteString(a + "\n")
+		}
+	} else {
+		sb.WriteString("- 数据表现一致，暂未发现明显的衍生品背离。\n")
+	}
+	sb.WriteString("\n")
+
+	// 3. 复核需求
+	sb.WriteString("**3. 复核需求：\n")
+	sb.WriteString("请结合以上【异常分析】和其他数据，判断此信号是否为【假突破】或【不可持续的挤压行情】？\n")
+
+	// 根据不同的分类给出特定的复核提示
+	if strings.Contains(s.RegimeClassification, "REVERSING") {
+		sb.WriteString("如果是 REVERSING，结合持仓量急剧变动，是否意味着趋势已经彻底反转？\n")
+	} else if strings.Contains(s.RegimeClassification, "TRENDING_UP_OVERHEATED") {
+		sb.WriteString("当前为过热上涨状态，需警惕资金费率过高导致的回调风险。\n")
+	} else if strings.Contains(s.RegimeClassification, "RANGE_BOUND") {
+		sb.WriteString("当前为区间震荡状态，等待突破信号或区间边界交易机会。\n")
+	}
+
+	sb.WriteString("\n")
+	return sb.String()
+}
+
+// detectAnomalies 检测异常背离
+//
+// 参数说明：
+//   - cvdSlope: CVD 斜率（暂时未使用）
+//
+// 返回值：
+//   - 异常描述字符串列表
+func (s *InstitutionalRegimeSignal) detectAnomalies(cvdSlope float64) []string {
+	anomalies := []string{}
+
+	// 检查：价格上涨但 OI 下降
+	if strings.Contains(s.RegimeClassification, "TRENDING_UP") && s.OiChangePercent5 < 0 {
+		anomalies = append(anomalies, "- 价格上涨但持仓量 (OI) 下降，暗示上涨动力来自【空头平仓】，而非新多头入场。")
+	}
+
+	// 检查 CVD 背离（暂时跳过，预留接口）
+	// if strings.Contains(s.RegimeClassification, "TRENDING_UP") && cvdSlope < 0 {
+	// 	anomalies = append(anomalies, "- 价格上涨但 CVD 下行，存在【买盘枯竭】或【冰山挂单吸收】风险。")
+	// }
+
+	// 检查资金费率极端
+	if s.FundingRateExtreme {
+		anomalies = append(anomalies, "- 资金费率过高，多头杠杆极度拥挤，注意【多杀多/闪崩】风险。")
+	}
+
+	return anomalies
+}
+
+// =============================================================================
+// 摆动点检测与拓扑分析
+// =============================================================================
+
+// GenerateTechnicalFeatures 执行完整的特征提取流程
+//
+// 参数说明：
+//   - klines: K 线数据列表
+//   - window: 滑动窗口大小（用于检测摆动点）
+//
+// 返回值：
+//   - 技术特征对象，包含摆动点、趋势和机构市场状态
+//
+// 执行流程：
+//  1. 识别摆动点（局部高点和低点）
+//  2. 标记拓扑结构（HH/HL/LH/LL）
+//  3. 统计支撑阻力位测试次数
+//  4. 分析趋势
 func GenerateTechnicalFeatures(klines []market.KlineBar, window int) *TechnicalFeatures {
-	// Need enough data for at least one window
+	// 需要足够的数据来识别摆动点
+	// 至少需要 window*2+1 根 K 线
 	if len(klines) < window*2+1 {
 		return &TechnicalFeatures{}
 	}
 
-	// 1. Identify Swing Points
+	// 1. 识别摆动点
 	swings := findSwingPoints(klines, window)
 
-	// 2. Label Topology (HH/HL/LH/LL)
+	// 2. 标记拓扑结构（HH/HL/LH/LL）
 	labelSwingTopology(swings)
 
-	// 3. Count Level Tests
-	// Use a tolerance of 0.2% (0.002) as requested
+	// 3. 统计支撑阻力位测试次数
+	// 使用 0.2% (0.002) 的容差
 	tolerance := 0.002
 	for i := range swings {
-		// Count tests starting from the candle *after* the swing point
+		// 从摆动点之后的 K 线开始统计测试次数
 		startIndex := swings[i].Index + 1
 		swings[i].TestCount = countLevelTests(swings[i].Price, swings[i].Type, klines, startIndex, tolerance)
 	}
@@ -62,12 +393,25 @@ func GenerateTechnicalFeatures(klines []market.KlineBar, window int) *TechnicalF
 	}
 }
 
-// findSwingPoints identifies local highs and lows using a sliding window
+// findSwingPoints 使用滑动窗口识别局部高点和低点
+//
+// 参数说明：
+//   - klines: K 线数据列表
+//   - window: 滑动窗口大小
+//
+// 返回值：
+//   - 摆动点列表
+//
+// 算法说明：
+//   - 对于每个 K 线，检查其左右 window 根 K 线
+//   - 如果当前 K 线的 High 是窗口内的最高点，则为 SwingHigh
+//   - 如果当前 K 线的 Low 是窗口内的最低点，则为 SwingLow
+//   - 左侧使用严格不等号，右侧使用非严格不等号（优先选择最近的峰值）
 func findSwingPoints(klines []market.KlineBar, window int) []SwingPoint {
 	var swings []SwingPoint
 
-	// We can only identify swings from [window] to [len-1-window]
-	// Because we need N candles on both sides
+	// 只能在 [window, len-1-window] 范围内识别摆动点
+	// 因为需要 window 根 K 线在两侧
 	for i := window; i < len(klines)-window; i++ {
 		isHigh := true
 		isLow := true
@@ -75,12 +419,12 @@ func findSwingPoints(klines []market.KlineBar, window int) []SwingPoint {
 		currentHigh := klines[i].High
 		currentLow := klines[i].Low
 
-		// Check left and right neighbors
+		// 检查左右邻居
 		for j := i - window; j <= i+window; j++ {
 			if i == j {
 				continue
 			}
-			// Left side: Strict inequality
+			// 左侧：严格不等号
 			if j < i {
 				if klines[j].High > currentHigh {
 					isHigh = false
@@ -89,8 +433,8 @@ func findSwingPoints(klines []market.KlineBar, window int) []SwingPoint {
 					isLow = false
 				}
 			} else {
-				// Right side: Strict inequality + Equality (prioritize most recent peak)
-				// If currentHigh == rightHigh, we fail current (so right one can be picked later)
+				// 右侧：非严格不等号 + 相等（优先选择最近的峰值）
+				// 如果 currentHigh == rightHigh，则当前失败（让右侧的被选中）
 				if klines[j].High >= currentHigh {
 					isHigh = false
 				}
@@ -100,7 +444,7 @@ func findSwingPoints(klines []market.KlineBar, window int) []SwingPoint {
 			}
 		}
 
-		// Add Swing High
+		// 添加 Swing High
 		if isHigh {
 			swings = append(swings, SwingPoint{
 				Price: currentHigh,
@@ -109,7 +453,7 @@ func findSwingPoints(klines []market.KlineBar, window int) []SwingPoint {
 				Type:  SwingHigh,
 			})
 		}
-		// Add Swing Low
+		// 添加 Swing Low
 		if isLow {
 			swings = append(swings, SwingPoint{
 				Price: currentLow,
@@ -122,20 +466,30 @@ func findSwingPoints(klines []market.KlineBar, window int) []SwingPoint {
 	return swings
 }
 
-// labelSwingTopology determines HH/LH for highs and HL/LL for lows
+// labelSwingTopology 确定高点的 HH/LH 和低点的 HL/LL
+//
+// 参数说明：
+//   - swings: 摆动点列表（按时间顺序）
+//
+// 算法说明：
+//   - 遍历摆动点列表
+//   - 对于高点：如果价格高于上一个高点，则标记为 HH（Higher High）
+//   - 对于高点：如果价格低于上一个高点，则标记为 LH（Lower High）
+//   - 对于低点：如果价格高于上一个低点，则标记为 HL（Higher Low）
+//   - 对于低点：如果价格低于上一个低点，则标记为 LL（Lower Low）
 func labelSwingTopology(swings []SwingPoint) {
-	// Track the last seen High and Low separately
+	// 分别跟踪最后看到的高点和低点
 	var lastHigh *SwingPoint
 	var lastLow *SwingPoint
 
-	// Iterate through swings chronologically
+	// 按时间顺序遍历摆动点
 	for i := 0; i < len(swings); i++ {
-		// Use pointer to modify the element in the slice directly
+		// 使用指针直接修改切片中的元素
 		s := &swings[i]
 
 		if s.Type == SwingHigh {
 			if lastHigh == nil {
-				s.Label = "High" // Initial High
+				s.Label = "High" // 第一个高点
 			} else {
 				if s.Price > lastHigh.Price {
 					s.Label = "HH" // Higher High
@@ -148,7 +502,7 @@ func labelSwingTopology(swings []SwingPoint) {
 			lastHigh = s
 		} else { // SwingLow
 			if lastLow == nil {
-				s.Label = "Low" // Initial Low
+				s.Label = "Low" // 第一个低点
 			} else {
 				if s.Price > lastLow.Price {
 					s.Label = "HL" // Higher Low
@@ -163,10 +517,27 @@ func labelSwingTopology(swings []SwingPoint) {
 	}
 }
 
-// countLevelTests counts how many times price tested a level within tolerance
-// Based on user's logic:
-// Support (Low): Price dips into [level-tol, level+tol] but closes > level+tol.
-// Resistance (High): Price rallies into [level-tol, level+tol] but closes < level-tol.
+// countLevelTests 统计价格在容差范围内测试某个价位的次数
+//
+// 参数说明：
+//   - level: 支撑/阻力位价格
+//   - sType: 摆动点类型（SwingLow=支撑，SwingHigh=阻力）
+//   - klines: K 线数据列表
+//   - startIndex: 开始统计的索引（从摆动点之后开始）
+//   - tolerancePct: 容差百分比（如 0.002 = 0.2%）
+//
+// 返回值：
+//   - 测试次数
+//
+// 算法说明（支撑位）：
+//  1. 价格进入容差区间 [level-tol, level+tol]
+//  2. 如果价格反弹并收盘高于 level+tol，则测试成功
+//  3. 如果价格跌破 level-tol，则支撑被破坏
+//
+// 算法说明（阻力位）：
+//  1. 价格进入容差区间 [level-tol, level+tol]
+//  2. 如果价格回落并收盘低于 level-tol，则测试成功
+//  3. 如果价格突破 level+tol，则阻力被突破
 func countLevelTests(level float64, sType SwingType, klines []market.KlineBar, startIndex int, tolerancePct float64) int {
 	if startIndex >= len(klines) {
 		return 0
@@ -181,48 +552,48 @@ func countLevelTests(level float64, sType SwingType, klines []market.KlineBar, s
 	for i := startIndex; i < len(klines); i++ {
 		c := klines[i]
 
-		if sType == SwingLow { // Support Logic
-			// 1. Check if price entered the tolerance zone (Low is within range)
-			// User logic: if c.Low >= lowerBound && c.Low <= upperBound
-			// Expanded to allow dipping slightly below but not closing below?
-			// User logic: "If Low < lowerBound -> broken". So strictly within bounds for a "test".
-			
-			// Entering the zone
+		if sType == SwingLow { // 支撑逻辑
+			// 1. 检查价格是否进入容差区间（Low 在范围内）
+			// 用户逻辑：if c.Low >= lowerBound && c.Low <= upperBound
+			// 扩展：允许略低于但不收盘低于？
+			// 用户逻辑："If Low < lowerBound -> broken"。所以严格在边界内为"测试"。
+
+			// 进入测试区间
 			if c.Low >= lowerBound && c.Low <= upperBound {
 				inTestZone = true
 			}
 
-			// Valid bounce (Test Confirmed)
-			// User logic: if inTestZone && c.Close > upperBound
+			// 有效的反弹（测试确认）
+			// 用户逻辑：if inTestZone && c.Close > upperBound
 			if inTestZone && c.Close > upperBound {
 				testedCount++
-				inTestZone = false // Reset for next test
+				inTestZone = false // 重置以进行下一次测试
 			}
 
-			// Broken Support
-			// User logic: if c.Low < lowerBound
+			// 支撑被破坏
+			// 用户逻辑：if c.Low < lowerBound
 			if c.Low < lowerBound {
-				inTestZone = false // Support broken, stop counting this sequence?
-				// Usually if support is broken, it's no longer a support.
-				// But we just stop the current "test" state. Future tests might be retests from below (resistance)?
-				// For simplicity, we just reset.
+				inTestZone = false // 支撑被破坏，停止计数此序列？
+				// 通常如果支撑被破坏，它就不再是支撑。
+				// 但我们只是停止当前的"测试"状态。未来测试可能是从下方的回测（阻力）？
+				// 为简化起见，我们只是重置。
 			}
 
-		} else { // SwingHigh (Resistance Logic) - Symmetric
-			// Entering the zone (High is within range)
+		} else { // SwingHigh (阻力逻辑) - 对称
+			// 进入测试区间（High 在范围内）
 			if c.High >= lowerBound && c.High <= upperBound {
 				inTestZone = true
 			}
 
-			// Valid rejection (Test Confirmed)
-			// For resistance, we want Close < lowerBound (rejected down)
+			// 有效的反弹（测试确认）
+			// 对于阻力，我们希望 Close < lowerBound（向下反弹）
 			if inTestZone && c.Close < lowerBound {
 				testedCount++
 				inTestZone = false
 			}
 
-			// Broken Resistance
-			// If High > upperBound
+			// 阻力被突破
+			// 如果 High > upperBound
 			if c.High > upperBound {
 				inTestZone = false
 			}
@@ -231,35 +602,51 @@ func countLevelTests(level float64, sType SwingType, klines []market.KlineBar, s
 	return testedCount
 }
 
+// analyzeTrend 分析摆动点序列以确定趋势
+//
+// 参数说明：
+//   - swings: 摆动点列表
+//
+// 返回值：
+//   - 趋势描述字符串
+//
+// 分析逻辑：
+//   - 检查最近 6 个摆动点（或全部，如果少于 6 个）
+//   - 统计 HH、HL、LH、LL 的数量
+//   - 根据模式识别趋势
 func analyzeTrend(swings []SwingPoint) string {
 	if len(swings) < 3 {
 		return "Insufficient data"
 	}
-	
-	// Analyze the sequence of labels
-	// We want to see consecutive HH+HL or LH+LL
-	
-	// Get last few swings
+
+	// 分析标签序列
+	// 我们想看到连续的 HH+HL 或 LH+LL
+
+	// 获取最近的摆动点
 	startIdx := 0
 	if len(swings) > 6 {
 		startIdx = len(swings) - 6
 	}
 	recent := swings[startIdx:]
-	
+
 	hh := 0
 	hl := 0
 	lh := 0
 	ll := 0
-	
+
 	for _, s := range recent {
 		switch s.Label {
-		case "HH": hh++
-		case "HL": hl++
-		case "LH": lh++
-		case "LL": ll++
+		case "HH":
+			hh++
+		case "HL":
+			hl++
+		case "LH":
+			lh++
+		case "LL":
+			ll++
 		}
 	}
-	
+
 	if hh >= 2 && hl >= 1 {
 		return "Strong Uptrend (Consecutive HHs)"
 	}
@@ -272,8 +659,8 @@ func analyzeTrend(swings []SwingPoint) string {
 	if lh >= 1 && ll >= 1 {
 		return "Downtrend Structure (LH+LL)"
 	}
-	
-	// Early signal detection for 3 points (e.g. H -> L -> LH)
+
+	// 3 点的早期信号检测（例如 H -> L -> LH）
 	if len(swings) == 3 {
 		last := swings[len(swings)-1]
 		if last.Label == "LH" {
@@ -289,48 +676,61 @@ func analyzeTrend(swings []SwingPoint) string {
 			return "Potential Uptrend (Higher Low observed)"
 		}
 	}
-	
+
 	return "Mixed/Consolidation"
 }
 
-// FormatFeaturesToText generates the user-requested string block
+// FormatFeaturesToText 生成用户请求的字符串块
+//
+// 参数说明：
+//   - maxItems: 要显示的最大项目数
+//
+// 返回值：
+//   - 格式化的物理结构锚点字符串
 func (f *TechnicalFeatures) FormatFeaturesToText(maxItems int) string {
 	if len(f.SwingPoints) == 0 {
-		return "### Physical Structural Anchors:\n(No swing points identified in recent data)\n\n"
+		return "### 物理结构锚点：\n(最近数据中未识别摆动点)\n\n"
 	}
 
 	var sb strings.Builder
 
-	// Filter to show only the last N items
+	// 过滤以仅显示最后 N 个项目
 	count := len(f.SwingPoints)
 	start := 0
 	if maxItems > 0 && count > maxItems {
 		start = count - maxItems
 	}
 
-	// Title
-	sb.WriteString(fmt.Sprintf("### Physical Structural Anchors (Recent %d Swings):\n", count-start))
+	// 标题
+	sb.WriteString(fmt.Sprintf("### 物理结构锚点（最近 %d 个摆动点）：\n", count-start))
 
 	for i := start; i < count; i++ {
 		s := f.SwingPoints[i]
-		
-		// Label formatting: [Higher High (HH)] or [Swing High]
+
+		// 标签格式化：[Higher High (HH)] 或 [Swing High]
 		labelStr := ""
 		if s.Label != "" && s.Label != "High" && s.Label != "Low" {
-			// Map short codes to full names
+			// 将短代码映射到全名
 			fullLabel := ""
 			switch s.Label {
-			case "HH": fullLabel = "Higher High"
-			case "HL": fullLabel = "Higher Low"
-			case "LH": fullLabel = "Lower High"
-			case "LL": fullLabel = "Lower Low"
-			case "EH": fullLabel = "Equal High"
-			case "EL": fullLabel = "Equal Low"
-			default: fullLabel = s.Label
+			case "HH":
+				fullLabel = "Higher High"
+			case "HL":
+				fullLabel = "Higher Low"
+			case "LH":
+				fullLabel = "Lower High"
+			case "LL":
+				fullLabel = "Lower Low"
+			case "EH":
+				fullLabel = "Equal High"
+			case "EL":
+				fullLabel = "Equal Low"
+			default:
+				fullLabel = s.Label
 			}
 			labelStr = fmt.Sprintf("[%s (%s)]", fullLabel, s.Label)
 		} else {
-			// Fallback for first points
+			// 首个点的回退
 			if s.Type == SwingHigh {
 				labelStr = "[Swing High]"
 			} else {
@@ -339,19 +739,19 @@ func (f *TechnicalFeatures) FormatFeaturesToText(maxItems int) string {
 		}
 
 		timeStr := time.Unix(s.Time/1000, 0).UTC().Format("01-02 15:04")
-		
-		// Format line
+
+		// 格式化行
 		// - [Higher Low (HL)]: 67763.70 | Tested: 3 times (02-22 00:00)
-		sb.WriteString(fmt.Sprintf("- %-20s: %-9s | Tested: %d times (%s)\n",
+		sb.WriteString(fmt.Sprintf("- %-20s: %-9s | 测试次数：%d 次 (%s)\n",
 			labelStr,
 			formatPriceForPrompt(s.Price),
 			s.TestCount,
 			timeStr,
 		))
 	}
-	
+
 	if f.Trend != "" {
-		sb.WriteString(fmt.Sprintf("(Trend Evidence: %s)\n", f.Trend))
+		sb.WriteString(fmt.Sprintf("(趋势证据：%s)\n", f.Trend))
 	}
 	sb.WriteString("\n")
 

@@ -441,15 +441,27 @@ func (m *Manager) formatCoinSourceTag(sources []string) string {
 // formatMarketData 格式化市场数据
 //
 // 参数说明:
-//   - data: 市场数据对象
-//   - indicators: 指标配置
+//   - data: 市场数据对象，包含价格、K 线、指标等完整数据
+//   - indicators: 指标配置，控制哪些指标需要展示
 //
 // 返回值:
-//   - 格式化的市场数据字符串，包含价格、技术指标、K线等
+//   - 格式化的市场数据字符串，按逻辑分层展示各类数据
+//
+// 数据布局结构（按展示顺序）:
+//  1. 基础价格和技术指标（价格、EMA、MACD、RSI）
+//  2. 局部支撑位和日内低点
+//  3. 附加数据（OI、资金费率、机构分类器、物理结构锚点）
+//  4. 多时间周期 K 线数据
+//  5. 主要区间边界和测试次数
+//  6. 动态参考（布林带、EMA）
 func (m *Manager) formatMarketData(data *market.Data, indicators store.IndicatorConfig) string {
 	var sb strings.Builder
 	// indicators are passed as argument
 
+	// =========================================================================
+	// 第一部分：基础价格和技术指标
+	// 用途：提供当前价格和核心动量指标，让 LLM 快速了解市场状态
+	// =========================================================================
 	sb.WriteString(fmt.Sprintf("=== %s Market Data ===\n\n", data.Symbol))
 	sb.WriteString(fmt.Sprintf("current_price = %.4f", data.CurrentPrice))
 
@@ -467,6 +479,10 @@ func (m *Manager) formatMarketData(data *market.Data, indicators store.Indicator
 
 	sb.WriteString("\n\n")
 
+	// =========================================================================
+	// 第二部分：局部支撑位和日内低点
+	// 用途：提供关键支撑位参考，帮助识别短期下跌保护位
+	// =========================================================================
 	if data.LocalSupport > 0 || data.DailyLow > 0 {
 		localSupportStr := ""
 		if data.LocalSupport > 0 {
@@ -491,19 +507,76 @@ func (m *Manager) formatMarketData(data *market.Data, indicators store.Indicator
 		}
 	}
 
+	// 确定主要时间周期（优先 1h，其次 4h），用于后续特征计算
+	var mainTf string
+	if _, ok := data.TimeframeData[mainTF1h]; ok {
+		mainTf = mainTF1h
+	} else if _, ok := data.TimeframeData[mainTF4h]; ok {
+		mainTf = mainTF4h
+	}
+
+	// =========================================================================
+	// 第三部分：附加数据（OI、资金费率、机构分类器、物理结构锚点）
+	// 用途：提供深层市场结构信息，包括机构行为和市场拓扑
+	// =========================================================================
 	if indicators.EnableOI || indicators.EnableFundingRate {
 		sb.WriteString(fmt.Sprintf("Additional data for %s:\n\n", data.Symbol))
 
+		// 3.1 持仓量数据
 		if indicators.EnableOI && data.OpenInterest != nil {
 			sb.WriteString(fmt.Sprintf("Open Interest: Latest: %.2f Average: %.2f\n\n",
 				data.OpenInterest.Latest, data.OpenInterest.Average))
 		}
 
+		// 3.2 资金费率
 		if indicators.EnableFundingRate {
 			sb.WriteString(fmt.Sprintf("Funding Rate: %.2e\n\n", data.FundingRate))
 		}
+
+		// 3.3 机构市场状态分类器（新增功能）
+		// 用途：基于 EMA 排列、OI 变化、资金费率等因子，识别当前市场处于哪种机构主导状态
+		// 分类结果：Trending(Strong/Overheated)、Reversing、Range-bound、Transitional
+		if mainTf != "" {
+			tfData := data.TimeframeData[mainTf]
+			oiLatest := 0.0
+			oiAverage := 0.0
+			if data.OpenInterest != nil {
+				oiLatest = data.OpenInterest.Latest
+				oiAverage = data.OpenInterest.Average
+			}
+			regimeSignal := GenerateInstitutionalRegimeSignal(
+				tfData.Klines,
+				tfData.EMA20Values,
+				tfData.EMA50Values,
+				tfData.ATR14Values,
+				oiLatest,
+				oiAverage,
+				data.FundingRate,
+			)
+			sb.WriteString(regimeSignal.FormatToText())
+
+			// 3.3.1 LLM 战术简报（基于分类器结果生成详细简报）
+			// 用途：为 LLM 提供易于理解的自然语言市场简报，包含异常分析和复核提示
+			currentPrice := data.CurrentPrice
+			cvdSlope := 0.0 // 暂时跳过 CVD，预留接口
+			sb.WriteString(regimeSignal.GenerateLLMBriefing(data.Symbol, currentPrice, cvdSlope))
+		}
+
+		// 3.4 物理结构锚点（摆动点 + 拓扑标记）
+		// 用途：识别 HH/HL/LH/LL 摆动点，标注市场拓扑结构，检测支撑/阻力位测试次数
+		// 帮助 LLM 理解市场结构和潜在反转点
+		if mainTf != "" {
+			tfData := data.TimeframeData[mainTf]
+			// Use window 3 for better sensitivity with limited data
+			features := GenerateTechnicalFeatures(tfData.Klines, swingWindowSize)
+			sb.WriteString(features.FormatFeaturesToText(maxSwingFeatures))
+		}
 	}
 
+	// =========================================================================
+	// 第四部分：多时间周期 K 线数据
+	// 用途：提供完整的价格走势和成交量信息，支持多时间周期分析
+	// =========================================================================
 	if len(data.TimeframeData) > 0 {
 		timeframeOrder := []string{"1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h", "1d", "3d", "1w"}
 		for _, tf := range timeframeOrder {
@@ -512,22 +585,12 @@ func (m *Manager) formatMarketData(data *market.Data, indicators store.Indicator
 				m.formatTimeframeSeriesData(&sb, tfData, indicators)
 			}
 		}
-		var mainTf string
-		if _, ok := data.TimeframeData[mainTF1h]; ok {
-			mainTf = mainTF1h
-		} else if _, ok := data.TimeframeData[mainTF4h]; ok {
-			mainTf = mainTF4h
-		}
 
-		// 1. Structural Anchors (Swings with Topology)
-		if mainTf != "" {
-			tfData := data.TimeframeData[mainTf]
-			// Use window 3 for better sensitivity with limited data
-			features := GenerateTechnicalFeatures(tfData.Klines, swingWindowSize)
-			sb.WriteString(features.FormatFeaturesToText(maxSwingFeatures))
-		}
-
-		// 2. Major Boundaries (Daily Levels)
+		// =====================================================================
+		// 第五部分：主要区间边界和测试次数
+		// 用途：识别日线级别的关键支撑/阻力位，统计价格测试次数
+		// 测试次数越多，突破的可能性越大（或支撑/阻力越强）
+		// =====================================================================
 		tf1d, ok := data.TimeframeData[mainTF1d]
 		if ok && len(tf1d.Klines) > 0 {
 			// Use yesterday's completed candle if available (more reliable "Major" level)
@@ -596,7 +659,12 @@ func (m *Manager) formatMarketData(data *market.Data, indicators store.Indicator
 			}
 		}
 
-		// Dynamic References (BB, EMA)
+		// =====================================================================
+		// 第六部分：动态参考（布林带、EMA）
+		// 用途：提供动态支撑/阻力位，这些位置会随时间变化
+		// 布林带下轨：短期超卖参考
+		// EMA50：中期趋势参考
+		// =====================================================================
 		refParts := []string{}
 		if tf, ok := data.TimeframeData[mainTF5m]; ok && len(tf.BOLLLower) > 0 {
 			refParts = append(refParts, fmt.Sprintf("BB_Lower (5M): %s", formatPriceForPrompt(tf.BOLLLower[len(tf.BOLLLower)-1])))
@@ -611,7 +679,12 @@ func (m *Manager) formatMarketData(data *market.Data, indicators store.Indicator
 			}
 			sb.WriteString("\n")
 		}
+		// =========================================================================
+		// 备用分支：当没有多时间周期 K 线数据时的替代方案
+		// 用途：提供日内序列数据和长期背景数据作为补充
+		// =========================================================================
 	} else {
+		// 备用方案 A：日内序列数据
 		if data.IntradaySeries != nil {
 			klineConfig := indicators.Klines
 			sb.WriteString(fmt.Sprintf("Intraday series (%s intervals, oldest → latest):\n\n", klineConfig.PrimaryTimeframe))
@@ -646,6 +719,7 @@ func (m *Manager) formatMarketData(data *market.Data, indicators store.Indicator
 			}
 		}
 
+		// 备用方案 B：长期背景数据
 		if data.LongerTermContext != nil && indicators.Klines.EnableMultiTimeframe {
 			sb.WriteString(fmt.Sprintf("Longer-term context (%s timeframe):\n\n", indicators.Klines.LongerTimeframe))
 
