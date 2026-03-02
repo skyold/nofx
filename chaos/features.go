@@ -60,6 +60,7 @@ type InstitutionalRegimeSignal struct {
 
 	// 价格结构
 	PriceMakingHigh50 bool    // 当前价格是否创 50 周期新高
+	PriceMakingLow50  bool    // 当前价格是否创 50 周期新低
 	BoxHeight50       float64 // 50 周期价格区间高度（相对百分比）
 
 	// 衍生品状态
@@ -68,6 +69,71 @@ type InstitutionalRegimeSignal struct {
 
 	// 状态分类
 	RegimeClassification string // 市场状态分类结果
+}
+
+// =============================================================================
+// Regime 分类器配置
+// =============================================================================
+
+// RegimeClassifierConfig Regime 分类器配置
+// 用于集中管理所有可调整的阈值参数
+type RegimeClassifierConfig struct {
+	// OI 变化阈值
+	OiGrowthThreshold float64 // OI 增长/下降阈值（默认 0.05 = 5%）
+
+	// 资金费率阈值
+	FundingExtreme float64 // 资金费率极端阈值（默认 0.0003 = 0.03%）
+
+	// 趋势确认阈值
+	TrendThreshold int // 趋势确认所需的 EMA 计数（默认 16/20）
+
+	// 动能特征阈值
+	RecoveryRatioThreshold     float64 // 收复比例阈值（默认 0.4 = 40%）
+	ShortSqueezePriceThreshold float64 // 轧空行情价格涨幅阈值（默认 1.01 = 1%）
+	ShortSqueezeOiThreshold    float64 // 轧空行情 OI 降幅阈值（默认 -0.02 = -2%）
+	CapitulationAtrThreshold   float64 // 恐慌探底 ATR 阈值（默认 0.03 = 3%）
+}
+
+// NewRegimeClassifierConfig_Balanced 创建平衡配置（默认）
+// 适用于 BTC/ETH 1H 级别，在准确率和覆盖率之间取得平衡
+func NewRegimeClassifierConfig_Balanced() *RegimeClassifierConfig {
+	return &RegimeClassifierConfig{
+		OiGrowthThreshold:          0.05,   // 5%
+		FundingExtreme:             0.0003, // 0.03%
+		TrendThreshold:             16,     // 16/20
+		RecoveryRatioThreshold:     0.4,    // 40%
+		ShortSqueezePriceThreshold: 1.01,   // 1%
+		ShortSqueezeOiThreshold:    -0.02,  // -2%
+		CapitulationAtrThreshold:   0.03,   // 3%
+	}
+}
+
+// NewRegimeClassifierConfig_Conservative 创建保守配置（高准确率）
+// 适用于追求高胜率、低频率交易的策略
+func NewRegimeClassifierConfig_Conservative() *RegimeClassifierConfig {
+	return &RegimeClassifierConfig{
+		OiGrowthThreshold:          0.08,   // 8%（提高，只在机构确定入场时动作）
+		FundingExtreme:             0.0004, // 0.04%（提高）
+		TrendThreshold:             18,     // 18/20（提高，更严格的趋势确认）
+		RecoveryRatioThreshold:     0.6,    // 60%（提高，只在强力反弹时触发）
+		ShortSqueezePriceThreshold: 1.02,   // 2%（提高）
+		ShortSqueezeOiThreshold:    -0.03,  // -3%（提高）
+		CapitulationAtrThreshold:   0.04,   // 4%（提高，更严格的恐慌底判定）
+	}
+}
+
+// NewRegimeClassifierConfig_Aggressive 创建激进配置（高覆盖率）
+// 适用于追求高频率、捕捉更多机会的策略
+func NewRegimeClassifierConfig_Aggressive() *RegimeClassifierConfig {
+	return &RegimeClassifierConfig{
+		OiGrowthThreshold:          0.03,   // 3%（降低，对更多 OI 变化有反应）
+		FundingExtreme:             0.0002, // 0.02%（降低）
+		TrendThreshold:             14,     // 14/20（降低，更快确认趋势）
+		RecoveryRatioThreshold:     0.3,    // 30%（降低，对任何风吹草动都有反应）
+		ShortSqueezePriceThreshold: 1.005,  // 0.5%（降低）
+		ShortSqueezeOiThreshold:    -0.01,  // -1%（降低）
+		CapitulationAtrThreshold:   0.02,   // 2%（降低，更容易触发恐慌底）
+	}
 }
 
 // TechnicalFeatures 技术特征
@@ -82,7 +148,25 @@ type TechnicalFeatures struct {
 // 机构市场状态信号生成
 // =============================================================================
 
-// GenerateInstitutionalRegimeSignal 计算机构市场状态信号
+// getPriceRange 获取指定周期内的价格区间
+func getPriceRange(klines []market.KlineBar, period int) (float64, float64) {
+	if len(klines) < period {
+		return 0, 0
+	}
+	sub := klines[len(klines)-period:]
+	h, l := 0.0, math.MaxFloat64
+	for _, k := range sub {
+		if k.High > h {
+			h = k.High
+		}
+		if k.Low < l {
+			l = k.Low
+		}
+	}
+	return h, l
+}
+
+// GenerateInstitutionalRegimeSignal 计算机构市场状态信号（使用默认平衡配置）
 //
 // 参数说明：
 //   - klines: K 线数据列表
@@ -97,11 +181,15 @@ type TechnicalFeatures struct {
 //   - 机构市场状态信号对象
 //
 // 分类结果：
-//   - TRENDING_UP_STRONG：机构驱动的强趋势
-//   - TRENDING_UP_OVERHEATED：散户驱动的过热趋势
-//   - REVERSING_POTENTIAL_TOP：潜在反转
-//   - RANGE_BOUND：区间震荡
-//   - TRANSITIONAL：模糊过渡状态
+//   - REVERSING_POTENTIAL_TOP：顶部反转预警
+//   - BULLISH_SHORT_SQUEEZE：轧空（空头平仓）
+//   - IMPULSIVE_RECOVERY：脉冲式修复
+//   - TRENDING_UP_STRONG：强多头趋势
+//   - TRENDING_UP_OVERHEATED：多头过热
+//   - TRENDING_DOWN_STRONG：强空头趋势
+//   - CAPITULATION_BOTTOM：恐慌探底
+//   - RANGE_BOUND：震荡区间
+//   - TRANSITIONAL：过渡状态
 func GenerateInstitutionalRegimeSignal(
 	klines []market.KlineBar,
 	ema20Values []float64,
@@ -111,91 +199,142 @@ func GenerateInstitutionalRegimeSignal(
 	oiAverage float64,
 	fundingRate float64,
 ) *InstitutionalRegimeSignal {
-	signal := &InstitutionalRegimeSignal{
-		FundingRate: fundingRate, // 保存资金费率，后续用于简报
+	return GenerateInstitutionalRegimeSignalWithConfig(
+		klines,
+		ema20Values,
+		ema50Values,
+		atr14Values,
+		oiLatest,
+		oiAverage,
+		fundingRate,
+		NewRegimeClassifierConfig_Balanced(),
+	)
+}
+
+// GenerateInstitutionalRegimeSignalWithConfig 计算机构市场状态信号（使用自定义配置）
+//
+// 参数说明：
+//   - klines: K 线数据列表
+//   - ema20Values: EMA20 指标值列表
+//   - ema50Values: EMA50 指标值列表
+//   - atr14Values: ATR14 指标值列表
+//   - oiLatest: 最新持仓量（OI）
+//   - oiAverage: 平均持仓量（OI）
+//   - fundingRate: 当前资金费率
+//   - config: 分类器配置（如果为 nil，使用默认平衡配置）
+//
+// 返回值：
+//   - 机构市场状态信号对象
+func GenerateInstitutionalRegimeSignalWithConfig(
+	klines []market.KlineBar,
+	ema20Values []float64,
+	ema50Values []float64,
+	atr14Values []float64,
+	oiLatest float64,
+	oiAverage float64,
+	fundingRate float64,
+	config *RegimeClassifierConfig,
+) *InstitutionalRegimeSignal {
+	if config == nil {
+		config = NewRegimeClassifierConfig_Balanced()
 	}
 
-	const (
-		oiGrowthThreshold = 0.05   // OI 增长阈值（5%）
-		fundingExtreme    = 0.0003 // 资金费率极端阈值（0.03%）
-	)
+	signal := &InstitutionalRegimeSignal{
+		FundingRate: fundingRate,
+	}
 
-	// 计算持仓量（OI）变化率
-	// 计算：(最新值 - 平均值) / 平均值
 	if oiAverage > 0 {
 		signal.OiChangePercent5 = (oiLatest - oiAverage) / oiAverage
 	}
+	signal.FundingRateExtreme = math.Abs(fundingRate) > config.FundingExtreme
 
-	// 判断资金费率是否极端
-	signal.FundingRateExtreme = math.Abs(fundingRate) > fundingExtreme
+	lastIdx := len(klines) - 1
+	if lastIdx < 0 {
+		signal.RegimeClassification = "TRANSITIONAL"
+		return signal
+	}
 
-	// 计算最近 20 根 K 线中 EMA20 > EMA50 的次数
-	// 16/20 = 80% 以上为强趋势
-	if len(ema20Values) >= 20 && len(ema50Values) >= 20 {
-		count := 0
-		start := len(ema20Values) - 20
+	currentPrice := klines[lastIdx].Close
+	currentEma20 := 0.0
+	currentAtr := 0.0
+
+	if len(ema20Values) > 0 {
+		currentEma20 = ema20Values[len(ema20Values)-1]
+	}
+	if len(atr14Values) > 0 {
+		currentAtr = atr14Values[len(atr14Values)-1]
+	}
+
+	countUp := 0
+	countDown := 0
+	lookback := 20
+	if len(ema20Values) >= lookback && len(ema50Values) >= lookback {
+		start := len(ema20Values) - lookback
 		for i := start; i < len(ema20Values); i++ {
 			if ema20Values[i] > ema50Values[i] {
-				count++
+				countUp++
 			}
-		}
-		signal.Ema20AboveEma50Count20 = count
-	}
-
-	// 计算价格结构和 ATR 百分比
-	// 需要至少 50 根 K 线
-	if len(klines) >= 50 && len(atr14Values) > 0 {
-		// 计算 50 周期价格区间
-		lookback50 := klines[len(klines)-50:]
-		high50 := 0.0
-		low50 := math.MaxFloat64
-		for _, k := range lookback50 {
-			if k.High > high50 {
-				high50 = k.High
+			if ema20Values[i] < ema50Values[i] {
+				countDown++
 			}
-			if k.Low < low50 {
-				low50 = k.Low
-			}
-		}
-		// 判断是否创 50 周期新高
-		currentHigh := klines[len(klines)-1].High
-		signal.PriceMakingHigh50 = currentHigh >= high50
-
-		// 计算 50 周期价格区间高度（相对）
-		if low50 > 0 {
-			signal.BoxHeight50 = (high50 - low50) / low50
-		}
-
-		// 计算 ATR 百分比（相对于当前价格）
-		currentPrice := klines[len(klines)-1].Close
-		if currentPrice > 0 {
-			signal.AtrPct = atr14Values[len(atr14Values)-1] / currentPrice
 		}
 	}
+	signal.Ema20AboveEma50Count20 = countUp
 
-	// 市场状态分类逻辑
-	// 根据多种因子组合判断
-	isEmaUp := signal.Ema20AboveEma50Count20 >= 16
-	isOiConfirmed := signal.OiChangePercent5 > oiGrowthThreshold
-	oiStable := math.Abs(signal.OiChangePercent5) < oiGrowthThreshold
-	oiDroppingFast := signal.OiChangePercent5 < -oiGrowthThreshold
+	high50, low50 := getPriceRange(klines, 50)
+	signal.PriceMakingHigh50 = currentPrice >= high50
+	signal.PriceMakingLow50 = currentPrice <= low50
+	if low50 > 0 {
+		signal.BoxHeight50 = (high50 - low50) / low50
+	}
+	if currentPrice > 0 {
+		signal.AtrPct = currentAtr / currentPrice
+	}
+
+	recoveryRatio := 0.0
+	if high50 > low50 {
+		recoveryRatio = (currentPrice - low50) / (high50 - low50)
+	}
+
+	isImpulsiveCross := false
+	if lastIdx >= 1 {
+		isImpulsiveCross = currentPrice > currentEma20 && klines[lastIdx-1].Close < currentEma20
+	}
+
+	isShortSqueeze := false
+	if lastIdx >= 1 {
+		isShortSqueeze = (currentPrice > klines[lastIdx-1].Close*config.ShortSqueezePriceThreshold) &&
+			(signal.OiChangePercent5 < config.ShortSqueezeOiThreshold)
+	}
 
 	switch {
-	case isEmaUp && isOiConfirmed:
-		// EMA 向上且 OI 确认
-		if fundingRate < fundingExtreme {
-			signal.RegimeClassification = "TRENDING_UP_STRONG"
-		} else {
-			signal.RegimeClassification = "TRENDING_UP_OVERHEATED"
-		}
-	case signal.PriceMakingHigh50 && (oiDroppingFast || signal.FundingRateExtreme):
-		// 价格新高但 OI 快速下降或资金费率极端
+	case signal.PriceMakingHigh50 && (signal.OiChangePercent5 < -config.OiGrowthThreshold || signal.FundingRateExtreme):
 		signal.RegimeClassification = "REVERSING_POTENTIAL_TOP"
-	case signal.BoxHeight50 < signal.AtrPct*3 && oiStable:
-		// 区间小且 OI 稳定
+
+	case isImpulsiveCross && recoveryRatio > config.RecoveryRatioThreshold:
+		if isShortSqueeze {
+			signal.RegimeClassification = "BULLISH_SHORT_SQUEEZE"
+		} else {
+			signal.RegimeClassification = "IMPULSIVE_RECOVERY"
+		}
+
+	case countUp >= config.TrendThreshold:
+		if fundingRate > config.FundingExtreme {
+			signal.RegimeClassification = "TRENDING_UP_OVERHEATED"
+		} else {
+			signal.RegimeClassification = "TRENDING_UP_STRONG"
+		}
+
+	case countDown >= config.TrendThreshold:
+		signal.RegimeClassification = "TRENDING_DOWN_STRONG"
+
+	case signal.PriceMakingLow50 && signal.AtrPct > config.CapitulationAtrThreshold:
+		signal.RegimeClassification = "CAPITULATION_BOTTOM"
+
+	case signal.BoxHeight50 < signal.AtrPct*4 && math.Abs(signal.OiChangePercent5) < config.OiGrowthThreshold:
 		signal.RegimeClassification = "RANGE_BOUND"
+
 	default:
-		// 其他情况为过渡状态
 		signal.RegimeClassification = "TRANSITIONAL"
 	}
 
@@ -225,11 +364,23 @@ func (s *InstitutionalRegimeSignal) FormatToText() string {
 	// 动力学因子
 	sb.WriteString(fmt.Sprintf("- EMA20 > EMA50 (last 20): %d/20\n", s.Ema20AboveEma50Count20))
 	sb.WriteString(fmt.Sprintf("- OI Change (5-period): %.2f%%\n", s.OiChangePercent5*100))
+	if s.PriceMakingLow50 {
+		sb.WriteString("- Price Making 50-period Low: Yes\n")
+	}
 
 	// 异常分析
 	anomalies := []string{}
 	if strings.Contains(s.RegimeClassification, "TRENDING_UP") && s.OiChangePercent5 < 0 {
 		anomalies = append(anomalies, "- 价格上涨但持仓量 (OI) 下降，暗示上涨动力来自【空头平仓】，而非新多头入场。")
+	}
+	if s.RegimeClassification == "BULLISH_SHORT_SQUEEZE" {
+		anomalies = append(anomalies, "- 检测到【轧空行情】：价格大涨 + 持仓量 (OI) 下降，空头正在平仓。注意：这种上涨可能快拉快跌，持续性较弱。")
+	}
+	if s.RegimeClassification == "IMPULSIVE_RECOVERY" {
+		anomalies = append(anomalies, "- 检测到【脉冲式修复】：价格快速收复 40% 以上的失地，可能预示 V 型反转，但需等待均线确认。")
+	}
+	if s.RegimeClassification == "CAPITULATION_BOTTOM" {
+		anomalies = append(anomalies, "- 检测到【恐慌探底】：价格创 50 周期新低 + 波动率 (ATR) 异常放大，可能是抄底机会。")
 	}
 	if s.FundingRateExtreme {
 		anomalies = append(anomalies, "- 资金费率过高，多头杠杆极度拥挤，注意【多杀多/闪崩】风险。")
@@ -313,6 +464,12 @@ func (s *InstitutionalRegimeSignal) GenerateLLMBriefing(symbol string, currentPr
 		sb.WriteString("当前为过热上涨状态，需警惕资金费率过高导致的回调风险。\n")
 	} else if strings.Contains(s.RegimeClassification, "RANGE_BOUND") {
 		sb.WriteString("当前为区间震荡状态，等待突破信号或区间边界交易机会。\n")
+	} else if s.RegimeClassification == "BULLISH_SHORT_SQUEEZE" {
+		sb.WriteString("当前为【轧空行情】，空头正在平仓推动价格上涨。请判断：这种上涨是否具有持续性？还是会快拉快跌？\n")
+	} else if s.RegimeClassification == "IMPULSIVE_RECOVERY" {
+		sb.WriteString("当前为【脉冲式修复】，价格快速收复失地。请判断：这是 V 型反转的开始，还是反弹后继续下跌？\n")
+	} else if s.RegimeClassification == "CAPITULATION_BOTTOM" {
+		sb.WriteString("当前为【恐慌探底】，恐慌盘正在抛售。请判断：这是否是抄底的好时机？还是会继续下跌？\n")
 	}
 
 	sb.WriteString("\n")
@@ -332,6 +489,16 @@ func (s *InstitutionalRegimeSignal) detectAnomalies(cvdSlope float64) []string {
 	// 检查：价格上涨但 OI 下降
 	if strings.Contains(s.RegimeClassification, "TRENDING_UP") && s.OiChangePercent5 < 0 {
 		anomalies = append(anomalies, "- 价格上涨但持仓量 (OI) 下降，暗示上涨动力来自【空头平仓】，而非新多头入场。")
+	}
+
+	if s.RegimeClassification == "BULLISH_SHORT_SQUEEZE" {
+		anomalies = append(anomalies, "- 检测到【轧空行情】：价格大涨 + 持仓量 (OI) 下降，空头正在平仓。注意：这种上涨可能快拉快跌，持续性较弱。")
+	}
+	if s.RegimeClassification == "IMPULSIVE_RECOVERY" {
+		anomalies = append(anomalies, "- 检测到【脉冲式修复】：价格快速收复 40% 以上的失地，可能预示 V 型反转，但需等待均线确认。")
+	}
+	if s.RegimeClassification == "CAPITULATION_BOTTOM" {
+		anomalies = append(anomalies, "- 检测到【恐慌探底】：价格创 50 周期新低 + 波动率 (ATR) 异常放大，可能是抄底机会。")
 	}
 
 	// 检查 CVD 背离（暂时跳过，预留接口）
