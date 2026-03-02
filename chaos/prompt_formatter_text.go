@@ -23,7 +23,7 @@ import (
 // TextFormatter 文本格式器
 // 将 MarketPromptData 格式化为文本格式
 type TextFormatter struct {
-	IncludeInstitutionalRegime bool // 是否包含机构分类器
+	IncludeRegime              bool // 是否包含 Regime 分类器
 	IncludeLLMBriefing         bool // 是否包含 LLM 简报
 }
 
@@ -85,7 +85,7 @@ func (f *TextFormatter) FormatMarketData(data *MarketPromptData, indicators stor
 	// =========================================================================
 	// 第三部分：附加数据（OI、资金费率、机构分类器、物理结构锚点）
 	// =========================================================================
-	if data.OpenInterest != nil || data.FundingRate != 0 || data.InstitutionalRegime != nil {
+	if data.OpenInterest != nil || data.FundingRate != 0 || data.Regime != nil {
 		sb.WriteString(fmt.Sprintf("Additional data for %s:\n\n", data.Symbol))
 
 		// 3.1 持仓量数据
@@ -99,9 +99,9 @@ func (f *TextFormatter) FormatMarketData(data *MarketPromptData, indicators stor
 			sb.WriteString(fmt.Sprintf("Funding Rate: %.2e\n\n", data.FundingRate))
 		}
 
-		// 3.3 机构市场状态分类器
-		if f.IncludeInstitutionalRegime && data.InstitutionalRegime != nil {
-			sb.WriteString(data.InstitutionalRegime.FormatToText())
+		// 3.3 Regime 分类器
+		if f.IncludeRegime && data.Regime != nil {
+			sb.WriteString(data.Regime.FormatToText())
 
 			// 3.3.1 LLM 战术简报
 			if f.IncludeLLMBriefing && data.LLMBriefing != "" {

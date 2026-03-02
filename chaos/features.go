@@ -52,7 +52,7 @@ type SwingPoint struct {
 
 // InstitutionalRegimeSignal 机构市场状态信号
 // 用于识别当前市场处于哪种机构主导状态
-type InstitutionalRegimeSignal struct {
+type RegimeSignal struct {
 	// 动力学因子
 	Ema20AboveEma50Count20 int     // 最近 20 根 K 线中 EMA20 高于 EMA50 的次数
 	OiChangePercent5       float64 // 近 5 周期持仓量（OI）变化百分比
@@ -69,6 +69,11 @@ type InstitutionalRegimeSignal struct {
 
 	// 状态分类
 	RegimeClassification string // 市场状态分类结果
+
+	// V4.1 新增字段：机构市场状态详情
+	RecoveryRatio    float64 // 收复比例（0.0-1.0）
+	IsShortSqueeze   bool    // 是否轧空行情
+	IsImpulsiveCross bool    // 是否脉冲交叉
 }
 
 // =============================================================================
@@ -124,7 +129,7 @@ func NewRegimeClassifierConfig_Conservative() *RegimeClassifierConfig {
 
 // NewRegimeClassifierConfig_Aggressive 创建激进配置（高覆盖率）
 // 适用于追求高频率、捕捉更多机会的策略
-func NewRegimeClassifierConfig_Aggressive() *RegimeClassifierConfig {
+func RegimeClassifierConfig_Aggressive() *RegimeClassifierConfig {
 	return &RegimeClassifierConfig{
 		OiGrowthThreshold:          0.03,   // 3%（降低，对更多 OI 变化有反应）
 		FundingExtreme:             0.0002, // 0.02%（降低）
@@ -139,13 +144,13 @@ func NewRegimeClassifierConfig_Aggressive() *RegimeClassifierConfig {
 // TechnicalFeatures 技术特征
 // 封装特征工程过程的所有结果
 type TechnicalFeatures struct {
-	SwingPoints         []SwingPoint               // 摆动点列表
-	Trend               string                     // 基于拓扑结构的简单趋势描述
-	InstitutionalRegime *InstitutionalRegimeSignal // 机构市场状态信号
+	SwingPoints []SwingPoint  // 摆动点列表
+	Trend       string        // 基于拓扑结构的简单趋势描述
+	Regime      *RegimeSignal // 机构市场状态信号
 }
 
 // =============================================================================
-// 机构市场状态信号生成
+// Regime 分类器
 // =============================================================================
 
 // getPriceRange 获取指定周期内的价格区间
@@ -166,7 +171,7 @@ func getPriceRange(klines []market.KlineBar, period int) (float64, float64) {
 	return h, l
 }
 
-// GenerateInstitutionalRegimeSignal 计算机构市场状态信号（使用默认平衡配置）
+// GenerateRegimeSignal 计算 Regime 分类器信号（使用默认平衡配置）
 //
 // 参数说明：
 //   - klines: K 线数据列表
@@ -190,7 +195,7 @@ func getPriceRange(klines []market.KlineBar, period int) (float64, float64) {
 //   - CAPITULATION_BOTTOM：恐慌探底
 //   - RANGE_BOUND：震荡区间
 //   - TRANSITIONAL：过渡状态
-func GenerateInstitutionalRegimeSignal(
+func GenerateRegimeSignal(
 	klines []market.KlineBar,
 	ema20Values []float64,
 	ema50Values []float64,
@@ -198,8 +203,8 @@ func GenerateInstitutionalRegimeSignal(
 	oiLatest float64,
 	oiAverage float64,
 	fundingRate float64,
-) *InstitutionalRegimeSignal {
-	return GenerateInstitutionalRegimeSignalWithConfig(
+) *RegimeSignal {
+	return GenerateRegimeSignalWithConfig(
 		klines,
 		ema20Values,
 		ema50Values,
@@ -211,7 +216,7 @@ func GenerateInstitutionalRegimeSignal(
 	)
 }
 
-// GenerateInstitutionalRegimeSignalWithConfig 计算机构市场状态信号（使用自定义配置）
+// GenerateRegimeSignalWithConfig 计算 Regime 分类器信号（使用自定义配置）
 //
 // 参数说明：
 //   - klines: K 线数据列表
@@ -224,8 +229,8 @@ func GenerateInstitutionalRegimeSignal(
 //   - config: 分类器配置（如果为 nil，使用默认平衡配置）
 //
 // 返回值：
-//   - 机构市场状态信号对象
-func GenerateInstitutionalRegimeSignalWithConfig(
+//   - Regime 分类器信号对象
+func GenerateRegimeSignalWithConfig(
 	klines []market.KlineBar,
 	ema20Values []float64,
 	ema50Values []float64,
@@ -234,12 +239,12 @@ func GenerateInstitutionalRegimeSignalWithConfig(
 	oiAverage float64,
 	fundingRate float64,
 	config *RegimeClassifierConfig,
-) *InstitutionalRegimeSignal {
+) *RegimeSignal {
 	if config == nil {
 		config = NewRegimeClassifierConfig_Balanced()
 	}
 
-	signal := &InstitutionalRegimeSignal{
+	signal := &RegimeSignal{
 		FundingRate: fundingRate,
 	}
 
@@ -295,17 +300,20 @@ func GenerateInstitutionalRegimeSignalWithConfig(
 	if high50 > low50 {
 		recoveryRatio = (currentPrice - low50) / (high50 - low50)
 	}
+	signal.RecoveryRatio = recoveryRatio
 
 	isImpulsiveCross := false
 	if lastIdx >= 1 {
 		isImpulsiveCross = currentPrice > currentEma20 && klines[lastIdx-1].Close < currentEma20
 	}
+	signal.IsImpulsiveCross = isImpulsiveCross
 
 	isShortSqueeze := false
 	if lastIdx >= 1 {
 		isShortSqueeze = (currentPrice > klines[lastIdx-1].Close*config.ShortSqueezePriceThreshold) &&
 			(signal.OiChangePercent5 < config.ShortSqueezeOiThreshold)
 	}
+	signal.IsShortSqueeze = isShortSqueeze
 
 	switch {
 	case signal.PriceMakingHigh50 && (signal.OiChangePercent5 < -config.OiGrowthThreshold || signal.FundingRateExtreme):
@@ -348,15 +356,15 @@ func GenerateInstitutionalRegimeSignalWithConfig(
 // FormatToText 格式化机构市场状态信号为文本（简洁版）
 //
 // 返回值：
-//   - 简洁的机构市场状态信号文本，适合放在 LLM
-func (s *InstitutionalRegimeSignal) FormatToText() string {
+//   - 简洁的 Regime 分类器信号文本，适合放在 LLM
+func (s *RegimeSignal) FormatToText() string {
 	if s == nil {
 		return ""
 	}
 
 	var sb strings.Builder
 
-	sb.WriteString("### Institutional Regime Classifier:\n")
+	sb.WriteString("### Regime Classifier:\n")
 
 	// 分类结果
 	sb.WriteString(fmt.Sprintf("- Regime: %s\n", s.RegimeClassification))
@@ -364,8 +372,18 @@ func (s *InstitutionalRegimeSignal) FormatToText() string {
 	// 动力学因子
 	sb.WriteString(fmt.Sprintf("- EMA20 > EMA50 (last 20): %d/20\n", s.Ema20AboveEma50Count20))
 	sb.WriteString(fmt.Sprintf("- OI Change (5-period): %.2f%%\n", s.OiChangePercent5*100))
+
+	// V4.1 机构市场状态详情
+	sb.WriteString(fmt.Sprintf("- Recovery Ratio: %.2f\n", s.RecoveryRatio))
+	sb.WriteString(fmt.Sprintf("- Is Short Squeeze: %v\n", s.IsShortSqueeze))
+	sb.WriteString(fmt.Sprintf("- Is Impulsive Cross: %v\n", s.IsImpulsiveCross))
+
+	// 价格结构
 	if s.PriceMakingLow50 {
 		sb.WriteString("- Price Making 50-period Low: Yes\n")
+	}
+	if s.PriceMakingHigh50 {
+		sb.WriteString("- Price Making 50-period High: Yes\n")
 	}
 
 	// 异常分析
@@ -415,7 +433,7 @@ func (s *InstitutionalRegimeSignal) FormatToText() string {
 //  1. 核心观测数据：价格、OI 变化、CVD 趋势、资金费率
 //  2. 算法诊断：分类结果和异常分析
 //  3. 复核需求：引导 LLM 进一步思考
-func (s *InstitutionalRegimeSignal) GenerateLLMBriefing(symbol string, currentPrice float64, cvdSlope float64) string {
+func (s *RegimeSignal) GenerateLLMBriefing(symbol string, currentPrice float64, cvdSlope float64) string {
 	if s == nil {
 		return ""
 	}
@@ -483,7 +501,7 @@ func (s *InstitutionalRegimeSignal) GenerateLLMBriefing(symbol string, currentPr
 //
 // 返回值：
 //   - 异常描述字符串列表
-func (s *InstitutionalRegimeSignal) detectAnomalies(cvdSlope float64) []string {
+func (s *RegimeSignal) detectAnomalies(cvdSlope float64) []string {
 	anomalies := []string{}
 
 	// 检查：价格上涨但 OI 下降

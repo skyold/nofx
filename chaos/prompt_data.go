@@ -19,22 +19,30 @@ import (
 // MarketPromptData 市场提示词数据
 // 包含所有可能需要的市场相关信息，由 Builder 填充，由 Formatter 格式化
 type MarketPromptData struct {
-	// 基础价格数据
-	Symbol        string
-	CurrentPrice  float64
-	LocalSupport  float64
+	// =========================================================================
+	// 第一部分：基础价格数据（在 Prompt 开头使用）
+	// =========================================================================
+	Symbol       string
+	CurrentPrice float64
+
+	// =========================================================================
+	// 第二部分：局部支撑位和日内低点（紧随基础价格）
+	// =========================================================================
+	LocalSupport     float64
 	LocalSupportTime int64
-	DailyLow      float64
-	FundingRate   float64
+	DailyLow         float64
 
-	// 时间周期数据
-	Timeframes map[string]*TimeframeData // 多时间周期数据
-
+	// =========================================================================
+	// 第三部分：附加数据（OI、资金费率、机构分类器、物理结构锚点）
+	// =========================================================================
 	// 持仓量数据
 	OpenInterest *OpenInterestData
 
-	// 机构市场状态分类器数据（可选，由 EnhancedBuilder 填充）
-	InstitutionalRegime *InstitutionalRegimeSignal
+	// 资金费率
+	FundingRate float64
+
+	// Regime 分类器数据（可选，由 EnhancedBuilder 填充）
+	Regime *RegimeSignal
 
 	// LLM 战术简报（可选，由 EnhancedBuilder 填充）
 	LLMBriefing string
@@ -42,13 +50,22 @@ type MarketPromptData struct {
 	// 物理结构锚点（摆动点等）
 	SwingFeatures *TechnicalFeatures
 
-	// 主要区间边界
+	// =========================================================================
+	// 第四部分：多时间周期数据（K 线和技术指标）
+	// =========================================================================
+	Timeframes map[string]*TimeframeData // 多时间周期数据
+
+	// =========================================================================
+	// 第五部分：主要区间边界和测试次数
+	// =========================================================================
 	MajorSupport    float64
 	MajorResistance float64
 	SupportTests    int
 	ResistanceTests int
 
-	// 动态参考
+	// =========================================================================
+	// 第六部分：动态参考
+	// =========================================================================
 	DynamicReferences []string
 }
 
@@ -79,12 +96,12 @@ type OpenInterestData struct {
 
 // AccountPromptData 账户提示词数据
 type AccountPromptData struct {
-	TotalEquity        float64
-	AvailableBalance   float64
-	TotalPnLPct        float64
-	MarginUsedPct      float64
-	PositionCount      int
-	BalancePercent     float64
+	TotalEquity      float64
+	AvailableBalance float64
+	TotalPnLPct      float64
+	MarginUsedPct    float64
+	PositionCount    int
+	BalancePercent   float64
 }
 
 // PositionPromptData 持仓提示词数据
@@ -128,7 +145,7 @@ type FlowData struct {
 
 // OIData 持仓量变化数据
 type OIData struct {
-	Delta       map[string]float64 // 时间周期 -> OI 变化值
+	Delta        map[string]float64 // 时间周期 -> OI 变化值
 	DeltaPercent map[string]float64 // 时间周期 -> OI 变化百分比
 }
 
@@ -192,14 +209,14 @@ type TradingStatsData struct {
 
 // RecentTradeData 最近交易数据
 type RecentTradeData struct {
-	Symbol        string
-	Side          string
-	EntryPrice    float64
-	ExitPrice     float64
-	ResultStr     string // "Profit" or "Loss"
-	RealizedPnL   float64
-	PnLPct        float64
-	EntryTime     string
-	ExitTime      string
-	HoldDuration  string
+	Symbol       string
+	Side         string
+	EntryPrice   float64
+	ExitPrice    float64
+	ResultStr    string // "Profit" or "Loss"
+	RealizedPnL  float64
+	PnLPct       float64
+	EntryTime    string
+	ExitTime     string
+	HoldDuration string
 }

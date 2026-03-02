@@ -177,8 +177,8 @@ func (b *EnhancedBuilder) BuildMarketData(symbol string, data *market.Data, indi
 	// 先构建基础数据
 	result := b.BasicBuilder.BuildMarketData(symbol, data, indicators)
 
-	// 添加机构市场状态分类器
-	b.buildInstitutionalRegime(result, data, indicators)
+	// 添加 Regime 分类器
+	b.buildRegime(result, data, indicators)
 
 	// 生成 LLM 战术简报
 	b.buildLLMBriefing(result, symbol)
@@ -186,8 +186,8 @@ func (b *EnhancedBuilder) BuildMarketData(symbol string, data *market.Data, indi
 	return result
 }
 
-// buildInstitutionalRegime 构建机构市场状态分类器
-func (b *EnhancedBuilder) buildInstitutionalRegime(result *MarketPromptData, data *market.Data, indicators store.IndicatorConfig) {
+// buildRegime 构建 Regime 分类器
+func (b *EnhancedBuilder) buildRegime(result *MarketPromptData, data *market.Data, indicators store.IndicatorConfig) {
 	// 确定主要时间周期
 	var mainTf string
 	if _, ok := data.TimeframeData["1h"]; ok {
@@ -208,7 +208,7 @@ func (b *EnhancedBuilder) buildInstitutionalRegime(result *MarketPromptData, dat
 		oiAverage = data.OpenInterest.Average
 	}
 
-	regimeSignal := GenerateInstitutionalRegimeSignal(
+	regimeSignal := GenerateRegimeSignal(
 		tfData.Klines,
 		tfData.EMA20Values,
 		tfData.EMA50Values,
@@ -218,15 +218,15 @@ func (b *EnhancedBuilder) buildInstitutionalRegime(result *MarketPromptData, dat
 		data.FundingRate,
 	)
 
-	result.InstitutionalRegime = regimeSignal
+	result.Regime = regimeSignal
 }
 
 // buildLLMBriefing 生成 LLM 战术简报
 func (b *EnhancedBuilder) buildLLMBriefing(result *MarketPromptData, symbol string) {
-	if result.InstitutionalRegime == nil {
+	if result.Regime == nil {
 		return
 	}
 
 	cvdSlope := 0.0 // 暂时跳过 CVD，预留接口
-	result.LLMBriefing = result.InstitutionalRegime.GenerateLLMBriefing(symbol, result.CurrentPrice, cvdSlope)
+	result.LLMBriefing = result.Regime.GenerateLLMBriefing(symbol, result.CurrentPrice, cvdSlope)
 }

@@ -51,7 +51,7 @@ func (m *Manager) formatMarketDataV2(data *market.Data, indicators store.Indicat
 
 	// Formatter: 格式化为文本（包含机构分类器和 LLM 简报）
 	formatter := &TextFormatter{
-		IncludeInstitutionalRegime: true,
+		IncludeRegime:              true,
 		IncludeLLMBriefing:         true,
 	}
 	return formatter.FormatMarketData(promptData, indicators)
