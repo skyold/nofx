@@ -46,18 +46,18 @@ func (t *FuturesTrader) SyncOrdersFromBinance(traderID string, exchangeID string
 			} else {
 				// Add 1 second buffer to avoid re-fetching the same fill
 				lastSyncTimeMs = lastFillTimeMs + 1000
-				logger.Infof("📅 Recovered last sync time from DB: %s (UTC)",
+				logger.Debugf("📅 Recovered last sync time from DB: %s (UTC)",
 					time.UnixMilli(lastSyncTimeMs).UTC().Format("2006-01-02 15:04:05"))
 			}
 		} else {
 			// First sync: go back 24 hours
 			lastSyncTimeMs = nowMs - 24*60*60*1000
-			logger.Infof("📅 First sync, starting from 24 hours ago: %s (UTC)",
+			logger.Debugf("📅 First sync, starting from 24 hours ago: %s (UTC)",
 				time.UnixMilli(lastSyncTimeMs).UTC().Format("2006-01-02 15:04:05"))
 		}
 	}
 
-	logger.Infof("🔄 Syncing Binance trades from: %s (UTC) [ms: %d, now: %d]",
+	logger.Debugf("🔄 Syncing Binance trades from: %s (UTC) [ms: %d, now: %d]",
 		time.UnixMilli(lastSyncTimeMs).UTC().Format("2006-01-02 15:04:05"), lastSyncTimeMs, nowMs)
 
 	// Step 1: Get max trade IDs from local DB for incremental sync
@@ -130,7 +130,7 @@ func (t *FuturesTrader) SyncOrdersFromBinance(traderID string, exchangeID string
 		return nil
 	}
 
-	logger.Infof("📊 Found %d symbols with new trades: %v", len(changedSymbols), changedSymbols)
+	logger.Debugf("📊 Found %d symbols with new trades: %v", len(changedSymbols), changedSymbols)
 
 	// Step 3: Query trades for changed symbols using fromId (incremental) or time-based (new symbols)
 	var allTrades []types.TradeRecord
@@ -157,7 +157,7 @@ func (t *FuturesTrader) SyncOrdersFromBinance(traderID string, exchangeID string
 		allTrades = append(allTrades, trades...)
 	}
 
-	logger.Infof("📥 Received %d trades from Binance (%d API calls)", len(allTrades), apiCalls)
+	logger.Debugf("📥 Received %d trades from Binance (%d API calls)", len(allTrades), apiCalls)
 
 	if len(allTrades) == 0 {
 		// No trades returned, but symbols were detected - might be false positive from COMMISSION/PnL detection

@@ -438,7 +438,7 @@ func (tm *TraderManager) LoadUserTradersFromStore(st *store.Store, userID string
 		return fmt.Errorf("failed to get trader list for user %s: %w", userID, err)
 	}
 
-	logger.Infof("📋 Loading trader configurations for user %s: %d traders", userID, len(traders))
+	logger.Debugf("📋 Loading trader configurations for user %s: %d traders", userID, len(traders))
 
 	// Get AI model and exchange lists (query only once outside loop)
 	aiModels, err := st.AIModel().List(userID)

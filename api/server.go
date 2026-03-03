@@ -1664,7 +1664,7 @@ func (s *Server) handleUpdateModelConfigs(c *gin.Context) {
 // handleGetExchangeConfigs Get exchange configurations
 func (s *Server) handleGetExchangeConfigs(c *gin.Context) {
 	userID := c.GetString("user_id")
-	logger.Infof("🔍 Querying exchange configs for user %s", userID)
+	logger.Debugf("🔍 Querying exchange configs for user %s", userID)
 	exchanges, err := s.store.Exchange().List(userID)
 	if err != nil {
 		SafeInternalError(c, "Failed to get exchange configs", err)
@@ -1678,7 +1678,7 @@ func (s *Server) handleGetExchangeConfigs(c *gin.Context) {
 		return
 	}
 
-	logger.Infof("✅ Found %d exchange configs", len(exchanges))
+	logger.Debugf("✅ Found %d exchange configs", len(exchanges))
 
 	// Convert to safe response structure, remove sensitive information
 	safeExchanges := make([]SafeExchangeConfig, len(exchanges))
@@ -2066,14 +2066,14 @@ func (s *Server) handleAccount(c *gin.Context) {
 		return
 	}
 
-	logger.Infof("📊 Received account info request [%s]", trader.GetName())
+	logger.Debugf("📊 Received account info request [%s]", trader.GetName())
 	account, err := trader.GetAccountInfo()
 	if err != nil {
 		SafeInternalError(c, "Get account info", err)
 		return
 	}
 
-	logger.Infof("✓ Returning account info [%s]: equity=%.2f, available=%.2f, pnl=%.2f (%.2f%%)",
+	logger.Debugf("✓ Returning account info [%s]: equity=%.2f, available=%.2f, pnl=%.2f (%.2f%%)",
 		trader.GetName(),
 		account["total_equity"],
 		account["available_balance"],
