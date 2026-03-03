@@ -274,11 +274,16 @@ func GetWithExchange(symbol, exchange string) (*Data, error) {
 		}
 	}
 
-	// Get OI data (using legacy method for backward compatibility)
-	oiData, err := GetOpenInterestData(symbol)
+	// Get OI data with historical data (1h period, 5 bars for Regime classifier)
+	oiData, err := GetOpenInterestDataByPeriod(symbol, "1h", 5)
 	if err != nil {
-		// OI failure doesn't affect overall result, use default values
-		oiData = &OIData{Latest: 0, Before5Period: 0, Average: 0}
+		logger.Warnf("⚠️ Failed to get OI history for %s: %v, using legacy method", symbol, err)
+		// Fallback to legacy method
+		oiData, err = GetOpenInterestData(symbol)
+		if err != nil {
+			// OI failure doesn't affect overall result, use default values
+			oiData = &OIData{Latest: 0, Before5Period: 0, Average: 0}
+		}
 	}
 
 	// Get Funding Rate
@@ -408,11 +413,16 @@ func GetWithTimeframes(symbol string, timeframes []string, primaryTimeframe stri
 		}
 	}
 
-	// Get OI data (using legacy method for backward compatibility)
-	oiData, err := GetOpenInterestData(symbol)
+	// Get OI data with historical data (1h period, 5 bars for Regime classifier)
+	oiData, err := GetOpenInterestDataByPeriod(symbol, "1h", 5)
 	if err != nil {
-		logger.Warnf("⚠️ Failed to get Open Interest for %s: %v", symbol, err)
-		oiData = &OIData{Latest: 0, Before5Period: 0, Average: 0}
+		logger.Warnf("⚠️ Failed to get OI history for %s: %v, using legacy method", symbol, err)
+		// Fallback to legacy method
+		oiData, err = GetOpenInterestData(symbol)
+		if err != nil {
+			logger.Warnf("⚠️ Failed to get OI for %s: %v", symbol, err)
+			oiData = &OIData{Latest: 0, Before5Period: 0, Average: 0}
+		}
 	}
 
 	// Get Funding Rate
