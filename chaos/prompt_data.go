@@ -86,8 +86,9 @@ type TimeframeData struct {
 
 // OpenInterestData 持仓量数据
 type OpenInterestData struct {
-	Latest  float64
-	Average float64
+	Latest        float64 // 最新持仓量（BTC 数量）
+	Before5Period float64 // 5 周期前的持仓量
+	Average       float64 // 平均持仓量（5 周期简单平均）
 }
 
 // ============================================================================

@@ -10,6 +10,7 @@
 package chaos
 
 import (
+	"nofx/logger"
 	"nofx/market"
 	"nofx/store"
 )
@@ -36,20 +37,33 @@ type BasicBuilder struct {
 // BuildMarketData 构建基础市场数据
 func (b *BasicBuilder) BuildMarketData(symbol string, data *market.Data, indicators store.IndicatorConfig) *MarketPromptData {
 	result := &MarketPromptData{
-		Symbol:        symbol,
-		CurrentPrice:  data.CurrentPrice,
-		LocalSupport:  data.LocalSupport,
+		Symbol:           symbol,
+		CurrentPrice:     data.CurrentPrice,
+		LocalSupport:     data.LocalSupport,
 		LocalSupportTime: data.LocalSupportTime,
-		DailyLow:      data.DailyLow,
-		FundingRate:   data.FundingRate,
-		Timeframes:    make(map[string]*TimeframeData),
+		DailyLow:         data.DailyLow,
+		FundingRate:      data.FundingRate,
+		Timeframes:       make(map[string]*TimeframeData),
+	}
+
+	// 获取 OI 历史数据（使用 1 小时周期，与 Regime 的 EMA 时间尺度匹配）
+	oiData, err := market.GetOpenInterestDataByPeriod(symbol, "1h", 5)
+	if err != nil {
+		logger.Warnf("⚠️ Failed to get OI history for %s: %v, using legacy method", symbol, err)
+		// Fallback to legacy method
+		oiData, err = market.GetOpenInterestData(symbol)
+		if err != nil {
+			logger.Warnf("⚠️ Failed to get OI for %s: %v", symbol, err)
+			oiData = &market.OIData{Latest: 0, Before5Period: 0, Average: 0}
+		}
 	}
 
 	// 构建持仓量数据
-	if data.OpenInterest != nil {
+	if oiData != nil {
 		result.OpenInterest = &OpenInterestData{
-			Latest:  data.OpenInterest.Latest,
-			Average: data.OpenInterest.Average,
+			Latest:        oiData.Latest,
+			Before5Period: oiData.Before5Period,
+			Average:       oiData.Average,
 		}
 	}
 
@@ -186,7 +200,7 @@ func (b *EnhancedBuilder) BuildMarketData(symbol string, data *market.Data, indi
 	return result
 }
 
-// buildRegime 构建 Regime 分类器
+// buildRegime 构建 Regime 分类器（带结构冲突检测）
 func (b *EnhancedBuilder) buildRegime(result *MarketPromptData, data *market.Data, indicators store.IndicatorConfig) {
 	// 确定主要时间周期
 	var mainTf string
@@ -202,20 +216,30 @@ func (b *EnhancedBuilder) buildRegime(result *MarketPromptData, data *market.Dat
 
 	tfData := data.TimeframeData[mainTf]
 	oiLatest := 0.0
+	oiBefore5Period := 0.0
 	oiAverage := 0.0
 	if data.OpenInterest != nil {
 		oiLatest = data.OpenInterest.Latest
+		oiBefore5Period = data.OpenInterest.Before5Period
 		oiAverage = data.OpenInterest.Average
 	}
 
-	regimeSignal := GenerateRegimeSignal(
+	// 获取摆动点拓扑趋势（用于结构冲突检测）
+	swingFeatures := GenerateTechnicalFeatures(tfData.Klines, swingWindowSize)
+	swingTrend := swingFeatures.Trend
+
+	// 使用自定义配置调用，传入 swingTrend 以检测结构冲突
+	regimeSignal := GenerateRegimeSignalWithConfig(
 		tfData.Klines,
 		tfData.EMA20Values,
 		tfData.EMA50Values,
 		tfData.ATR14Values,
 		oiLatest,
+		oiBefore5Period,
 		oiAverage,
 		data.FundingRate,
+		NewRegimeClassifierConfig_Balanced(),
+		swingTrend,
 	)
 
 	result.Regime = regimeSignal

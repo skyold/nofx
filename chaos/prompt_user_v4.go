@@ -640,8 +640,8 @@ func (m *Manager) buildV4PositioningSignals(md *market.Data) V4PositioningSignal
 
 	if md.OpenInterest != nil {
 		signals.OiValue = md.OpenInterest.Latest
-		if md.OpenInterest.Average > 0 {
-			signals.OiChangePercent = roundFloat((md.OpenInterest.Latest-md.OpenInterest.Average)/md.OpenInterest.Average*100, 2)
+		if md.OpenInterest.Before5Period > 0 {
+			signals.OiChangePercent = roundFloat((md.OpenInterest.Latest-md.OpenInterest.Before5Period)/md.OpenInterest.Before5Period*100, 2)
 		}
 	}
 

@@ -274,11 +274,11 @@ func GetWithExchange(symbol, exchange string) (*Data, error) {
 		}
 	}
 
-	// Get OI data
-	oiData, err := getOpenInterestData(symbol)
+	// Get OI data (using legacy method for backward compatibility)
+	oiData, err := GetOpenInterestData(symbol)
 	if err != nil {
 		// OI failure doesn't affect overall result, use default values
-		oiData = &OIData{Latest: 0, Average: 0}
+		oiData = &OIData{Latest: 0, Before5Period: 0, Average: 0}
 	}
 
 	// Get Funding Rate
@@ -408,11 +408,11 @@ func GetWithTimeframes(symbol string, timeframes []string, primaryTimeframe stri
 		}
 	}
 
-	// Get OI data
-	oiData, err := getOpenInterestData(symbol)
+	// Get OI data (using legacy method for backward compatibility)
+	oiData, err := GetOpenInterestData(symbol)
 	if err != nil {
 		logger.Warnf("⚠️ Failed to get Open Interest for %s: %v", symbol, err)
-		oiData = &OIData{Latest: 0, Average: 0}
+		oiData = &OIData{Latest: 0, Before5Period: 0, Average: 0}
 	}
 
 	// Get Funding Rate
@@ -973,8 +973,10 @@ func calculateLongerTermData(klines []Kline) *LongerTermData {
 	return data
 }
 
-// getOpenInterestData retrieves OI data
-func getOpenInterestData(symbol string) (*OIData, error) {
+// GetOpenInterestData retrieves OI data (legacy version for backward compatibility)
+// 使用 /fapi/v1/openInterest 端点获取当前最新 OI
+// 注意：此版本只返回单个 OI 值，Before5Period 和 Average 都设置为 Latest
+func GetOpenInterestData(symbol string) (*OIData, error) {
 	url := fmt.Sprintf("https://fapi.binance.com/fapi/v1/openInterest?symbol=%s", symbol)
 
 	apiClient := NewAPIClient()
@@ -1012,9 +1014,101 @@ func getOpenInterestData(symbol string) (*OIData, error) {
 		return nil, fmt.Errorf("failed to parse OpenInterest: %v", err)
 	}
 
+	// 向后兼容：Before5Period 和 Average 都设置为 Latest
 	return &OIData{
-		Latest:  oi,
-		Average: oi * 0.999, // Approximate average
+		Latest:        oi,
+		Before5Period: oi, // 没有历史数据，设置为相同值
+		Average:       oi, // 没有历史数据，设置为相同值
+	}, nil
+}
+
+// GetOpenInterestDataByPeriod retrieves OI data with historical data for a specific period
+// 使用 /futures/data/openInterestHist 端点获取 OI 历史数据
+//
+// 参数说明：
+//   - symbol: 交易对名称（如 BTCUSDT）
+//   - period: 时间周期（5m, 15m, 30m, 1h, 2h, 4h），默认 "1h"
+//   - limit: 返回数量（默认 5，最大 500）
+//
+// 返回值：
+//   - Latest: 最新持仓量（最后一个元素）
+//   - Before5Period: 5 周期前的持仓量（第一个元素）
+//   - Average: 5 周期简单平均值
+func GetOpenInterestDataByPeriod(symbol string, period string, limit int) (*OIData, error) {
+	// 默认参数
+	if period == "" {
+		period = "1h" // 默认 1 小时，与 Regime 的 EMA 时间尺度匹配
+	}
+	if limit <= 0 {
+		limit = 5 // 默认 5 个周期
+	}
+
+	// Get OI history from Binance API
+	url := fmt.Sprintf("https://fapi.binance.com/futures/data/openInterestHist?symbol=%s&period=%s&limit=%d", symbol, period, limit)
+
+	apiClient := NewAPIClient()
+	resp, err := apiClient.client.Get(url)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("API returned status %d", resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	// Binance OI history response format: array of {sumOpenInterest, symbol, timestamp}
+	var oiHistory []struct {
+		Symbol               string `json:"symbol"`
+		SumOpenInterest      string `json:"sumOpenInterest"`      // BTC 数量
+		SumOpenInterestValue string `json:"sumOpenInterestValue"` // USDT 价值
+		Timestamp            int64  `json:"timestamp"`
+	}
+
+	if err := json.Unmarshal(body, &oiHistory); err != nil {
+		return nil, err
+	}
+
+	if len(oiHistory) == 0 {
+		return nil, fmt.Errorf("empty OI history response")
+	}
+
+	// Latest = most recent OI (last element)
+	oiLatest, err := strconv.ParseFloat(oiHistory[len(oiHistory)-1].SumOpenInterest, 64)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse latest OI: %v", err)
+	}
+
+	// Before5Period = first element (oldest in the returned data)
+	// 如果数据不足 5 个，使用第一个可用的值
+	oiBefore5 := oiLatest
+	if len(oiHistory) >= 5 {
+		oiBefore5, err = strconv.ParseFloat(oiHistory[0].SumOpenInterest, 64)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse OI 5 periods ago: %v", err)
+		}
+	}
+
+	// Average = calculate from all returned periods (simple average)
+	sum := 0.0
+	for i := 0; i < len(oiHistory); i++ {
+		oi, err := strconv.ParseFloat(oiHistory[i].SumOpenInterest, 64)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse OI for average: %v", err)
+		}
+		sum += oi
+	}
+	oiAverage := sum / float64(len(oiHistory))
+
+	return &OIData{
+		Latest:        oiLatest,
+		Before5Period: oiBefore5,
+		Average:       oiAverage,
 	}, nil
 }
 
@@ -1123,9 +1217,9 @@ func Format(data *Data) string {
 	if data.OpenInterest != nil {
 		// Format OI data with dynamic precision
 		oiLatestStr := formatPriceWithDynamicPrecision(data.OpenInterest.Latest)
-		oiAverageStr := formatPriceWithDynamicPrecision(data.OpenInterest.Average)
-		sb.WriteString(fmt.Sprintf("Open Interest: Latest: %s Average: %s\n\n",
-			oiLatestStr, oiAverageStr))
+		oiBefore5Str := formatPriceWithDynamicPrecision(data.OpenInterest.Before5Period)
+		sb.WriteString(fmt.Sprintf("Open Interest: Latest: %s 5-Period-Ago: %s\n\n",
+			oiLatestStr, oiBefore5Str))
 	}
 
 	sb.WriteString(fmt.Sprintf("Funding Rate: %.2e\n\n", data.FundingRate))
@@ -1449,7 +1543,7 @@ func BuildDataFromKlines(symbol string, primary []Kline, longer []Kline) (*Data,
 		DailyLow:          dailyLow,
 		PriceChange1h:     priceChangeFromSeries(primary, time.Hour),
 		PriceChange4h:     priceChangeFromSeries(primary, 4*time.Hour),
-		OpenInterest:      &OIData{Latest: 0, Average: 0},
+		OpenInterest:      &OIData{Latest: 0, Before5Period: 0},
 		FundingRate:       0,
 		IntradaySeries:    calculateIntradaySeries(primary),
 		LongerTermContext: nil,

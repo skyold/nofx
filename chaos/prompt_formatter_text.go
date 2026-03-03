@@ -23,8 +23,8 @@ import (
 // TextFormatter 文本格式器
 // 将 MarketPromptData 格式化为文本格式
 type TextFormatter struct {
-	IncludeRegime              bool // 是否包含 Regime 分类器
-	IncludeLLMBriefing         bool // 是否包含 LLM 简报
+	IncludeRegime      bool // 是否包含 Regime 分类器
+	IncludeLLMBriefing bool // 是否包含 LLM 简报
 }
 
 // FormatMarketData 格式化市场数据为文本
@@ -90,8 +90,8 @@ func (f *TextFormatter) FormatMarketData(data *MarketPromptData, indicators stor
 
 		// 3.1 持仓量数据
 		if data.OpenInterest != nil {
-			sb.WriteString(fmt.Sprintf("Open Interest: Latest: %.2f Average: %.2f\n\n",
-				data.OpenInterest.Latest, data.OpenInterest.Average))
+			sb.WriteString(fmt.Sprintf("Open Interest: Latest: %.2f 5-Period-Ago: %.2f\n\n",
+				data.OpenInterest.Latest, data.OpenInterest.Before5Period))
 		}
 
 		// 3.2 资金费率

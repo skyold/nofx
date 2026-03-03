@@ -64,8 +64,9 @@ type RegimeSignal struct {
 	BoxHeight50       float64 // 50 周期价格区间高度（相对百分比）
 
 	// 衍生品状态
-	FundingRate        float64 // 资金费率
-	FundingRateExtreme bool    // 资金费率是否极端（超过阈值）
+	FundingRate               float64 // 资金费率
+	FundingRateExtreme        bool    // 资金费率是否极端正值（多头过热，> FundingExtreme）
+	FundingRateExtremeBearish bool    // 资金费率是否极端负值（空头过热，< -FundingExtreme）
 
 	// 状态分类
 	RegimeClassification string // 市场状态分类结果
@@ -74,6 +75,10 @@ type RegimeSignal struct {
 	RecoveryRatio    float64 // 收复比例（0.0-1.0）
 	IsShortSqueeze   bool    // 是否轧空行情
 	IsImpulsiveCross bool    // 是否脉冲交叉
+
+	// V4.2 新增字段：结构冲突检测
+	StructureConflict     bool   // EMA 趋势与价格结构方向相反
+	StructureConflictDesc string // 冲突描述，如"EMA 显示多头但价格结构为 LH+LL"
 }
 
 // =============================================================================
@@ -129,7 +134,7 @@ func NewRegimeClassifierConfig_Conservative() *RegimeClassifierConfig {
 
 // NewRegimeClassifierConfig_Aggressive 创建激进配置（高覆盖率）
 // 适用于追求高频率、捕捉更多机会的策略
-func RegimeClassifierConfig_Aggressive() *RegimeClassifierConfig {
+func NewRegimeClassifierConfig_Aggressive() *RegimeClassifierConfig {
 	return &RegimeClassifierConfig{
 		OiGrowthThreshold:          0.03,   // 3%（降低，对更多 OI 变化有反应）
 		FundingExtreme:             0.0002, // 0.02%（降低）
@@ -179,7 +184,8 @@ func getPriceRange(klines []market.KlineBar, period int) (float64, float64) {
 //   - ema50Values: EMA50 指标值列表
 //   - atr14Values: ATR14 指标值列表
 //   - oiLatest: 最新持仓量（OI）
-//   - oiAverage: 平均持仓量（OI）
+//   - oiBefore5Period: 5 周期前的持仓量（用于计算变化率）
+//   - oiAverage: 平均持仓量（用于参考，可以是长期均值或其他计算方式）
 //   - fundingRate: 当前资金费率
 //
 // 返回值：
@@ -201,6 +207,7 @@ func GenerateRegimeSignal(
 	ema50Values []float64,
 	atr14Values []float64,
 	oiLatest float64,
+	oiBefore5Period float64,
 	oiAverage float64,
 	fundingRate float64,
 ) *RegimeSignal {
@@ -210,9 +217,11 @@ func GenerateRegimeSignal(
 		ema50Values,
 		atr14Values,
 		oiLatest,
+		oiBefore5Period,
 		oiAverage,
 		fundingRate,
 		NewRegimeClassifierConfig_Balanced(),
+		"", // swingTrend: 简化版本不检测结构冲突
 	)
 }
 
@@ -224,9 +233,11 @@ func GenerateRegimeSignal(
 //   - ema50Values: EMA50 指标值列表
 //   - atr14Values: ATR14 指标值列表
 //   - oiLatest: 最新持仓量（OI）
-//   - oiAverage: 平均持仓量（OI）
+//   - oiBefore5Period: 5 周期前的持仓量（用于计算变化率）
+//   - oiAverage: 平均持仓量（用于参考，可以是长期均值或其他计算方式）
 //   - fundingRate: 当前资金费率
 //   - config: 分类器配置（如果为 nil，使用默认平衡配置）
+//   - swingTrend: 摆动点拓扑趋势（来自 GenerateTechnicalFeatures().Trend），用于检测结构冲突
 //
 // 返回值：
 //   - Regime 分类器信号对象
@@ -236,9 +247,11 @@ func GenerateRegimeSignalWithConfig(
 	ema50Values []float64,
 	atr14Values []float64,
 	oiLatest float64,
+	oiBefore5Period float64,
 	oiAverage float64,
 	fundingRate float64,
 	config *RegimeClassifierConfig,
+	swingTrend string,
 ) *RegimeSignal {
 	if config == nil {
 		config = NewRegimeClassifierConfig_Balanced()
@@ -248,10 +261,12 @@ func GenerateRegimeSignalWithConfig(
 		FundingRate: fundingRate,
 	}
 
-	if oiAverage > 0 {
-		signal.OiChangePercent5 = (oiLatest - oiAverage) / oiAverage
+	if oiBefore5Period > 0 {
+		signal.OiChangePercent5 = (oiLatest - oiBefore5Period) / oiBefore5Period
 	}
-	signal.FundingRateExtreme = math.Abs(fundingRate) > config.FundingExtreme
+	// Bug 3 修复：区分正负资金费率
+	signal.FundingRateExtreme = fundingRate > config.FundingExtreme         // 多头过热
+	signal.FundingRateExtremeBearish = fundingRate < -config.FundingExtreme // 空头过热
 
 	lastIdx := len(klines) - 1
 	if lastIdx < 0 {
@@ -302,9 +317,19 @@ func GenerateRegimeSignalWithConfig(
 	}
 	signal.RecoveryRatio = recoveryRatio
 
+	// Bug 5 修复：扩展回溯窗口到 3 根 K 线
+	lookbackCross := 3
+	if lookbackCross > lastIdx {
+		lookbackCross = lastIdx
+	}
 	isImpulsiveCross := false
-	if lastIdx >= 1 {
-		isImpulsiveCross = currentPrice > currentEma20 && klines[lastIdx-1].Close < currentEma20
+	if currentPrice > currentEma20 { // 当前必须在 EMA20 上方
+		for k := 1; k <= lookbackCross; k++ {
+			if klines[lastIdx-k].Close < currentEma20 {
+				isImpulsiveCross = true
+				break
+			}
+		}
 	}
 	signal.IsImpulsiveCross = isImpulsiveCross
 
@@ -346,7 +371,44 @@ func GenerateRegimeSignalWithConfig(
 		signal.RegimeClassification = "TRANSITIONAL"
 	}
 
+	// V4.2: 检测 EMA 趋势与价格结构的冲突
+	if swingTrend != "" {
+		detectStructureConflict(signal, swingTrend)
+	}
+
 	return signal
+}
+
+// =============================================================================
+// 结构冲突检测
+// =============================================================================
+
+// detectStructureConflict 检测 EMA 趋势与价格结构是否冲突
+//
+// 参数说明：
+//   - signal: Regime 信号对象（会被修改）
+//   - swingTrend: 摆动点拓扑趋势描述
+//
+// 检测逻辑：
+//   - 当 EMA 显示多头趋势但价格结构为 LH+LL（下跌结构）时，标记冲突
+//   - 当 EMA 显示空头趋势但价格结构为 HH+HL（上涨结构）时，标记冲突
+//   - 冲突信息会被传递给 LLM，由 LLM 综合判断
+func detectStructureConflict(signal *RegimeSignal, swingTrend string) {
+	// 检查多头冲突：EMA 向上但价格结构向下
+	if strings.Contains(signal.RegimeClassification, "TRENDING_UP") &&
+		(swingTrend == "Downtrend Structure (LH+LL)" ||
+			swingTrend == "Strong Downtrend (Consecutive LHs)") {
+		signal.StructureConflict = true
+		signal.StructureConflictDesc = fmt.Sprintf("EMA 显示多头趋势但价格结构为 %s", swingTrend)
+	}
+
+	// 检查空头冲突：EMA 向下但价格结构向上
+	if strings.Contains(signal.RegimeClassification, "TRENDING_DOWN") &&
+		(swingTrend == "Uptrend Structure (HH+HL)" ||
+			swingTrend == "Strong Uptrend (Consecutive HHs)") {
+		signal.StructureConflict = true
+		signal.StructureConflictDesc = fmt.Sprintf("EMA 显示空头趋势但价格结构为 %s", swingTrend)
+	}
 }
 
 // =============================================================================
@@ -368,6 +430,11 @@ func (s *RegimeSignal) FormatToText() string {
 
 	// 分类结果
 	sb.WriteString(fmt.Sprintf("- Regime: %s\n", s.RegimeClassification))
+
+	// V4.2: 结构冲突检测
+	if s.StructureConflict {
+		sb.WriteString(fmt.Sprintf("- ⚠️ Structure Conflict: %s\n", s.StructureConflictDesc))
+	}
 
 	// 动力学因子
 	sb.WriteString(fmt.Sprintf("- EMA20 > EMA50 (last 20): %d/20\n", s.Ema20AboveEma50Count20))
@@ -402,6 +469,9 @@ func (s *RegimeSignal) FormatToText() string {
 	}
 	if s.FundingRateExtreme {
 		anomalies = append(anomalies, "- 资金费率过高，多头杠杆极度拥挤，注意【多杀多/闪崩】风险。")
+	}
+	if s.FundingRateExtremeBearish {
+		anomalies = append(anomalies, "- 资金费率极端负值，空头杠杆极度拥挤，注意【轧空/逼空】风险。")
 	}
 
 	if len(anomalies) > 0 {
@@ -440,54 +510,61 @@ func (s *RegimeSignal) GenerateLLMBriefing(symbol string, currentPrice float64, 
 
 	var sb strings.Builder
 
-	// 标题
-	sb.WriteString(fmt.Sprintf("### 📊 市场战术简报 | 资产：%s | 当前状态：**%s**\n\n", symbol, s.RegimeClassification))
+	// 标题：简洁格式
+	sb.WriteString(fmt.Sprintf("### Regime Signal [%s]\n", symbol))
 
-	// 1. 核心观测数据
-	sb.WriteString("**1. 核心观测数据：\n")
-	sb.WriteString(fmt.Sprintf("- **当前价格：%.2f\n", currentPrice))
-	sb.WriteString(fmt.Sprintf("- **持仓量 (OI) 变化：%.2f%% (近 5 周期)\n", s.OiChangePercent5*100))
+	// 1. 核心事实（去除重复）
+	sb.WriteString(fmt.Sprintf("- 分类：%s (EMA20>EMA50: %d/20)\n",
+		s.RegimeClassification, s.Ema20AboveEma50Count20))
 
-	// CVD 方向（暂时跳过，预留接口）
-	cvdDir := "流入 (买方主动)"
-	if cvdSlope < 0 {
-		cvdDir = "流出 (卖方主动)"
+	// 结构冲突（如果有）
+	if s.StructureConflict {
+		sb.WriteString(fmt.Sprintf("- 价格结构：⚠️ CONFLICT — %s\n", s.StructureConflictDesc))
 	}
-	sb.WriteString(fmt.Sprintf("- **主动成交 (CVD) 趋势：%s\n", cvdDir))
-	sb.WriteString(fmt.Sprintf("- **资金费率：%.4f%% (当前周期)\n\n", s.FundingRate*100))
 
-	// 2. 算法诊断
-	sb.WriteString("**2. 算法诊断：\n")
-	sb.WriteString(fmt.Sprintf("由逻辑分类器判定当前市场处于 **%s**。\n", s.RegimeClassification))
+	// 动能信号
+	sb.WriteString(fmt.Sprintf("- 动能信号：IsImpulsiveCross=%v, RecoveryRatio=%.2f\n",
+		s.IsImpulsiveCross, s.RecoveryRatio))
 
-	// 异常分析
-	anomalies := s.detectAnomalies(cvdSlope)
-	if len(anomalies) > 0 {
-		for _, a := range anomalies {
-			sb.WriteString(a + "\n")
-		}
+	// OI 和资金费率
+	sb.WriteString(fmt.Sprintf("- OI 变化 (5 周期): %.2f%%  |  资金费率：%.4f%%\n",
+		s.OiChangePercent5*100, s.FundingRate*100))
+
+	// 2. 冲突解决规则（关键改进）
+	if s.StructureConflict {
+		sb.WriteString("\n[CONFLICT_RESOLUTION 规则]\n")
+		sb.WriteString("当 structure_conflict=true 时，你必须：\n")
+		sb.WriteString("1. 检查 RSI + 成交量是否支持 EMA 方向（回调）还是结构方向（反转）\n")
+		sb.WriteString("2. 如果 IsImpulsiveCross=true + RecoveryRatio > 0.6，优先考虑 IMPULSIVE_RECOVERY\n")
+		sb.WriteString("3. 如果 OI 变化与价格方向相反，考虑是否为【假突破】或【空头平仓驱动】\n")
+		sb.WriteString("4. 在 execution_reasoning 中明确写出你的判断依据和最终采用哪个信号\n")
 	} else {
-		sb.WriteString("- 数据表现一致，暂未发现明显的衍生品背离。\n")
+		// 无冲突时，简单提示
+		sb.WriteString("\n[DECISION_RULE]\n")
+		sb.WriteString("数据一致，直接使用 Regime 分类结果。\n")
 	}
-	sb.WriteString("\n")
 
-	// 3. 复核需求
-	sb.WriteString("**3. 复核需求：\n")
-	sb.WriteString("请结合以上【异常分析】和其他数据，判断此信号是否为【假突破】或【不可持续的挤压行情】？\n")
-
-	// 根据不同的分类给出特定的复核提示
-	if strings.Contains(s.RegimeClassification, "REVERSING") {
-		sb.WriteString("如果是 REVERSING，结合持仓量急剧变动，是否意味着趋势已经彻底反转？\n")
-	} else if strings.Contains(s.RegimeClassification, "TRENDING_UP_OVERHEATED") {
-		sb.WriteString("当前为过热上涨状态，需警惕资金费率过高导致的回调风险。\n")
-	} else if strings.Contains(s.RegimeClassification, "RANGE_BOUND") {
-		sb.WriteString("当前为区间震荡状态，等待突破信号或区间边界交易机会。\n")
-	} else if s.RegimeClassification == "BULLISH_SHORT_SQUEEZE" {
-		sb.WriteString("当前为【轧空行情】，空头正在平仓推动价格上涨。请判断：这种上涨是否具有持续性？还是会快拉快跌？\n")
+	// 3. 特定状态的补充规则（替换原来的开放性问题）
+	if s.RegimeClassification == "BULLISH_SHORT_SQUEEZE" {
+		sb.WriteString("\n[SHORT_SQUEEZE 规则]\n")
+		sb.WriteString("轧空行情特征：价格上涨 + OI 下降 → 空头平仓驱动\n")
+		sb.WriteString("决策：如果 OI 持续下降，上涨可能快拉快跌，不宜追高\n")
 	} else if s.RegimeClassification == "IMPULSIVE_RECOVERY" {
-		sb.WriteString("当前为【脉冲式修复】，价格快速收复失地。请判断：这是 V 型反转的开始，还是反弹后继续下跌？\n")
+		sb.WriteString("\n[IMPULSIVE_RECOVERY 规则]\n")
+		sb.WriteString("脉冲修复特征：价格快速收复 >40% 失地 + 穿越 EMA20\n")
+		sb.WriteString("决策：如果 RSI + 成交量配合，可能是 V 型反转起点\n")
 	} else if s.RegimeClassification == "CAPITULATION_BOTTOM" {
-		sb.WriteString("当前为【恐慌探底】，恐慌盘正在抛售。请判断：这是否是抄底的好时机？还是会继续下跌？\n")
+		sb.WriteString("\n[CAPITULATION 规则]\n")
+		sb.WriteString("恐慌探底特征：价格创新低 + ATR 异常放大 + OI 可能上升\n")
+		sb.WriteString("决策：等待价格站稳 + OI 回落，确认恐慌盘出清后再抄底\n")
+	} else if s.FundingRateExtreme {
+		sb.WriteString("\n[FUNDING_EXTREME 规则]\n")
+		sb.WriteString("资金费率极端正值：多头杠杆极度拥挤\n")
+		sb.WriteString("决策：警惕【多杀多/闪崩】风险，不宜继续追多\n")
+	} else if s.FundingRateExtremeBearish {
+		sb.WriteString("\n[FUNDING_EXTREME_BEARISH 规则]\n")
+		sb.WriteString("资金费率极端负值：空头杠杆极度拥挤\n")
+		sb.WriteString("决策：警惕【轧空/逼空】风险，不宜继续追空\n")
 	}
 
 	sb.WriteString("\n")
@@ -527,6 +604,9 @@ func (s *RegimeSignal) detectAnomalies(cvdSlope float64) []string {
 	// 检查资金费率极端
 	if s.FundingRateExtreme {
 		anomalies = append(anomalies, "- 资金费率过高，多头杠杆极度拥挤，注意【多杀多/闪崩】风险。")
+	}
+	if s.FundingRateExtremeBearish {
+		anomalies = append(anomalies, "- 资金费率极端负值，空头杠杆极度拥挤，注意【轧空/逼空】风险。")
 	}
 
 	return anomalies
@@ -758,10 +838,8 @@ func countLevelTests(level float64, sType SwingType, klines []market.KlineBar, s
 			// 支撑被破坏
 			// 用户逻辑：if c.Low < lowerBound
 			if c.Low < lowerBound {
-				inTestZone = false // 支撑被破坏，停止计数此序列？
-				// 通常如果支撑被破坏，它就不再是支撑。
-				// 但我们只是停止当前的"测试"状态。未来测试可能是从下方的回测（阻力）？
-				// 为简化起见，我们只是重置。
+				// Bug 4 修复：支撑已破坏，停止统计
+				break
 			}
 
 		} else { // SwingHigh (阻力逻辑) - 对称
@@ -780,7 +858,8 @@ func countLevelTests(level float64, sType SwingType, klines []market.KlineBar, s
 			// 阻力被突破
 			// 如果 High > upperBound
 			if c.High > upperBound {
-				inTestZone = false
+				// Bug 4 修复：阻力已突破，停止统计
+				break
 			}
 		}
 	}

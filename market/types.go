@@ -56,8 +56,9 @@ type TimeframeSeriesData struct {
 
 // OIData Open Interest data
 type OIData struct {
-	Latest  float64
-	Average float64
+	Latest        float64 // 最新持仓量（BTC 数量）
+	Before5Period float64 // 5 周期前的持仓量（用于计算变化率）
+	Average       float64 // 平均持仓量（用于参考，可以是长期均值或其他计算方式）
 }
 
 // IntradayData intraday data (3-minute interval)
