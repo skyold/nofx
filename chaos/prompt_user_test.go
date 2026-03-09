@@ -8,8 +8,8 @@ import (
 	"nofx/store"
 )
 
-// TestV2IncludesInstitutionalRegime 测试 V2 版本是否包含机构分类器
-func TestV2IncludesInstitutionalRegime(t *testing.T) {
+// TestFormatMarketData 测试市场数据格式化功能
+func TestFormatMarketData(t *testing.T) {
 	// 创建模拟数据
 	data := &market.Data{
 		Symbol:       "ETHUSDT",
@@ -45,39 +45,27 @@ func TestV2IncludesInstitutionalRegime(t *testing.T) {
 		EnableFundingRate: true,
 	}
 
-	// 测试 V1
+	// 测试格式化功能
 	m := &Manager{}
-	v1Output := m.formatMarketDataV1(data, indicators)
+	output := m.formatMarketData(data, indicators)
 
-	// 测试 V2
-	v2Output := m.formatMarketDataV2(data, indicators)
+	fmt.Println("=== Market Data Output ===")
+	fmt.Println(output)
 
-	fmt.Println("=== V1 Output ===")
-	fmt.Println(v1Output)
-	fmt.Println("\n=== V2 Output ===")
-	fmt.Println(v2Output)
-
-	// 验证 V1 不包含机构分类器
-	if contains(v1Output, "Institutional Regime Classifier") {
-		t.Error("V1 should NOT contain Institutional Regime Classifier")
+	// 验证基本格式
+	if !contains(output, "ETHUSDT") {
+		t.Error("Output should contain symbol ETHUSDT")
 	}
-
-	// 验证 V2 包含机构分类器
-	if !contains(v2Output, "Institutional Regime Classifier") {
-		t.Error("V2 SHOULD contain Institutional Regime Classifier")
-	}
-
-	// 验证 V2 包含 LLM 战术简报
-	if !contains(v2Output, "市场战术简报") {
-		t.Error("V2 SHOULD contain LLM Briefing (市场战术简报)")
+	if !contains(output, "current_price") {
+		t.Error("Output should contain current_price")
 	}
 }
 
 func contains(s, substr string) bool {
-	return len(s) > 0 && len(substr) > 0 && 
-		(len(s) >= len(substr) && (s == substr || len(s) > len(substr) && 
-		(s[:len(substr)] == substr || s[len(s)-len(substr):] == substr || 
-		findSubstring(s, substr))))
+	return len(s) > 0 && len(substr) > 0 &&
+		(len(s) >= len(substr) && (s == substr || len(s) > len(substr) &&
+			(s[:len(substr)] == substr || s[len(s)-len(substr):] == substr ||
+				findSubstring(s, substr))))
 }
 
 func findSubstring(s, substr string) bool {

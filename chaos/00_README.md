@@ -66,16 +66,9 @@
 ### User Prompt（用户提示词）
 | 文件 | 说明 | 主要结构/函数 |
 |------|------|---------------|
-| **prompt_user.go** | 用户提示词入口（版本分发） | `BuildUserPrompt()` - 根据配置选择版本 |
-| **prompt_user_v1.go** | V1 版本用户提示词（文本格式） | `buildUserPromptV1()` |
-| **prompt_user_v2.go** | V2 版本用户提示词（JSON 格式）- 默认 | `buildUserPromptV2()` |
-| **prompt_user_v4.go** | V4 版本用户提示词（结构事实版） | `buildUserPromptV4()` |
+| **prompt_user.go** | 用户提示词构建（统一版本） | `BuildUserPrompt()`, `formatMarketData()`, `buildTargetSymbols()` |
 | **prompt_user_test.go** | User Prompt 单元测试 | - |
-| **prompt_builder.go** | Builder 模式实现 | `MarketDataBuilder`, `BasicBuilder`, `EnhancedBuilder` |
-| **prompt_data.go** | Prompt 数据结构定义 | `MarketPromptData`, `AccountPromptData`, `PositionPromptData` |
-| **prompt_formatter_text.go** | 文本格式化器 | 格式化市场数据为文本 |
-| **prompt_helpers.go** | 通用辅助函数 | 构建头部、账户状态、持仓等辅助函数 |
-| **prompt_types_json.go** | JSON 类型定义 | JSON 相关的类型定义 |
+| **prompt_helpers.go** | 通用辅助函数 | `roundFloat()`, `calculatePercentile()` |
 
 ### 数据加工与特征工程
 | 文件 | 说明 | 主要结构/函数 |
@@ -111,13 +104,9 @@
 ### 按 Prompt 查找
 - **想修改 System Prompt？** → 查看 [prompt_system.go](file:///Users/zhengningdai/workspace/skyold/nofx/chaos/prompt_system.go)
 - **想修改系统执行协议？** → 查看 [prompt_contract.go](file:///Users/zhengningdai/workspace/skyold/nofx/chaos/prompt_contract.go)
-- **想修改 User Prompt 版本分发？** → 查看 [prompt_user.go](file:///Users/zhengningdai/workspace/skyold/nofx/chaos/prompt_user.go)
-- **想修改 V1 版本（文本）？** → 查看 [prompt_user_v1.go](file:///Users/zhengningdai/workspace/skyold/nofx/chaos/prompt_user_v1.go)
-- **想修改 V2 版本（JSON）？** → 查看 [prompt_user_v2.go](file:///Users/zhengningdai/workspace/skyold/nofx/chaos/prompt_user_v2.go)
-- **想修改 V4 版本（结构事实）？** → 查看 [prompt_user_v4.go](file:///Users/zhengningdai/workspace/skyold/nofx/chaos/prompt_user_v4.go)
-- **想修改 Prompt 构建器？** → 查看 [prompt_builder.go](file:///Users/zhengningdai/workspace/skyold/nofx/chaos/prompt_builder.go)
-- **想修改 Prompt 数据结构？** → 查看 [prompt_data.go](file:///Users/zhengningdai/workspace/skyold/nofx/chaos/prompt_data.go)
-- **想修改 Prompt 格式化？** → 查看 [prompt_formatter_text.go](file:///Users/zhengningdai/workspace/skyold/nofx/chaos/prompt_formatter_text.go)
+- **想修改 User Prompt？** → 查看 [prompt_user.go](file:///Users/zhengningdai/workspace/skyold/nofx/chaos/prompt_user.go)
+- **想修改市场数据格式化？** → 查看 [prompt_user.go](file:///Users/zhengningdai/workspace/skyold/nofx/chaos/prompt_user.go#L318-L424)
+- **想修改辅助函数？** → 查看 [prompt_helpers.go](file:///Users/zhengningdai/workspace/skyold/nofx/chaos/prompt_helpers.go)
 
 ### 按数据加工查找
 - **想修改特征工程？** → 查看 [features.go](file:///Users/zhengningdai/workspace/skyold/nofx/chaos/features.go)
@@ -144,6 +133,8 @@ if engine.IsChaosMode(customPrompt) {
 
 ## 📊 文件分组总览
 
+**简化后的架构** (从 12 个 prompt 相关文件减少到 4 个):
+
 ```
 chaos/
 ├── 核心入口与类型
@@ -162,19 +153,12 @@ chaos/
 │   └── prompt_contract.go           # 系统执行协议
 │
 ├── User Prompt（用户提示词）
-│   ├── prompt_user.go               # 用户提示词入口（版本分发）
-│   ├── prompt_user_v1.go            # V1 版本（文本格式）
-│   ├── prompt_user_v2.go            # V2 版本（JSON 格式）- 默认
-│   ├── prompt_user_v4.go            # V4 版本（结构事实版）
+│   ├── prompt_user.go               # 用户提示词构建（统一版本，直接格式化）
 │   ├── prompt_user_test.go          # 用户提示词测试
-│   ├── prompt_builder.go            # Builder 模式实现
-│   ├── prompt_data.go               # Prompt 数据结构定义
-│   ├── prompt_formatter_text.go     # 文本格式化器
-│   ├── prompt_helpers.go            # 通用辅助函数
-│   └── prompt_types_json.go         # JSON 类型定义
+│   └── prompt_helpers.go            # 通用辅助函数
 │
 └── 数据加工与特征工程
-    └── features.go                  # 特征工程（原始数据 → 指标 → 特征）
+    └── signal.go                    # 信号处理（特征工程、Regime 分类器等）
 ```
 
 ## 🎯 文件命名规范
