@@ -2,8 +2,7 @@ import { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import useSWR from 'swr'
 import { api } from './lib/api'
-import { TraderDashboardPage } from './pages/TraderDashboardPage'
-import { ChaosDashboardPage } from './pages/ChaosDashboardPage'
+import { DashboardPage } from './pages/DashboardPage'
 import { AITradersPage } from './components/AITradersPage'
 import { LoginPage } from './components/LoginPage'
 import { RegisterPage } from './components/RegisterPage'
@@ -12,11 +11,7 @@ import { CompetitionPage } from './components/CompetitionPage'
 import { LandingPage } from './pages/LandingPage'
 import { FAQPage } from './pages/FAQPage'
 import { StrategyStudioPage } from './pages/StrategyStudioPage'
-import { ChaosStudioPage } from './pages/ChaosStudioPage'
-import { DebateArenaPage } from './pages/DebateArenaPage'
-import { StrategyMarketPage } from './pages/StrategyMarketPage'
 import { TimeMachinePage } from './pages/TimeMachinePage'
-import { DataPage } from './pages/DataPage'
 import { NewTransactionListPage } from './pages/NewTransactionListPage'
 import { LoginRequiredOverlay } from './components/LoginRequiredOverlay'
 import HeaderBar from './components/HeaderBar'
@@ -42,15 +37,10 @@ type Page =
   | 'competition'
   | 'traders'
   | 'trader'
-  | 'chaos'
-  | 'chaos-studio'
+  | 'time-machine'
+  | 'transactions'
   | 'backtest'
   | 'strategy'
-  | 'strategy-market'
-  | 'time-machine'
-  | 'data'
-  | 'debate'
-  | 'transactions'
   | 'faq'
   | 'login'
   | 'register'
@@ -68,21 +58,16 @@ function App() {
     console.log('[App] Mounted. Route:', window.location.pathname);
   }, []);
 
-  // 从URL路径读取初始页面状态（支持刷新保持页面）
+  // 从 URL 路径读取初始页面状态（支持刷新保持页面）
   const getInitialPage = (): Page => {
     const path = window.location.pathname
     const hash = window.location.hash.slice(1) // 去掉 #
 
     if (path === '/traders' || hash === 'traders') return 'traders'
-    if (path === '/chaos' || hash === 'chaos') return 'chaos'
-    if (path === '/chaos-studio' || hash === 'chaos-studio') return 'chaos-studio'
+    if (path === '/time-machine' || hash === 'time-machine') return 'time-machine'
+    if (path === '/transactions' || hash === 'transactions') return 'transactions'
     if (path === '/backtest' || hash === 'backtest') return 'backtest'
     if (path === '/strategy' || hash === 'strategy') return 'strategy'
-    if (path === '/strategy-market' || hash === 'strategy-market') return 'strategy-market'
-    if (path === '/time-machine' || hash === 'time-machine') return 'time-machine'
-    if (path === '/data' || hash === 'data') return 'data'
-    if (path === '/transactions' || hash === 'transactions') return 'transactions'
-    if (path === '/debate' || hash === 'debate') return 'debate'
     if (path === '/dashboard' || hash === 'trader' || hash === 'details')
       return 'trader'
     return 'competition' // 默认为竞赛页面
@@ -101,17 +86,12 @@ function App() {
   const navigateToPage = (page: Page) => {
     const pathMap: Record<Page, string> = {
       'competition': '/competition',
-      'strategy-market': '/strategy-market',
-      'time-machine': '/time-machine',
-      'data': '/data',
       'traders': '/traders',
       'trader': '/dashboard',
-      'chaos': '/chaos',
-      'chaos-studio': '/chaos-studio',
+      'time-machine': '/time-machine',
+      'transactions': '/transactions',
       'backtest': '/backtest',
       'strategy': '/strategy',
-      'debate': '/debate',
-      'transactions': '/transactions',
       'faq': '/faq',
       'login': '/login',
       'register': '/register',
@@ -155,7 +135,7 @@ function App() {
   const [lastUpdate, setLastUpdate] = useState<string>('--:--:--')
   const [decisionsLimit, setDecisionsLimit] = useState<number>(5)
 
-  // 监听URL变化，同步页面状态
+  // 监听 URL 变化，同步页面状态
   useEffect(() => {
     const handleRouteChange = () => {
       const path = window.location.pathname
@@ -165,22 +145,14 @@ function App() {
 
       if (path === '/traders' || hash === 'traders') {
         setCurrentPage('traders')
-      } else if (path === '/chaos' || hash === 'chaos') {
-        setCurrentPage('chaos')
+      } else if (path === '/time-machine' || hash === 'time-machine') {
+        setCurrentPage('time-machine')
+      } else if (path === '/transactions' || hash === 'transactions') {
+        setCurrentPage('transactions')
       } else if (path === '/backtest' || hash === 'backtest') {
         setCurrentPage('backtest')
       } else if (path === '/strategy' || hash === 'strategy') {
         setCurrentPage('strategy')
-      } else if (path === '/strategy-market' || hash === 'strategy-market') {
-        setCurrentPage('strategy-market')
-      } else if (path === '/time-machine' || hash === 'time-machine') {
-        setCurrentPage('time-machine')
-      } else if (path === '/data' || hash === 'data') {
-        setCurrentPage('data')
-      } else if (path === '/debate' || hash === 'debate') {
-        setCurrentPage('debate')
-      } else if (path === '/transactions' || hash === 'transactions') {
-        setCurrentPage('transactions')
       } else if (
         path === '/dashboard' ||
         hash === 'trader' ||
@@ -255,60 +227,60 @@ function App() {
 
   // 如果在trader页面，获取该trader的数据
   const { data: status } = useSWR<SystemStatus>(
-    (currentPage === 'trader' || currentPage === 'chaos') && selectedTraderId
+    currentPage === 'trader' && selectedTraderId
       ? `status-${selectedTraderId}`
       : null,
     () => api.getStatus(selectedTraderId),
     {
-      refreshInterval: 15000, // 15秒刷新（配合后端15秒缓存）
+      refreshInterval: 15000, // 15 秒刷新（配合后端 15 秒缓存）
       revalidateOnFocus: false, // 禁用聚焦时重新验证，减少请求
-      dedupingInterval: 10000, // 10秒去重，防止短时间内重复请求
+      dedupingInterval: 10000, // 10 秒去重，防止短时间内重复请求
     }
   )
 
   const { data: account } = useSWR<AccountInfo>(
-    (currentPage === 'trader' || currentPage === 'chaos') && selectedTraderId
+    currentPage === 'trader' && selectedTraderId
       ? `account-${selectedTraderId}`
       : null,
     () => api.getAccount(selectedTraderId),
     {
-      refreshInterval: 15000, // 15秒刷新（配合后端15秒缓存）
+      refreshInterval: 15000, // 15 秒刷新（配合后端 15 秒缓存）
       revalidateOnFocus: false, // 禁用聚焦时重新验证，减少请求
-      dedupingInterval: 10000, // 10秒去重，防止短时间内重复请求
+      dedupingInterval: 10000, // 10 秒去重，防止短时间内重复请求
     }
   )
 
   const { data: positions } = useSWR<Position[]>(
-    (currentPage === 'trader' || currentPage === 'chaos') && selectedTraderId
+    currentPage === 'trader' && selectedTraderId
       ? `positions-${selectedTraderId}`
       : null,
     () => api.getPositions(selectedTraderId),
     {
-      refreshInterval: 15000, // 15秒刷新（配合后端15秒缓存）
+      refreshInterval: 15000, // 15 秒刷新（配合后端 15 秒缓存）
       revalidateOnFocus: false, // 禁用聚焦时重新验证，减少请求
-      dedupingInterval: 10000, // 10秒去重，防止短时间内重复请求
+      dedupingInterval: 10000, // 10 秒去重，防止短时间内重复请求
     }
   )
 
   const { data: decisions } = useSWR<DecisionRecord[]>(
-    (currentPage === 'trader' || currentPage === 'chaos') && selectedTraderId
+    currentPage === 'trader' && selectedTraderId
       ? `decisions/latest-${selectedTraderId}-${decisionsLimit}`
       : null,
     () => api.getLatestDecisions(selectedTraderId, decisionsLimit),
     {
-      refreshInterval: 30000, // 30秒刷新（决策更新频率较低）
+      refreshInterval: 30000, // 30 秒刷新（决策更新频率较低）
       revalidateOnFocus: false,
       dedupingInterval: 20000,
     }
   )
 
   const { data: stats } = useSWR<Statistics>(
-    (currentPage === 'trader' || currentPage === 'chaos') && selectedTraderId
+    currentPage === 'trader' && selectedTraderId
       ? `statistics-${selectedTraderId}`
       : null,
     () => api.getStatistics(selectedTraderId),
     {
-      refreshInterval: 30000, // 30秒刷新（统计数据更新频率较低）
+      refreshInterval: 30000, // 30 秒刷新（统计数据更新频率较低）
       revalidateOnFocus: false,
       dedupingInterval: 20000,
     }
@@ -397,51 +369,6 @@ function App() {
   if (route === '/reset-password') {
     return <ResetPasswordPage />
   }
-  // Data page - publicly accessible with embedded dashboard
-  if (route === '/data') {
-    const dataPageNavigate = (page: Page) => {
-      const pathMap: Record<string, string> = {
-        'data': '/data',
-        'competition': '/competition',
-        'strategy-market': '/strategy-market',
-        'traders': '/traders',
-        'trader': '/dashboard',
-        'backtest': '/backtest',
-        'strategy': '/strategy',
-        'debate': '/debate',
-        'faq': '/faq',
-      }
-      const path = pathMap[page]
-      if (path) {
-        window.location.href = path
-      }
-    }
-    return (
-      <div
-        className="min-h-screen"
-        style={{ background: '#0B0E11', color: '#EAECEF' }}
-      >
-        <HeaderBar
-          isLoggedIn={!!user}
-          currentPage="data"
-          language={language}
-          onLanguageChange={setLanguage}
-          user={user}
-          onLogout={logout}
-          onLoginRequired={handleLoginRequired}
-          onPageChange={dataPageNavigate}
-        />
-        <main className="pt-16">
-          <DataPage />
-        </main>
-        <LoginRequiredOverlay
-          isOpen={loginOverlayOpen}
-          onClose={() => setLoginOverlayOpen(false)}
-          featureName={loginOverlayFeature}
-        />
-      </div>
-    )
-  }
   // Show landing page for root route
   if (route === '/' || route === '') {
     return <LandingPage />
@@ -480,12 +407,6 @@ function App() {
           >
             {currentPage === 'competition' ? (
               <CompetitionPage />
-            ) : currentPage === 'data' ? (
-              <DataPage />
-            ) : currentPage === 'strategy-market' ? (
-              <StrategyMarketPage />
-            ) : currentPage === 'time-machine' ? (
-              <TimeMachinePage />
             ) : currentPage === 'traders' ? (
               <AITradersPage
                 onTraderSelect={(traderId) => {
@@ -495,18 +416,16 @@ function App() {
                   setCurrentPage('trader')
                 }}
               />
+            ) : currentPage === 'time-machine' ? (
+              <TimeMachinePage />
+            ) : currentPage === 'transactions' ? (
+              <NewTransactionListPage />
             ) : currentPage === 'backtest' ? (
               <BacktestPage />
             ) : currentPage === 'strategy' ? (
               <StrategyStudioPage />
-            ) : currentPage === 'debate' ? (
-              <DebateArenaPage />
-            ) : currentPage === 'transactions' ? (
-              <NewTransactionListPage />
-            ) : currentPage === 'chaos-studio' ? (
-              <ChaosStudioPage />
-            ) : currentPage === 'chaos' ? (
-              <ChaosDashboardPage
+            ) : currentPage === 'trader' ? (
+              <DashboardPage
                 selectedTrader={selectedTrader}
                 status={status}
                 account={account}
@@ -522,7 +441,7 @@ function App() {
                 selectedTraderId={selectedTraderId}
                 onTraderSelect={(traderId) => {
                   setSelectedTraderId(traderId)
-                  // 更新 URL 参数（使用 slug: name-id前4位）
+                  // 更新 URL 参数（使用 slug: name-id 前 4 位）
                   const trader = traders?.find(t => t.trader_id === traderId)
                   if (trader) {
                     const url = new URL(window.location.href)
@@ -537,49 +456,16 @@ function App() {
                 }}
                 exchanges={exchanges}
               />
-            ) : (
-              <TraderDashboardPage
-                selectedTrader={selectedTrader}
-                status={status}
-                account={account}
-                positions={positions}
-                decisions={decisions}
-                decisionsLimit={decisionsLimit}
-                onDecisionsLimitChange={setDecisionsLimit}
-                stats={stats}
-                lastUpdate={lastUpdate}
-                language={language}
-                traders={traders}
-                tradersError={tradersError}
-                selectedTraderId={selectedTraderId}
-                onTraderSelect={(traderId) => {
-                  setSelectedTraderId(traderId)
-                  // 更新 URL 参数（使用 slug: name-id前4位）
-                  const trader = traders?.find(t => t.trader_id === traderId)
-                  if (trader) {
-                    const url = new URL(window.location.href)
-                    url.searchParams.set('trader', getTraderSlug(trader))
-                    window.history.replaceState({}, '', url.toString())
-                  }
-                }}
-                onNavigateToTraders={() => {
-                  window.history.pushState({}, '', '/traders')
-                  setRoute('/traders')
-                  setCurrentPage('traders')
-                }}
-                exchanges={exchanges}
-              />
-            )}
+            ) : null}
           </motion.div>
         </AnimatePresence>
       </main>
 
-      {/* Footer - Hidden on debate page */}
-      {currentPage !== 'debate' && (
-        <footer
-          className="mt-16"
-          style={{ borderTop: '1px solid #2B3139', background: '#181A20' }}
-        >
+      {/* Footer */}
+      <footer
+        className="mt-16"
+        style={{ borderTop: '1px solid #2B3139', background: '#181A20' }}
+      >
           <div
             className="max-w-[1920px] mx-auto px-6 py-6 text-center text-sm"
             style={{ color: '#5E6673' }}
@@ -686,7 +572,6 @@ function App() {
             </div>
           </div>
         </footer>
-      )}
 
       {/* Login Required Overlay */}
       <LoginRequiredOverlay

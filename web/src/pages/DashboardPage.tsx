@@ -6,9 +6,11 @@ import { DecisionCard } from '../components/DecisionCard'
 import { PositionHistory } from '../components/PositionHistory'
 import { PunkAvatar, getTraderAvatar } from '../components/PunkAvatar'
 import { confirmToast, notify } from '../lib/notify'
+import { formatPrice, formatQuantity } from '../utils/format'
 import { t, type Language } from '../i18n/translations'
 import { LogOut, Loader2, Eye, EyeOff, Copy, Check, Download, RotateCw } from 'lucide-react'
 import { DeepVoidBackground } from '../components/DeepVoidBackground'
+import { GridRiskPanel } from '../components/strategy/GridRiskPanel'
 import type {
     SystemStatus,
     AccountInfo,
@@ -111,7 +113,7 @@ function hasTradeActions(decision: DecisionRecord): boolean {
 
 // --- Components ---
 
-interface ChaosDashboardPageProps {
+interface DashboardPageProps {
     selectedTrader?: TraderInfo
     traders?: TraderInfo[]
     tradersError?: Error
@@ -130,8 +132,10 @@ interface ChaosDashboardPageProps {
     exchanges?: Exchange[]
 }
 
-export function ChaosDashboardPage({
+export function DashboardPage({
     selectedTrader,
+    traders,
+    tradersError,
     status,
     account,
     positions,
@@ -140,13 +144,11 @@ export function ChaosDashboardPage({
     onDecisionsLimitChange,
     lastUpdate,
     language,
-    traders,
-    tradersError,
     selectedTraderId,
     onTraderSelect,
     onNavigateToTraders,
     exchanges,
-}: ChaosDashboardPageProps) {
+}: DashboardPageProps) {
     const [closingPosition, setClosingPosition] = useState<string | null>(null)
     const [selectedChartSymbol, setSelectedChartSymbol] = useState<string | undefined>(undefined)
     const [chartUpdateKey, setChartUpdateKey] = useState<number>(0)
@@ -171,6 +173,13 @@ export function ChaosDashboardPage({
     useEffect(() => {
         setPositionsCurrentPage(1)
     }, [selectedTraderId, positionsPageSize])
+
+    // Auto-set chart symbol for grid trading
+    useEffect(() => {
+        if (status?.strategy_type === 'grid_trading' && status?.grid_symbol) {
+            setSelectedChartSymbol(status.grid_symbol)
+        }
+    }, [status?.strategy_type, status?.grid_symbol])
 
     // Get current exchange info for perp-dex wallet display
     const currentExchange = exchanges?.find(
@@ -633,6 +642,17 @@ export function ChaosDashboardPage({
                     />
                 </div>
 
+                {/* Grid Strategy Risk Panel */}
+                {status?.strategy_type === 'grid_trading' && selectedTraderId && (
+                    <div className="mb-8 animate-slide-in">
+                        <GridRiskPanel
+                            traderId={selectedTraderId}
+                            language={language}
+                            refreshInterval={5000}
+                        />
+                    </div>
+                )}
+
                 {/* Main Content Area */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
                     {/* Left Column: Charts + Positions */}
@@ -651,7 +671,6 @@ export function ChaosDashboardPage({
                                     selectedTrader.exchange_id,
                                     exchanges
                                 )}
-                                defaultVisibleCandles={200}
                             />
                         </div>
 
@@ -736,10 +755,10 @@ export function ChaosDashboardPage({
                                                                 {language === 'zh' ? '平仓' : 'Close'}
                                                             </button>
                                                         </td>
-                                                        <td className="px-1 py-3 font-mono whitespace-nowrap text-right text-nofx-text-main hidden md:table-cell">{pos.entry_price.toFixed(4)}</td>
-                                                        <td className="px-1 py-3 font-mono whitespace-nowrap text-right text-nofx-text-main hidden md:table-cell">{pos.mark_price.toFixed(4)}</td>
-                                                        <td className="px-1 py-3 font-mono whitespace-nowrap text-right text-nofx-text-main">{pos.quantity.toFixed(4)}</td>
-                                                        <td className="px-1 py-3 font-mono font-bold whitespace-nowrap text-right text-nofx-text-main hidden md:table-cell">{(pos.quantity * pos.mark_price).toFixed(2)}</td>
+                                                        <td className="px-1 py-3 font-mono whitespace-nowrap text-right text-nofx-text-main hidden md:table-cell">{formatPrice(pos.entry_price)}</td>
+                                                        <td className="px-1 py-3 font-mono whitespace-nowrap text-right text-nofx-text-main hidden md:table-cell">{formatPrice(pos.mark_price)}</td>
+                                                        <td className="px-1 py-3 font-mono whitespace-nowrap text-right text-nofx-text-main">{formatQuantity(pos.quantity)}</td>
+                                                        <td className="px-1 py-3 font-mono font-bold whitespace-nowrap text-right text-nofx-text-main hidden md:table-cell">{formatPrice(pos.quantity * pos.mark_price)}</td>
                                                         <td className="px-1 py-3 font-mono whitespace-nowrap text-center text-nofx-gold hidden md:table-cell">{pos.leverage}x</td>
                                                         <td className="px-1 py-3 font-mono whitespace-nowrap text-right">
                                                             <span
@@ -750,7 +769,7 @@ export function ChaosDashboardPage({
                                                                 {pos.unrealized_pnl.toFixed(2)}
                                                             </span>
                                                         </td>
-                                                        <td className="px-1 py-3 font-mono whitespace-nowrap text-right text-nofx-text-muted hidden md:table-cell">{pos.liquidation_price.toFixed(4)}</td>
+                                                        <td className="px-1 py-3 font-mono whitespace-nowrap text-right text-nofx-text-muted hidden md:table-cell">{formatPrice(pos.liquidation_price)}</td>
                                                     </tr>
                                                 ))}
                                             </tbody>

@@ -10,15 +10,10 @@ type Page =
   | 'competition'
   | 'traders'
   | 'trader'
-  | 'chaos'
-  | 'chaos-studio'
+  | 'time-machine'
+  | 'transactions'
   | 'backtest'
   | 'strategy'
-  | 'strategy-market'
-  | 'time-machine'
-  | 'data'
-  | 'debate'
-  | 'transactions'
   | 'faq'
   | 'login'
   | 'register'
@@ -55,9 +50,6 @@ export default function HeaderBar({
   const userDropdownRef = useRef<HTMLDivElement>(null)
   const { config: systemConfig } = useSystemConfig()
   const registrationEnabled = systemConfig?.registration_enabled !== false
-  
-  // Default to Chaos mode, reset on every mount (login)
-  const [isChaosMode, setIsChaosMode] = useState(true)
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -106,32 +98,17 @@ export default function HeaderBar({
             {(() => {
               // Define all navigation tabs
               const allNavTabs: { page: Page; path: string; label: string; requiresAuth: boolean }[] = [
-                { page: 'data', path: '/data', label: language === 'zh' ? '数据' : 'Data', requiresAuth: false },
-                { page: 'strategy-market', path: '/strategy-market', label: language === 'zh' ? '策略市场' : 'Market', requiresAuth: true },
-                { page: 'time-machine', path: '/time-machine', label: language === 'zh' ? '时光机' : 'Time Machine', requiresAuth: true },
-                { page: 'transactions', path: '/transactions', label: language === 'zh' ? '交易列表' : 'Transactions', requiresAuth: true },
                 { page: 'traders', path: '/traders', label: t('configNav', language), requiresAuth: true },
                 { page: 'trader', path: '/dashboard', label: t('dashboardNav', language), requiresAuth: true },
-                { page: 'chaos-studio', path: '/chaos-studio', label: 'Chaos Studio', requiresAuth: true },
-                { page: 'chaos', path: '/chaos', label: 'Chaos', requiresAuth: true },
+                { page: 'time-machine', path: '/time-machine', label: language === 'zh' ? '时光机' : 'Time Machine', requiresAuth: true },
+                { page: 'transactions', path: '/transactions', label: language === 'zh' ? '交易列表' : 'Transactions', requiresAuth: true },
                 { page: 'strategy', path: '/strategy', label: t('strategyNav', language), requiresAuth: true },
                 { page: 'competition', path: '/competition', label: t('realtimeNav', language), requiresAuth: true },
-                { page: 'debate', path: '/debate', label: t('debateNav', language), requiresAuth: true },
                 { page: 'backtest', path: '/backtest', label: 'Backtest', requiresAuth: true },
                 { page: 'faq', path: '/faq', label: t('faqNav', language), requiresAuth: false },
               ]
 
-              const CHAOS_ONLY_PAGES: Page[] = ['time-machine', 'transactions', 'chaos-studio', 'chaos']
-              const SHARED_PAGES: Page[] = ['traders']
-
-              const navTabs = allNavTabs.filter(tab => {
-                if (SHARED_PAGES.includes(tab.page)) return true
-                if (isChaosMode) {
-                  return CHAOS_ONLY_PAGES.includes(tab.page)
-                } else {
-                  return !CHAOS_ONLY_PAGES.includes(tab.page)
-                }
-              })
+              const navTabs = allNavTabs
 
               const handleNavClick = (tab: typeof navTabs[0]) => {
                 // If requires auth and not logged in, show login prompt
@@ -166,22 +143,6 @@ export default function HeaderBar({
 
           {/* Right Side - Social Links and User Actions */}
           <div className="flex items-center gap-4">
-            {/* Mode Toggle */}
-            <div className="flex items-center bg-zinc-900 rounded-lg p-1 border border-zinc-800">
-              <button
-                onClick={() => setIsChaosMode(true)}
-                className={`px-3 py-1 text-xs font-bold rounded transition-colors ${isChaosMode ? 'bg-nofx-gold text-black' : 'text-zinc-500 hover:text-zinc-300'}`}
-              >
-                CHAOS
-              </button>
-              <button
-                onClick={() => setIsChaosMode(false)}
-                className={`px-3 py-1 text-xs font-bold rounded transition-colors ${!isChaosMode ? 'bg-nofx-gold text-black' : 'text-zinc-500 hover:text-zinc-300'}`}
-              >
-                NOFX
-              </button>
-            </div>
-
             {/* Social Links - Always visible */}
             <div className="flex items-center gap-1">
               {/* GitHub */}
@@ -368,32 +329,17 @@ export default function HeaderBar({
               <div className="flex flex-col gap-6 mb-12">
                 {(() => {
                   const allNavTabs: { page: Page; path: string; label: string; requiresAuth: boolean }[] = [
-                    { page: 'data', path: '/data', label: language === 'zh' ? '数据' : 'Data', requiresAuth: false },
-                    { page: 'strategy-market', path: '/strategy-market', label: language === 'zh' ? '策略市场' : 'Market', requiresAuth: true },
-                    { page: 'time-machine', path: '/time-machine', label: language === 'zh' ? '时光机' : 'Time Machine', requiresAuth: true },
-                    { page: 'transactions', path: '/transactions', label: language === 'zh' ? '交易列表' : 'Transactions', requiresAuth: true },
                     { page: 'traders', path: '/traders', label: t('configNav', language), requiresAuth: true },
                     { page: 'trader', path: '/dashboard', label: t('dashboardNav', language), requiresAuth: true },
-                    { page: 'chaos-studio', path: '/chaos-studio', label: 'Chaos Studio', requiresAuth: true },
-                    { page: 'chaos', path: '/chaos', label: 'Chaos', requiresAuth: true },
+                    { page: 'time-machine', path: '/time-machine', label: language === 'zh' ? '时光机' : 'Time Machine', requiresAuth: true },
+                    { page: 'transactions', path: '/transactions', label: language === 'zh' ? '交易列表' : 'Transactions', requiresAuth: true },
                     { page: 'strategy', path: '/strategy', label: t('strategyNav', language), requiresAuth: true },
                     { page: 'competition', path: '/competition', label: t('realtimeNav', language), requiresAuth: true },
-                    { page: 'debate', path: '/debate', label: t('debateNav', language), requiresAuth: true },
                     { page: 'backtest', path: '/backtest', label: 'Backtest', requiresAuth: true },
                     { page: 'faq', path: '/faq', label: t('faqNav', language), requiresAuth: false },
                   ]
 
-                  const CHAOS_ONLY_PAGES: Page[] = ['time-machine', 'transactions', 'chaos-studio', 'chaos']
-                  const SHARED_PAGES: Page[] = ['traders']
-
-                  const navTabs = allNavTabs.filter(tab => {
-                    if (SHARED_PAGES.includes(tab.page)) return true
-                    if (isChaosMode) {
-                      return CHAOS_ONLY_PAGES.includes(tab.page)
-                    } else {
-                      return !CHAOS_ONLY_PAGES.includes(tab.page)
-                    }
-                  })
+                  const navTabs = allNavTabs
 
                   const handleMobileNavClick = (tab: typeof navTabs[0]) => {
                     if (tab.requiresAuth && !isLoggedIn) {
@@ -481,29 +427,7 @@ export default function HeaderBar({
                 </div>
 
                 {/* Account / Lang */}
-                <div className="flex flex-col gap-4">
-                  {/* Mode Switcher */}
-                  <div className="flex bg-zinc-900 rounded-lg p-1 border border-zinc-800">
-                    <button
-                      onClick={() => setIsChaosMode(true)}
-                      className={`flex-1 py-3 text-sm font-bold rounded-md transition-colors ${isChaosMode
-                        ? 'bg-zinc-800 text-white shadow-sm'
-                        : 'text-zinc-500'
-                        }`}
-                    >
-                      CHAOS
-                    </button>
-                    <button
-                      onClick={() => setIsChaosMode(false)}
-                      className={`flex-1 py-3 text-sm font-bold rounded-md transition-colors ${!isChaosMode
-                        ? 'bg-zinc-800 text-white shadow-sm'
-                        : 'text-zinc-500'
-                        }`}
-                    >
-                      NOFX
-                    </button>
-                  </div>
-
+                  <div className="flex flex-col gap-4">
                   <div className="grid grid-cols-2 gap-4">
                   {/* Lang Switcher */}
                   <div className="flex bg-zinc-900 rounded-lg p-1 border border-zinc-800">
