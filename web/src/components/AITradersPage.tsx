@@ -1733,7 +1733,7 @@ function ModelConfigModal({
                   </svg>
                   {selectedModel.provider?.startsWith('blockrun')
                     ? (language === 'zh' ? '钱包私钥 *' : 'Wallet Private Key *')
-                    : 'API Key {selectedModelId !== 'virtual' && '*'}'}
+                    : `API Key ${selectedModelId !== 'virtual' && '*'}`}
                 </label>
                 <input
                   type="password"
