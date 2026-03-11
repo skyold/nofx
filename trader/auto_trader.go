@@ -17,6 +17,7 @@ import (
 	"nofx/trader/bybit"
 	"nofx/trader/gate"
 	"nofx/trader/hyperliquid"
+	"nofx/trader/indodax"
 	"nofx/trader/kucoin"
 	"nofx/trader/lighter"
 	"nofx/trader/okx"
@@ -63,6 +64,10 @@ type AutoTraderConfig struct {
 	KuCoinAPIKey     string
 	KuCoinSecretKey  string
 	KuCoinPassphrase string
+
+	// Indodax API configuration
+	IndodaxAPIKey    string
+	IndodaxSecretKey string
 
 	// Hyperliquid configuration
 	HyperliquidPrivateKey  string
@@ -199,6 +204,21 @@ func NewAutoTrader(config AutoTraderConfig, st *store.Store, userID string) (*Au
 		mcpClient.SetAPIKey(config.CustomAPIKey, config.CustomAPIURL, config.CustomModelName)
 		logger.Infof("🤖 [%s] Using OpenAI", config.Name)
 
+	case "minimax":
+		mcpClient = mcp.NewMiniMaxClient()
+		mcpClient.SetAPIKey(config.CustomAPIKey, config.CustomAPIURL, config.CustomModelName)
+		logger.Infof("🤖 [%s] Using MiniMax AI", config.Name)
+
+	case "blockrun-base":
+		mcpClient = mcp.NewBlockRunBaseClient()
+		mcpClient.SetAPIKey(config.CustomAPIKey, "", config.CustomModelName)
+		logger.Infof("🤖 [%s] Using BlockRun (Base Wallet) AI", config.Name)
+
+	case "blockrun-sol":
+		mcpClient = mcp.NewBlockRunSolClient()
+		mcpClient.SetAPIKey(config.CustomAPIKey, "", config.CustomModelName)
+		logger.Infof("🤖 [%s] Using BlockRun (Solana Wallet) AI", config.Name)
+
 	case "ollama":
 		mcpClient = mcp.NewOllamaClient()
 		mcpClient.SetAPIKey(config.CustomAPIKey, config.CustomAPIURL, config.CustomModelName)
@@ -301,6 +321,9 @@ func NewAutoTrader(config AutoTraderConfig, st *store.Store, userID string) (*Au
 			return nil, fmt.Errorf("failed to initialize LIGHTER trader: %w", err)
 		}
 		logger.Infof("✓ LIGHTER trader initialized successfully")
+	case "indodax":
+		logger.Infof("🏦 [%s] Using Indodax Spot trading", config.Name)
+		trader = indodax.NewIndodaxTrader(config.IndodaxAPIKey, config.IndodaxSecretKey)
 	case "virtual":
 		logger.Infof("🎮 [%s] Using Virtual Exchange (Simulation)", config.Name)
 		trader = virtual.NewVirtualTrader(userID, config.ID, st, config.InitialBalance)

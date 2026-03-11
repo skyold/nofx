@@ -298,7 +298,7 @@ export default function HeaderBar({
                 className="flex items-center gap-2 px-3 py-2 rounded transition-colors text-nofx-text-muted hover:bg-white/5"
               >
                 <span className="text-lg">
-                  {language === 'zh' ? '🇨🇳' : '🇺🇸'}
+                  {language === 'zh' ? '🇨🇳' : language === 'id' ? '🇮🇩' : '🇺🇸'}
                 </span>
                 <ChevronDown className="w-4 h-4" />
               </button>
@@ -326,6 +326,17 @@ export default function HeaderBar({
                   >
                     <span className="text-base">🇺🇸</span>
                     <span className="text-sm">English</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      onLanguageChange?.('id')
+                      setLanguageDropdownOpen(false)
+                    }}
+                    className={`w-full flex items-center gap-2 px-3 py-2 transition-colors text-nofx-text-muted hover:text-white
+                      ${language === 'id' ? 'bg-nofx-gold/10' : 'hover:bg-white/5'}`}
+                  >
+                    <span className="text-base">🇮🇩</span>
+                    <span className="text-sm">Bahasa</span>
                   </button>
                 </div>
               )}
@@ -507,7 +518,7 @@ export default function HeaderBar({
                   <div className="grid grid-cols-2 gap-4">
                   {/* Lang Switcher */}
                   <div className="flex bg-zinc-900 rounded-lg p-1 border border-zinc-800">
-                    {['zh', 'en'].map((lang) => (
+                    {['zh', 'en', 'id'].map((lang) => (
                       <button
                         key={lang}
                         onClick={() => {
@@ -519,7 +530,7 @@ export default function HeaderBar({
                           : 'text-zinc-500'
                           }`}
                       >
-                        {lang === 'zh' ? 'CN' : 'EN'}
+                        {lang === 'zh' ? 'CN' : lang === 'id' ? 'ID' : 'EN'}
                       </button>
                     ))}
                   </div>

@@ -30,6 +30,7 @@ const SUPPORTED_EXCHANGE_TEMPLATES = [
   { exchange_type: 'hyperliquid', name: 'Hyperliquid', type: 'dex' as const },
   { exchange_type: 'aster', name: 'Aster DEX', type: 'dex' as const },
   { exchange_type: 'lighter', name: 'Lighter', type: 'dex' as const },
+  { exchange_type: 'indodax', name: 'Indodax', type: 'cex' as const },
   { exchange_type: 'virtual', name: 'Virtual Exchange', type: 'sim' as const },
 ]
 
@@ -205,6 +206,7 @@ export function ExchangeConfigModal({
     hyperliquid: { url: 'https://app.hyperliquid.xyz/join/AITRADING', hasReferral: true },
     aster: { url: 'https://www.asterdex.com/en/referral/fdfc0e', hasReferral: true },
     lighter: { url: 'https://app.lighter.xyz/?referral=68151432', hasReferral: true },
+    indodax: { url: 'https://indodax.com/ref/Saep23/1', hasReferral: true },
   }
 
   // Initialize form when editing
@@ -313,7 +315,7 @@ export function ExchangeConfigModal({
 
     setIsSaving(true)
     try {
-      if (currentExchangeType === 'binance' || currentExchangeType === 'bybit') {
+      if (currentExchangeType === 'binance' || currentExchangeType === 'bybit' || currentExchangeType === 'indodax') {
         if (!apiKey.trim() || !secretKey.trim()) return
         await onSave(exchangeId, exchangeType, trimmedAccountName, apiKey.trim(), secretKey.trim(), '', testnet)
       } else if (currentExchangeType === 'okx' || currentExchangeType === 'bitget' || currentExchangeType === 'kucoin') {
@@ -545,7 +547,7 @@ export function ExchangeConfigModal({
               )}
 
               {/* CEX Fields */}
-              {(currentExchangeType === 'binance' || currentExchangeType === 'bybit' || currentExchangeType === 'okx' || currentExchangeType === 'bitget' || currentExchangeType === 'gate' || currentExchangeType === 'kucoin') && (
+              {(currentExchangeType === 'binance' || currentExchangeType === 'bybit' || currentExchangeType === 'okx' || currentExchangeType === 'bitget' || currentExchangeType === 'gate' || currentExchangeType === 'kucoin' || currentExchangeType === 'indodax') && (
                 <>
                   {currentExchangeType === 'binance' && (
                     <div

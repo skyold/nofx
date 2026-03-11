@@ -71,6 +71,13 @@ func configureMCPClient(cfg BacktestConfig, base mcp.AIClient) (mcp.AIClient, er
 		oaiC := mcp.NewOpenAIClientWithOptions()
 		oaiC.(*mcp.OpenAIClient).SetAPIKey(cfg.AICfg.APIKey, cfg.AICfg.BaseURL, cfg.AICfg.Model)
 		return oaiC, nil
+	case "minimax":
+		if cfg.AICfg.APIKey == "" {
+			return nil, fmt.Errorf("minimax provider requires api key")
+		}
+		mmC := mcp.NewMiniMaxClientWithOptions()
+		mmC.(*mcp.MiniMaxClient).SetAPIKey(cfg.AICfg.APIKey, cfg.AICfg.BaseURL, cfg.AICfg.Model)
+		return mmC, nil
 	case "ollama":
 		// Ollama API key is optional
 		ollamaC := mcp.NewOllamaClientWithOptions()
@@ -131,6 +138,11 @@ func cloneBaseClient(base mcp.AIClient) *mcp.Client {
 			return &cp
 		}
 	case *mcp.OllamaClient:
+		if c != nil && c.Client != nil {
+			cp := *c.Client
+			return &cp
+		}
+	case *mcp.MiniMaxClient:
 		if c != nil && c.Client != nil {
 			cp := *c.Client
 			return &cp

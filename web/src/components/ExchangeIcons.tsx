@@ -17,6 +17,7 @@ const ICON_PATHS: Record<string, string> = {
   hyperliquid: '/exchange-icons/hyperliquid.png',
   aster: '/exchange-icons/aster.svg',
   lighter: '/exchange-icons/lighter.png',
+  indodax: '/exchange-icons/indodax.png',
   virtual: '/icons/virtual.svg',
 }
 
@@ -102,7 +103,9 @@ export const getExchangeIcon = (
                   ? 'aster'
                   : lowerType.includes('lighter')
                     ? 'lighter'
-                    : lowerType.includes('virtual')
+                    : lowerType.includes('indodax')
+                      ? 'indodax'
+                      : lowerType.includes('virtual')
                       ? 'virtual'
                       : lowerType
 
