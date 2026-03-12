@@ -1485,3 +1485,5 @@ func (t *FuturesTrader) GetPnLSymbols(lastSyncTime time.Time) ([]string, error) 
 
 	return symbols, nil
 }
+
+var _ types.ExchangeAdapter = (*FuturesTrader)(nil)

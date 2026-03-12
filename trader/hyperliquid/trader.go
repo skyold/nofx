@@ -2246,3 +2246,5 @@ func (t *HyperliquidTrader) GetOrderBook(symbol string, depth int) (bids, asks [
 
 	return bids, asks, nil
 }
+
+var _ types.ExchangeAdapter = (*HyperliquidTrader)(nil)

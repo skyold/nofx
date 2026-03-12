@@ -141,6 +141,9 @@ type ExchangeAdapter interface {
 
 	// CancelAllOrders 取消所有订单（可选 symbol 参数）
 	CancelAllOrders(symbol string) error
+
+	// GetOpenOrders 查询未成交订单
+	GetOpenOrders(symbol string) ([]OpenOrder, error)
 }
 
 // === 数据类型定义 ===

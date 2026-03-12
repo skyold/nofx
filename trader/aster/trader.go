@@ -1606,3 +1606,5 @@ func (t *AsterTrader) GetOrderBook(symbol string, depth int) (bids, asks [][]flo
 
 	return bids, asks, nil
 }
+
+var _ types.ExchangeAdapter = (*AsterTrader)(nil)

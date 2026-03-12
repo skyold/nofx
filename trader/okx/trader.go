@@ -1680,3 +1680,5 @@ func (t *OKXTrader) GetOrderBook(symbol string, depth int) (bids, asks [][]float
 
 	return bids, asks, nil
 }
+
+var _ types.ExchangeAdapter = (*OKXTrader)(nil)

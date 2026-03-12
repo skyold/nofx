@@ -9,10 +9,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/antihax/optional"
-	"github.com/gateio/gateapi-go/v6"
 	"nofx/logger"
 	"nofx/trader/types"
+
+	"github.com/antihax/optional"
+	"github.com/gateio/gateapi-go/v6"
 )
 
 // GateTrader implements ExchangeAdapter interface for Gate.io Futures
@@ -676,6 +677,14 @@ func (t *GateTrader) CancelAllOrders(symbol string) error {
 	return nil
 }
 
+// CancelOrder cancels a specific order by ID
+func (t *GateTrader) CancelOrder(symbol string, orderID string) error {
+	// Gate API doesn't have a direct cancel single order by ID method
+	// Cancel all orders for the symbol as a workaround
+	logger.Warnf("  [Gate] CancelOrder not fully implemented, canceling all orders for %s", symbol)
+	return t.CancelAllOrders(symbol)
+}
+
 // CancelStopOrders cancels all stop orders (stop loss and take profit)
 func (t *GateTrader) CancelStopOrders(symbol string) error {
 	t.CancelStopLossOrders(symbol)
@@ -893,3 +902,5 @@ func (t *GateTrader) clearCache() {
 	t.cachedPositions = nil
 	t.positionsCacheMutex.Unlock()
 }
+
+var _ types.ExchangeAdapter = (*GateTrader)(nil)

@@ -1262,3 +1262,5 @@ func (t *BybitTrader) GetOrderBook(symbol string, depth int) (bids, asks [][]flo
 
 	return bids, asks, nil
 }
+
+var _ types.ExchangeAdapter = (*BybitTrader)(nil)

@@ -610,3 +610,21 @@ func CleanupVirtualData(traderID string) error {
 	}
 	return nil
 }
+
+// CancelOrder cancels a specific order by ID
+func (t *VirtualTrader) CancelOrder(symbol string, orderID string) error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	for id := range t.state.Orders {
+		if id == orderID {
+			delete(t.state.Orders, id)
+			logger.Infof("  ✓ [Virtual] Order cancelled: %s", orderID)
+			return nil
+		}
+	}
+	logger.Warnf("  ⚠️ [Virtual] Order not found: %s", orderID)
+	return nil
+}
+
+var _ types.ExchangeAdapter = (*VirtualTrader)(nil)

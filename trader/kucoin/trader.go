@@ -1053,6 +1053,21 @@ func (t *KuCoinTrader) CancelAllOrders(symbol string) error {
 	return nil
 }
 
+// CancelOrder cancels a specific order by ID
+func (t *KuCoinTrader) CancelOrder(symbol string, orderID string) error {
+	path := fmt.Sprintf("%s/%s", kucoinCancelOrderPath, orderID)
+	_, err := t.doRequest("DELETE", path, nil)
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			logger.Warnf("Order not found: %s", orderID)
+			return nil
+		}
+		return fmt.Errorf("failed to cancel order: %w", err)
+	}
+	logger.Infof("  ✓ [KuCoin] Order cancelled: %s", orderID)
+	return nil
+}
+
 // FormatQuantity formats quantity to correct precision
 func (t *KuCoinTrader) FormatQuantity(symbol string, quantity float64) (string, error) {
 	contract, err := t.getContract(symbol)
@@ -1291,3 +1306,5 @@ func (t *KuCoinTrader) GetOpenOrders(symbol string) ([]types.OpenOrder, error) {
 
 	return orders, nil
 }
+
+var _ types.ExchangeAdapter = (*KuCoinTrader)(nil)
