@@ -1,230 +1,278 @@
 package types
 
 import (
-	"fmt"
-	"nofx/logger"
+	"context"
 	"time"
 )
 
-// ClosedPnLRecord represents a single closed position record from exchange
-type ClosedPnLRecord struct {
-	Symbol       string    // Trading pair (e.g., "BTCUSDT")
-	Side         string    // "long" or "short"
-	EntryPrice   float64   // Entry price
-	ExitPrice    float64   // Exit/close price
-	Quantity     float64   // Position size
-	RealizedPnL  float64   // Realized profit/loss
-	Fee          float64   // Trading fee/commission
-	Leverage     int       // Leverage used
-	EntryTime    time.Time // Position open time
-	ExitTime     time.Time // Position close time
-	OrderID      string    // Close order ID
-	CloseType    string    // "manual", "stop_loss", "take_profit", "liquidation", "unknown"
-	ExchangeID   string    // Exchange-specific position ID
-}
+// Action 定义所有可能的交易动作
+type Action string
 
-// TradeRecord represents a single trade/fill from exchange
-// Used for reconstructing position history with unified algorithm
-type TradeRecord struct {
-	TradeID      string    // Unique trade ID from exchange
-	Symbol       string    // Trading pair (e.g., "BTCUSDT")
-	Side         string    // "BUY" or "SELL"
-	PositionSide string    // "LONG", "SHORT", or "BOTH" (for one-way mode)
-	OrderAction  string    // "open_long", "open_short", "close_long", "close_short" (from exchange Dir field)
-	Price        float64   // Execution price
-	Quantity     float64   // Executed quantity
-	RealizedPnL  float64   // Realized PnL (non-zero for closing trades)
-	Fee          float64   // Trading fee/commission
-	Time         time.Time // Trade execution time
-}
+const (
+	// 基础动作
+	ActionOpenLong   Action = "open_long"
+	ActionOpenShort  Action = "open_short"
+	ActionCloseLong  Action = "close_long"
+	ActionCloseShort Action = "close_short"
 
-// Trader Unified trader interface
-// Supports multiple trading platforms (Binance, Hyperliquid, etc.)
+	// 风控动作
+	ActionSetLeverage   Action = "set_leverage"
+	ActionSetStopLoss   Action = "set_stop_loss"
+	ActionSetTakeProfit Action = "set_take_profit"
+
+	// 订单查询动作
+	ActionOrderStatusQuery Action = "order_status_query"
+	ActionOpenOrdersQuery  Action = "open_orders_query"
+	ActionCancelOrder      Action = "cancel_order"
+	ActionCancelAllOrders  Action = "cancel_all_orders"
+)
+
+// Trader 统一交易器接口
+// 这是上层应用（Scheduler/Engine）调用的接口
+// Trader 负责实现这个接口并适配底层交易所
 type Trader interface {
-	// GetBalance Get account balance
+	// === 基础信息 ===
+
+	// GetExchange 返回交易所名称
+	GetExchange() string
+
+	// === 能力查询 ===
+
+	// GetCapabilities 获取支持的所有 action 列表
+	GetCapabilities() []Action
+
+	// SupportsAction 检查是否支持某个 action
+	SupportsAction(action Action) bool
+
+	// === 账户查询 ===
+
+	// GetAccountInfo 获取账户信息
+	GetAccountInfo(ctx context.Context) (*AccountInfo, error)
+
+	// GetPositions 获取持仓信息
+	GetPositions(ctx context.Context) ([]PositionInfo, error)
+
+	// GetMarketPrice 获取市场价格
+	GetMarketPrice(ctx context.Context, symbol string) (float64, error)
+
+	// === 基础交易 ===
+
+	// OpenLong 开多仓
+	OpenLong(ctx context.Context, symbol string, quantity float64, leverage int) (*Order, error)
+
+	// OpenShort 开空仓
+	OpenShort(ctx context.Context, symbol string, quantity float64, leverage int) (*Order, error)
+
+	// CloseLong 平多仓
+	CloseLong(ctx context.Context, symbol string, quantity float64) (*Order, error)
+
+	// CloseShort 平空仓
+	CloseShort(ctx context.Context, symbol string, quantity float64) (*Order, error)
+
+	// === 风控（可选） ===
+
+	// SetLeverage 设置杠杆
+	SetLeverage(ctx context.Context, symbol string, leverage int) error
+
+	// SetStopLoss 设置止损
+	SetStopLoss(ctx context.Context, orderID string, price float64) error
+
+	// SetTakeProfit 设置止盈
+	SetTakeProfit(ctx context.Context, orderID string, price float64) error
+
+	// === 订单管理（可选） ===
+
+	// GetOrderStatus 查询订单状态
+	GetOrderStatus(ctx context.Context, symbol, orderID string) (*OrderStatus, error)
+
+	// GetOpenOrders 查询未成交订单
+	GetOpenOrders(ctx context.Context, symbol string) ([]OpenOrder, error)
+
+	// CancelOrder 取消订单
+	CancelOrder(ctx context.Context, symbol string, orderID string) (*Order, error)
+
+	// CancelAllOrders 取消所有订单
+	CancelAllOrders(ctx context.Context, symbol string) error
+
+	// === 统一执行 ===
+
+	// ExecuteDecision 执行交易决策
+	ExecuteDecision(ctx context.Context, decision interface{}) (*OrderResult, error)
+}
+
+// ExchangeAdapter 底层交易所适配器接口
+// 这是 Trader 持有的接口，用于适配各个交易所的原始实现
+// 所有交易所的原始方法签名都类似这样（无 context，返回 map）
+type ExchangeAdapter interface {
+	// === 账户查询（无 context，返回 map） ===
+
+	// GetBalance 获取账户余额
 	GetBalance() (map[string]interface{}, error)
 
-	// GetPositions Get all positions
+	// GetPositions 获取持仓信息
 	GetPositions() ([]map[string]interface{}, error)
 
-	// OpenLong Open long position
-	OpenLong(symbol string, quantity float64, leverage int) (map[string]interface{}, error)
-
-	// OpenShort Open short position
-	OpenShort(symbol string, quantity float64, leverage int) (map[string]interface{}, error)
-
-	// CloseLong Close long position (quantity=0 means close all)
-	CloseLong(symbol string, quantity float64) (map[string]interface{}, error)
-
-	// CloseShort Close short position (quantity=0 means close all)
-	CloseShort(symbol string, quantity float64) (map[string]interface{}, error)
-
-	// SetLeverage Set leverage
-	SetLeverage(symbol string, leverage int) error
-
-	// SetMarginMode Set position mode (true=cross margin, false=isolated margin)
-	SetMarginMode(symbol string, isCrossMargin bool) error
-
-	// GetMarketPrice Get market price
+	// GetMarketPrice 获取市场价格
 	GetMarketPrice(symbol string) (float64, error)
 
-	// SetStopLoss Set stop-loss order
-	SetStopLoss(symbol string, positionSide string, quantity, stopPrice float64) error
+	// === 基础交易（无 context，返回 map） ===
 
-	// SetTakeProfit Set take-profit order
-	SetTakeProfit(symbol string, positionSide string, quantity, takeProfitPrice float64) error
+	// OpenLong 开多仓
+	OpenLong(symbol string, quantity float64, leverage int) (map[string]interface{}, error)
 
-	// CancelStopLossOrders Cancel only stop-loss orders (BUG fix: don't delete take-profit when adjusting stop-loss)
-	CancelStopLossOrders(symbol string) error
+	// OpenShort 开空仓
+	OpenShort(symbol string, quantity float64, leverage int) (map[string]interface{}, error)
 
-	// CancelTakeProfitOrders Cancel only take-profit orders (BUG fix: don't delete stop-loss when adjusting take-profit)
-	CancelTakeProfitOrders(symbol string) error
+	// CloseLong 平多仓
+	CloseLong(symbol string, quantity float64) (map[string]interface{}, error)
 
-	// CancelAllOrders Cancel all pending orders for this symbol
+	// CloseShort 平空仓
+	CloseShort(symbol string, quantity float64) (map[string]interface{}, error)
+
+	// === 风控 ===
+
+	// SetLeverage 设置杠杆
+	SetLeverage(symbol string, leverage int) error
+
+	// === 订单管理 ===
+
+	// CancelOrder 取消订单
+	CancelOrder(symbol string, orderID string) error
+
+	// CancelAllOrders 取消所有订单（可选 symbol 参数）
 	CancelAllOrders(symbol string) error
-
-	// CancelStopOrders Cancel stop-loss/take-profit orders for this symbol (for adjusting stop-loss/take-profit positions)
-	CancelStopOrders(symbol string) error
-
-	// FormatQuantity Format quantity to correct precision
-	FormatQuantity(symbol string, quantity float64) (string, error)
-
-	// GetOrderStatus Get order status
-	// Returns: status(FILLED/NEW/CANCELED), avgPrice, executedQty, commission
-	GetOrderStatus(symbol string, orderID string) (map[string]interface{}, error)
-
-	// GetClosedPnL Get closed position PnL records from exchange
-	// startTime: start time for query (usually last sync time)
-	// limit: max number of records to return
-	// Returns accurate exit price, fees, and close reason for positions closed externally
-	GetClosedPnL(startTime time.Time, limit int) ([]ClosedPnLRecord, error)
-
-	// GetOpenOrders Get open/pending orders from exchange
-	// Returns stop-loss, take-profit, and limit orders that haven't been filled
-	GetOpenOrders(symbol string) ([]OpenOrder, error)
 }
 
-// OpenOrder represents a pending order on the exchange
+// === 数据类型定义 ===
+
+// AccountInfo 账户信息
+type AccountInfo struct {
+	TotalEquity        float64 `json:"total_equity"`         // 总权益
+	AvailableBalance   float64 `json:"available_balance"`    // 可用余额
+	TotalUnrealizedPnL float64 `json:"total_unrealized_pnl"` // 总未实现盈亏
+	TotalRealizedPnL   float64 `json:"total_realized_pnl"`   // 总已实现盈亏
+	MarginUsed         float64 `json:"margin_used"`          // 已使用保证金
+	MarginRatio        float64 `json:"margin_ratio"`         // 保证金率
+	AccountID          string  `json:"account_id"`           // 账户 ID
+}
+
+// PositionInfo 持仓信息
+type PositionInfo struct {
+	Symbol           string  `json:"symbol"`            // 交易对
+	Side             string  `json:"side"`              // 方向：LONG/SHORT
+	Quantity         float64 `json:"quantity"`          // 数量
+	EntryPrice       float64 `json:"entry_price"`       // 入场价
+	MarkPrice        float64 `json:"mark_price"`        // 标记价格
+	Leverage         int     `json:"leverage"`          // 杠杆
+	UnrealizedPnL    float64 `json:"unrealized_pnl"`    // 未实现盈亏
+	LiquidationPrice float64 `json:"liquidation_price"` // 强平价格
+	MarginMode       string  `json:"margin_mode"`       // 保证金模式：cross/isolated
+	PositionID       string  `json:"position_id"`       // 持仓 ID
+}
+
+// Order 订单信息
+type Order struct {
+	OrderID        string    `json:"order_id"`        // 订单 ID
+	Symbol         string    `json:"symbol"`          // 交易对
+	Side           string    `json:"side"`            // 方向：BUY/SELL
+	Type           string    `json:"type"`            // 类型：MARKET/LIMIT
+	Quantity       float64   `json:"quantity"`        // 数量
+	Price          float64   `json:"price"`           // 价格
+	AvgFillPrice   float64   `json:"avg_fill_price"`  // 平均成交价
+	FilledQuantity float64   `json:"filled_quantity"` // 已成交数量
+	Status         string    `json:"status"`          // 状态：NEW/FILLED/CANCELED
+	CreatedAt      time.Time `json:"created_at"`      // 创建时间
+	FilledAt       time.Time `json:"filled_at"`       // 成交时间
+	Fee            float64   `json:"fee"`             // 手续费
+	FeeAsset       string    `json:"fee_asset"`       // 手续费币种
+}
+
+// OrderStatus 订单状态
+type OrderStatus struct {
+	OrderID      string  `json:"order_id"`      // 订单 ID
+	Status       string  `json:"status"`        // 状态
+	AvgPrice     float64 `json:"avg_price"`     // 平均价格
+	ExecutedQty  float64 `json:"executed_qty"`  // 已执行数量
+	RemainingQty float64 `json:"remaining_qty"` // 剩余数量
+	Fee          float64 `json:"fee"`           // 手续费
+}
+
+// OrderResult 订单执行结果
+type OrderResult struct {
+	Success      bool   `json:"success"`                  // 是否成功
+	Order        *Order `json:"order,omitempty"`          // 订单信息
+	OrderID      string `json:"order_id,omitempty"`       // 订单 ID
+	StopLossID   string `json:"stop_loss_id,omitempty"`   // 止损订单 ID
+	TakeProfitID string `json:"take_profit_id,omitempty"` // 止盈订单 ID
+	Error        error  `json:"error,omitempty"`          // 错误
+	Message      string `json:"message,omitempty"`        // 消息
+}
+
+// OpenOrder 未成交订单
 type OpenOrder struct {
-	OrderID      string  `json:"order_id"`
-	Symbol       string  `json:"symbol"`
-	Side         string  `json:"side"`          // BUY/SELL
-	PositionSide string  `json:"position_side"` // LONG/SHORT
-	Type         string  `json:"type"`          // LIMIT/STOP_MARKET/TAKE_PROFIT_MARKET
-	Price        float64 `json:"price"`         // Order price (for limit orders)
-	StopPrice    float64 `json:"stop_price"`    // Trigger price (for stop orders)
-	Quantity     float64 `json:"quantity"`
-	Status       string  `json:"status"` // NEW
+	OrderID      string  `json:"order_id"`      // 订单 ID
+	Symbol       string  `json:"symbol"`        // 交易对
+	Side         string  `json:"side"`          // 方向：BUY/SELL
+	PositionSide string  `json:"position_side"` // 持仓方向：LONG/SHORT
+	Type         string  `json:"type"`          // 类型
+	Price        float64 `json:"price"`         // 价格
+	StopPrice    float64 `json:"stop_price"`    // 触发价
+	Quantity     float64 `json:"quantity"`      // 数量
+	Status       string  `json:"status"`        // 状态
 }
 
-// LimitOrderRequest represents a limit order request for grid trading
+// ClosedPnLRecord 已实现盈亏记录
+type ClosedPnLRecord struct {
+	Symbol      string    `json:"symbol"`       // 交易对
+	Side        string    `json:"side"`         // 方向
+	EntryPrice  float64   `json:"entry_price"`  // 入场价
+	ExitPrice   float64   `json:"exit_price"`   // 出场价
+	Quantity    float64   `json:"quantity"`     // 数量
+	RealizedPnL float64   `json:"realized_pnl"` // 已实现盈亏
+	Fee         float64   `json:"fee"`          // 手续费
+	Leverage    int       `json:"leverage"`     // 杠杆
+	EntryTime   time.Time `json:"entry_time"`   // 入场时间
+	ExitTime    time.Time `json:"exit_time"`    // 出场时间
+	OrderID     string    `json:"order_id"`     // 订单 ID
+	CloseType   string    `json:"close_type"`   // 平仓类型
+	ExchangeID  string    `json:"exchange_id"`  // 交易所 ID
+}
+
+// TradeRecord 交易记录
+type TradeRecord struct {
+	TradeID      string    `json:"trade_id"`      // 交易 ID
+	Symbol       string    `json:"symbol"`        // 交易对
+	Side         string    `json:"side"`          // 方向
+	PositionSide string    `json:"position_side"` // 持仓方向
+	OrderAction  string    `json:"order_action"`  // 订单动作
+	Price        float64   `json:"price"`         // 价格
+	Quantity     float64   `json:"quantity"`      // 数量
+	RealizedPnL  float64   `json:"realized_pnl"`  // 已实现盈亏
+	Fee          float64   `json:"fee"`           // 手续费
+	Time         time.Time `json:"time"`          // 时间
+}
+
+// LimitOrderRequest 限价单请求（用于 Grid 交易）
 type LimitOrderRequest struct {
-	Symbol       string  `json:"symbol"`
-	Side         string  `json:"side"`          // BUY/SELL
-	PositionSide string  `json:"position_side"` // LONG/SHORT (for hedge mode)
-	Price        float64 `json:"price"`         // Limit price
-	Quantity     float64 `json:"quantity"`
-	Leverage     int     `json:"leverage"`
-	PostOnly     bool    `json:"post_only"`     // Maker only order
-	ReduceOnly   bool    `json:"reduce_only"`   // Reduce position only
-	ClientID     string  `json:"client_id"`     // Client order ID for tracking
+	Symbol       string  `json:"symbol"`        // 交易对
+	Side         string  `json:"side"`          // 方向
+	PositionSide string  `json:"position_side"` // 持仓方向
+	Price        float64 `json:"price"`         // 限价
+	Quantity     float64 `json:"quantity"`      // 数量
+	Leverage     int     `json:"leverage"`      // 杠杆
+	PostOnly     bool    `json:"post_only"`     // 是否 PostOnly
+	ReduceOnly   bool    `json:"reduce_only"`   // 是否 ReduceOnly
+	ClientID     string  `json:"client_id"`     // 客户端订单 ID
 }
 
-// LimitOrderResult represents the result of placing a limit order
+// LimitOrderResult 限价单结果
 type LimitOrderResult struct {
-	OrderID      string  `json:"order_id"`
-	ClientID     string  `json:"client_id"`
-	Symbol       string  `json:"symbol"`
-	Side         string  `json:"side"`
-	PositionSide string  `json:"position_side"`
-	Price        float64 `json:"price"`
-	Quantity     float64 `json:"quantity"`
-	Status       string  `json:"status"` // NEW, PARTIALLY_FILLED, FILLED, CANCELED
-}
-
-// GridTrader extends Trader interface with limit order support for grid trading
-// Exchanges that support grid trading should implement this interface
-type GridTrader interface {
-	Trader
-
-	// PlaceLimitOrder places a limit order at specified price
-	// Returns order ID and status
-	PlaceLimitOrder(req *LimitOrderRequest) (*LimitOrderResult, error)
-
-	// CancelOrder cancels a specific order by ID
-	CancelOrder(symbol, orderID string) error
-
-	// GetOrderBook gets current order book (for price validation)
-	// Returns best bid/ask prices
-	GetOrderBook(symbol string, depth int) (bids, asks [][]float64, err error)
-}
-
-// GridTraderAdapter wraps a basic Trader to provide GridTrader interface
-// Uses stop orders as a fallback when limit orders aren't directly available
-type GridTraderAdapter struct {
-	Trader
-}
-
-// NewGridTraderAdapter creates an adapter for basic Trader
-func NewGridTraderAdapter(t Trader) *GridTraderAdapter {
-	return &GridTraderAdapter{Trader: t}
-}
-
-// PlaceLimitOrder implements limit order using available methods
-// For exchanges without native limit order support, this uses conditional orders
-func (a *GridTraderAdapter) PlaceLimitOrder(req *LimitOrderRequest) (*LimitOrderResult, error) {
-	// CRITICAL FIX: Set leverage before placing order
-	if req.Leverage > 0 {
-		if err := a.Trader.SetLeverage(req.Symbol, req.Leverage); err != nil {
-			logger.Warnf("[Grid] Failed to set leverage %dx: %v", req.Leverage, err)
-			// Continue anyway - some exchanges don't require explicit leverage setting
-		}
-	}
-
-	// Use SetStopLoss/SetTakeProfit as conditional limit orders
-	// For buy orders below current price, use stop-loss mechanism
-	// For sell orders above current price, use take-profit mechanism
-	var err error
-	if req.Side == "BUY" {
-		err = a.Trader.SetStopLoss(req.Symbol, "SHORT", req.Quantity, req.Price)
-	} else {
-		err = a.Trader.SetTakeProfit(req.Symbol, "LONG", req.Quantity, req.Price)
-	}
-	if err != nil {
-		return nil, err
-	}
-	return &LimitOrderResult{
-		OrderID:      req.ClientID,
-		ClientID:     req.ClientID,
-		Symbol:       req.Symbol,
-		Side:         req.Side,
-		PositionSide: req.PositionSide,
-		Price:        req.Price,
-		Quantity:     req.Quantity,
-		Status:       "NEW",
-	}, nil
-}
-
-// CancelOrder cancels a specific order
-func (a *GridTraderAdapter) CancelOrder(symbol, orderID string) error {
-	// Try to use CancelOrder if trader supports it directly
-	if canceler, ok := a.Trader.(interface {
-		CancelOrder(symbol, orderID string) error
-	}); ok {
-		return canceler.CancelOrder(symbol, orderID)
-	}
-
-	// For traders that only support CancelAllOrders, log a warning
-	// This is a limitation - we cannot cancel individual orders
-	logger.Warnf("[Grid] Trader does not support individual order cancellation, "+
-		"cannot cancel order %s. Consider using exchange-specific GridTrader implementation.", orderID)
-
-	// Return error instead of canceling all orders
-	return fmt.Errorf("individual order cancellation not supported for this exchange")
-}
-
-// GetOrderBook returns empty order book (not supported in basic Trader)
-func (a *GridTraderAdapter) GetOrderBook(symbol string, depth int) (bids, asks [][]float64, err error) {
-	// Not supported, return empty
-	return nil, nil, nil
+	OrderID      string  `json:"order_id"`      // 订单 ID
+	ClientID     string  `json:"client_id"`     // 客户端订单 ID
+	Symbol       string  `json:"symbol"`        // 交易对
+	Side         string  `json:"side"`          // 方向
+	PositionSide string  `json:"position_side"` // 持仓方向
+	Price        float64 `json:"price"`         // 价格
+	Quantity     float64 `json:"quantity"`      // 数量
+	Status       string  `json:"status"`        // 状态
 }

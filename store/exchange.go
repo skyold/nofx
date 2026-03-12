@@ -30,6 +30,7 @@ type Exchange struct {
 	Testnet                 bool            `gorm:"default:false" json:"testnet"`
 	HyperliquidWalletAddr   string          `gorm:"column:hyperliquid_wallet_addr;default:''" json:"hyperliquidWalletAddr"`
 	HyperliquidUnifiedAcct  bool            `gorm:"column:hyperliquid_unified_account;default:true" json:"hyperliquidUnifiedAccount"` // Unified Account mode (Spot as collateral)
+	HyperliquidPrivateKey  crypto.EncryptedString `gorm:"column:hyperliquid_private_key;default:''" json:"hyperliquidPrivateKey"`
 	AsterUser               string          `gorm:"column:aster_user;default:''" json:"asterUser"`
 	AsterSigner             string          `gorm:"column:aster_signer;default:''" json:"asterSigner"`
 	AsterPrivateKey         crypto.EncryptedString `gorm:"column:aster_private_key;default:''" json:"asterPrivateKey"`

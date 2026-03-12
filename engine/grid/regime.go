@@ -1,4 +1,4 @@
-package trader
+package grid
 
 import (
 	"nofx/market"

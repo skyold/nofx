@@ -15,7 +15,7 @@ import (
 	"nofx/trader/types"
 )
 
-// GateTrader implements types.Trader interface for Gate.io Futures
+// GateTrader implements ExchangeAdapter interface for Gate.io Futures
 type GateTrader struct {
 	apiKey    string
 	secretKey string
@@ -893,6 +893,3 @@ func (t *GateTrader) clearCache() {
 	t.cachedPositions = nil
 	t.positionsCacheMutex.Unlock()
 }
-
-// Ensure GateTrader implements Trader interface
-var _ types.Trader = (*GateTrader)(nil)

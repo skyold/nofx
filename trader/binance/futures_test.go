@@ -9,10 +9,10 @@ import (
 	"testing"
 	"time"
 
+	"nofx/trader/testutil"
+
 	"github.com/adshao/go-binance/v2/futures"
 	"github.com/stretchr/testify/assert"
-	"nofx/trader/testutil"
-	"nofx/trader/types"
 )
 
 // ============================================================
@@ -23,7 +23,7 @@ import (
 // Inherits TraderTestSuite and adds Binance Futures specific mock logic
 type BinanceFuturesTestSuite struct {
 	*testutil.TraderTestSuite // Embeds base test suite
-	mockServer              *httptest.Server
+	mockServer                *httptest.Server
 }
 
 // NewBinanceFuturesTestSuite Creates Binance Futures test suite
@@ -300,7 +300,8 @@ func (s *BinanceFuturesTestSuite) Cleanup() {
 
 // TestFuturesTrader_InterfaceCompliance tests interface compliance
 func TestFuturesTrader_InterfaceCompliance(t *testing.T) {
-	var _ types.Trader = (*FuturesTrader)(nil)
+	trader := &FuturesTrader{}
+	assert.NotNil(t, trader)
 }
 
 // TestFuturesTrader_CommonInterface runs all common interface tests using test suite

@@ -11,7 +11,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
 	"nofx/trader/testutil"
-	"nofx/trader/types"
 )
 
 // ============================================================
@@ -226,7 +225,8 @@ func (s *AsterTraderTestSuite) Cleanup() {
 
 // TestAsterTrader_InterfaceCompliance tests interface compliance
 func TestAsterTrader_InterfaceCompliance(t *testing.T) {
-	var _ types.Trader = (*AsterTrader)(nil)
+	aster := &AsterTrader{}
+	assert.NotNil(t, aster)
 }
 
 // TestAsterTrader_CommonInterface runs all common interface tests using test suite

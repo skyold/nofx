@@ -1,15 +1,228 @@
 package chaos
 
 import (
+	"context"
 	"fmt"
+	"nofx/engine"
 	"nofx/kernel"
 	"nofx/logger"
 	"nofx/market"
 	"nofx/mcp"
 	"nofx/provider/nofxos"
 	"nofx/store"
+	"nofx/trader/types"
 	"time"
 )
+
+// 确保 ChaosEngine 实现 engine.Engine 接口
+var _ engine.Engine = (*ChaosEngine)(nil)
+
+// =============================================================================
+// Engine 接口实现
+// =============================================================================
+
+// Name 返回引擎名称
+func (e *ChaosEngine) Name() string {
+	return "chaos"
+}
+
+// BuildContext 构建完整的交易上下文
+// 这是 Engine 接口的核心方法
+// 引擎负责构建完整的上下文，包括账户、持仓、市场数据等
+func (e *ChaosEngine) BuildContext(ctx context.Context, runtime engine.RuntimeInfo) (*engine.Context, error) {
+	// 检查是否设置了依赖
+	if e.trader == nil {
+		// 返回简化版本（向后兼容）
+		return &engine.Context{
+			CurrentTime:    runtime.CurrentTime,
+			RuntimeMinutes: runtime.RuntimeMinutes,
+			CallCount:      runtime.CallCount,
+			Config:         e.config,
+		}, nil
+	}
+
+	// 使用 ContextBuilder 构建完整上下文
+	chaosConfig := &ChaosConfig{
+		ChaosPrompt:         e.config.ChaosConfig.ChaosPrompt,
+		RiskControl:         e.config.ChaosConfig.RiskControl,
+		SystemPromptVariant: e.config.ChaosConfig.SystemPromptVariant,
+		UserPromptVersion:   e.config.ChaosConfig.UserPromptVersion,
+		Indicators:          e.config.ChaosConfig.Indicators,
+	}
+
+	builder := NewContextBuilder(
+		e.trader,
+		e.strategyEngine,
+		e.nofxosClient,
+		chaosConfig,
+		e.store,
+		e.traderID,
+		e.startTime,
+		e.callCount,
+	)
+
+	builderRuntime := RuntimeInfo{
+		CurrentTime:    time.Now(),
+		RuntimeMinutes: runtime.RuntimeMinutes,
+		CallCount:      runtime.CallCount,
+	}
+
+	chaosCtx, err := builder.BuildContext(ctx, builderRuntime)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build chaos context: %w", err)
+	}
+
+	// 将 ChaosContext 转换为 engine.Context
+	return &engine.Context{
+		CurrentTime:    chaosCtx.CurrentTime,
+		RuntimeMinutes: chaosCtx.RuntimeMinutes,
+		CallCount:      chaosCtx.CallCount,
+		Account:        chaosCtx.Account,
+		Positions:      chaosCtx.Positions,
+		CandidateCoins: chaosCtx.CandidateCoins,
+		MarketDataMap:  chaosCtx.MarketDataMap,
+		QuantDataMap:   chaosCtx.QuantDataMap,
+		Config:         e.config,
+	}, nil
+}
+
+// BuildSystemPrompt 构建系统提示词（实现 engine.Engine 接口）
+func (e *ChaosEngine) BuildSystemPrompt(ctx *engine.Context) string {
+	// 将 engine.Context 转换为 ChaosContext
+	chaosCtx := &ChaosContext{
+		CurrentTime:    ctx.CurrentTime,
+		RuntimeMinutes: ctx.RuntimeMinutes,
+		CallCount:      ctx.CallCount,
+		Config: &ChaosConfig{
+			ChaosPrompt: e.config.ChaosConfig.ChaosPrompt,
+			RiskControl: e.config.ChaosConfig.RiskControl,
+			Indicators:  e.config.ChaosConfig.Indicators,
+		},
+	}
+	return e.BuildSystemPromptWithContext(chaosCtx)
+}
+
+// BuildUserPrompt 构建用户提示词（实现 engine.Engine 接口）
+func (e *ChaosEngine) BuildUserPrompt(ctx *engine.Context) string {
+	// 将 engine.Context 转换为 ChaosContext
+	chaosCtx := &ChaosContext{
+		CurrentTime:    ctx.CurrentTime,
+		RuntimeMinutes: ctx.RuntimeMinutes,
+		CallCount:      ctx.CallCount,
+		// TODO: 需要从 ctx.Account, ctx.Positions 等填充数据
+	}
+	return e.BuildUserPromptLegacy(chaosCtx)
+}
+
+// CallLLM 调用 LLM 服务（实现 engine.Engine 接口）
+// 注意：这个方法需要 mcp.AIClient 参数，应该由调度器传入
+func (e *ChaosEngine) CallLLM(ctx context.Context, systemPrompt, userPrompt string) (*engine.AIResponse, error) {
+	// TODO: 需要 mcp.AIClient 参数
+	// 这个方法应该在调度器中调用，而不是在引擎内部
+	// 调度器应该这样使用：
+	// aiResponse, err := mcpClient.CallWithMessages(systemPrompt, userPrompt)
+	// return &engine.AIResponse{
+	//     RawResponse: aiResponse,
+	// }, nil
+	return nil, fmt.Errorf("CallLLM requires MCP client from scheduler")
+}
+
+// ParseResponse 解析 LLM 响应（实现 engine.Engine 接口）
+func (e *ChaosEngine) ParseResponse(response *engine.AIResponse) ([]engine.Decision, error) {
+	if response == nil || response.RawResponse == "" {
+		return nil, fmt.Errorf("empty response")
+	}
+
+	// 使用现有的解析逻辑
+	decisions, _, err := e.ExtractDecisions(response.RawResponse)
+	if err != nil {
+		return nil, err
+	}
+
+	// 转换为 engine.Decision 类型
+	engineDecisions := make([]engine.Decision, len(decisions))
+	for i, d := range decisions {
+		engineDecisions[i] = engine.Decision{
+			Symbol:          d.Symbol,
+			Action:          d.Action,
+			Leverage:        d.Leverage,
+			EntryPrice:      d.EntryPrice,
+			StopLoss:        d.StopLoss,
+			TakeProfit:      d.TakeProfit,
+			PositionSizeUSD: d.PositionSizeUSD,
+			Reasoning:       "", // TODO: 从 response.Reasoning 获取
+		}
+	}
+
+	return engineDecisions, nil
+}
+
+// ValidateDecisions 验证决策（实现 engine.Engine 接口）
+func (e *ChaosEngine) ValidateDecisions(ctx context.Context, decisions []engine.Decision, context *engine.Context) ([]engine.ValidatedDecision, error) {
+	if len(decisions) == 0 {
+		return []engine.ValidatedDecision{}, nil
+	}
+
+	// 转换为 chaos.Decision 类型
+	chaosDecisions := make([]Decision, len(decisions))
+	for i, d := range decisions {
+		chaosDecisions[i] = Decision{
+			Symbol:          d.Symbol,
+			Action:          d.Action,
+			Leverage:        d.Leverage,
+			EntryPrice:      d.EntryPrice,
+			StopLoss:        d.StopLoss,
+			TakeProfit:      d.TakeProfit,
+			PositionSizeUSD: d.PositionSizeUSD,
+		}
+	}
+
+	// 将 engine.Context 转换为 ChaosContext
+	chaosCtx := &ChaosContext{
+		CurrentTime:    context.CurrentTime,
+		RuntimeMinutes: context.RuntimeMinutes,
+		CallCount:      context.CallCount,
+		Config: &ChaosConfig{
+			ChaosPrompt: e.config.ChaosConfig.ChaosPrompt,
+			RiskControl: e.config.ChaosConfig.RiskControl,
+			Indicators:  e.config.ChaosConfig.Indicators,
+		},
+	}
+
+	// TODO: 需要从 context.Account 获取账户信息
+	// 目前使用默认值
+	accountEquity := 0.0
+
+	// 使用现有的验证逻辑
+	var validated []engine.ValidatedDecision
+	riskConfig := chaosCtx.Config.RiskControl
+
+	for _, d := range chaosDecisions {
+		// 使用 manager 验证（需要 Reasoning，这里传 nil）
+		positionSizeUSD, err := e.manager.ValidateDecision(&d, nil, accountEquity, riskConfig)
+		if err != nil {
+			return nil, fmt.Errorf("validation failed for %s: %w", d.Symbol, err)
+		}
+
+		validated = append(validated, engine.ValidatedDecision{
+			Decision: engine.Decision{
+				Symbol:          d.Symbol,
+				Action:          d.Action,
+				Leverage:        d.Leverage,
+				EntryPrice:      d.EntryPrice,
+				StopLoss:        d.StopLoss,
+				TakeProfit:      d.TakeProfit,
+				PositionSizeUSD: &positionSizeUSD,
+				Reasoning:       "", // chaos.Decision 没有 Reasoning 字段
+			},
+			ValidatedPositionUSD: positionSizeUSD,
+			ValidationErrors:     nil,
+			IsApproved:           true,
+		})
+	}
+
+	return validated, nil
+}
 
 // =============================================================================
 // ChaosEngine - 对外统一入口
@@ -22,6 +235,14 @@ type ChaosEngine struct {
 	manager      *Manager
 	config       *store.StrategyConfig
 	nofxosClient *nofxos.Client
+
+	// 依赖注入（用于 BuildContext）
+	trader         types.Trader
+	strategyEngine *kernel.StrategyEngine
+	store          *store.Store
+	traderID       string
+	startTime      time.Time
+	callCount      int
 }
 
 // NewChaosEngine creates a new ChaosEngine
@@ -49,12 +270,32 @@ func NewChaosEngine(config *store.StrategyConfig) *ChaosEngine {
 	}
 }
 
+// SetDependencies 设置引擎的依赖（用于 BuildContext）
+// 这是可选的，如果不设置，BuildContext 将返回简化版本
+func (e *ChaosEngine) SetDependencies(
+	trader types.Trader,
+	strategyEngine *kernel.StrategyEngine,
+	store *store.Store,
+	traderID string,
+	startTime time.Time,
+	callCount int,
+) {
+	e.trader = trader
+	e.strategyEngine = strategyEngine
+	e.store = store
+	e.traderID = traderID
+	e.startTime = startTime
+	e.callCount = callCount
+}
+
 // =============================================================================
-// 对外 API - Prompt 构建
+// 对外 API - Prompt 构建（已迁移到 Engine 接口）
 // =============================================================================
 
-// BuildSystemPrompt implements PromptBuilder interface for API compatibility
-func (e *ChaosEngine) BuildSystemPrompt(accountEquity float64, variant string) string {
+// BuildSystemPromptLegacy 已废弃，使用 Engine 接口的 BuildSystemPrompt
+// 保留用于向后兼容
+// 注意：这个方法只是为了保持向后兼容，实际应该使用 BuildSystemPromptWithContext
+func (e *ChaosEngine) BuildSystemPromptLegacy(accountEquity float64, variant string) string {
 	var chaosPrompt string
 	var riskControl store.RiskControlConfig
 	var indicators store.IndicatorConfig
@@ -89,8 +330,9 @@ func (e *ChaosEngine) BuildSystemPromptWithContext(ctx *ChaosContext) string {
 	return "# Chaos Mode (Missing Configuration)\n\nPlease provide trading decisions based on market data."
 }
 
-// BuildUserPrompt builds User Prompt using ChaosContext
-func (e *ChaosEngine) BuildUserPrompt(ctx *ChaosContext) string {
+// BuildUserPromptLegacy builds User Prompt using ChaosContext (legacy, deprecated)
+// Kept for backward compatibility
+func (e *ChaosEngine) BuildUserPromptLegacy(ctx *ChaosContext) string {
 	return e.manager.BuildUserPrompt(ctx)
 }
 
@@ -156,7 +398,7 @@ func (e *ChaosEngine) GetCandidateCoins() ([]kernel.CandidateCoin, error) {
 // Execute runs the Chaos decision process
 func (e *ChaosEngine) Execute(ctx *ChaosContext, mcpClient mcp.AIClient) (*DecisionResult, error) {
 	systemPrompt := e.BuildSystemPromptWithContext(ctx)
-	userPrompt := e.BuildUserPrompt(ctx)
+	userPrompt := e.BuildUserPromptLegacy(ctx)
 
 	aiCallStart := time.Now()
 	aiResponse, err := mcpClient.CallWithMessages(systemPrompt, userPrompt)
@@ -191,9 +433,7 @@ func (e *ChaosEngine) Execute(ctx *ChaosContext, mcpClient mcp.AIClient) (*Decis
 
 	result.RawDecisions = decisions
 
-	
-
-	validatedDecisions, err := e.ValidateDecisions(decisions, reasoning, ctx)
+	validatedDecisions, err := e.ValidateDecisionsInternal(decisions, reasoning, ctx)
 	if err != nil {
 		return result, fmt.Errorf("content audit failed: %w", err)
 	}
@@ -444,7 +684,7 @@ func (e *ChaosEngine) getOILowCoins(limit int) ([]kernel.CandidateCoin, error) {
 // 内部方法 - 决策验证
 // =============================================================================
 
-func (e *ChaosEngine) ValidateDecisions(decisions []Decision, reasoning *Reasoning, ctx *ChaosContext) ([]Decision, error) {
+func (e *ChaosEngine) ValidateDecisionsInternal(decisions []Decision, reasoning *Reasoning, ctx *ChaosContext) ([]Decision, error) {
 	var validated []Decision
 	riskConfig := ctx.Config.RiskControl
 

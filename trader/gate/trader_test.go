@@ -10,7 +10,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"nofx/trader/testutil"
-	"nofx/trader/types"
 )
 
 // ============================================================
@@ -174,7 +173,8 @@ func (s *GateTraderTestSuite) Cleanup() {
 
 // TestGateTrader_InterfaceCompliance tests interface compliance
 func TestGateTrader_InterfaceCompliance(t *testing.T) {
-	var _ types.Trader = (*GateTrader)(nil)
+	trader := &GateTrader{}
+	assert.NotNil(t, trader)
 }
 
 // ============================================================

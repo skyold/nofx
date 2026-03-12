@@ -1,6 +1,7 @@
 package store
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"nofx/logger"
@@ -16,7 +17,7 @@ import (
 // 2. Quantity mismatches (partial external fills/closes)
 func (s *PositionStore) ReconcilePositions(trader types.Trader, traderID, exchangeID string) error {
 	// 1. Get real positions from exchange
-	exchangePositions, err := trader.GetPositions()
+	exchangePositions, err := trader.GetPositions(context.Background())
 	if err != nil {
 		return fmt.Errorf("failed to get exchange positions: %w", err)
 	}
@@ -28,10 +29,10 @@ func (s *PositionStore) ReconcilePositions(trader types.Trader, traderID, exchan
 	})
 
 	for _, pos := range exchangePositions {
-		symbol, _ := pos["symbol"].(string)
-		side, _ := pos["side"].(string)
-		qty, _ := pos["positionAmt"].(float64)
-		entryPrice, _ := pos["entryPrice"].(float64)
+		symbol := pos.Symbol
+		side := pos.Side
+		qty := pos.Quantity
+		entryPrice := pos.EntryPrice
 
 		if symbol == "" || qty == 0 {
 			continue

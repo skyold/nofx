@@ -2,6 +2,7 @@ package trader
 
 import (
 	"fmt"
+	"nofx/trader/types"
 	"sort"
 	"time"
 )
@@ -39,7 +40,7 @@ type positionState struct {
 // - Partial opens (multiple trades to build a position)
 // - Partial closes (multiple trades to close a position)
 // - Both hedge mode (LONG/SHORT) and one-way mode (BOTH)
-func RebuildPositionsFromTrades(trades []TradeRecord) []ClosedPnLRecord {
+func RebuildPositionsFromTrades(trades []types.TradeRecord) []types.ClosedPnLRecord {
 	if len(trades) == 0 {
 		return nil
 	}
@@ -51,7 +52,7 @@ func RebuildPositionsFromTrades(trades []TradeRecord) []ClosedPnLRecord {
 
 	// Track positions by symbol_side
 	positions := make(map[string]*positionState)
-	var records []ClosedPnLRecord
+	var records []types.ClosedPnLRecord
 
 	for _, trade := range trades {
 		// Determine position side
@@ -89,7 +90,7 @@ func RebuildPositionsFromTrades(trades []TradeRecord) []ClosedPnLRecord {
 }
 
 // determinePositionSide determines the position side from a trade
-func determinePositionSide(trade TradeRecord) string {
+func determinePositionSide(trade types.TradeRecord) string {
 	// Hedge mode: use PositionSide directly
 	switch trade.PositionSide {
 	case "LONG", "long":
@@ -119,7 +120,7 @@ func determinePositionSide(trade TradeRecord) string {
 }
 
 // buildClosedPosition builds a closed position record from a closing trade
-func buildClosedPosition(trade TradeRecord, side string, state *positionState) *ClosedPnLRecord {
+func buildClosedPosition(trade types.TradeRecord, side string, state *positionState) *types.ClosedPnLRecord {
 	var entryPrice float64
 	var entryTime time.Time
 	var totalEntryFee float64
@@ -178,7 +179,7 @@ func buildClosedPosition(trade TradeRecord, side string, state *positionState) *
 		return nil
 	}
 
-	return &ClosedPnLRecord{
+	return &types.ClosedPnLRecord{
 		Symbol:      trade.Symbol,
 		Side:        side,
 		EntryPrice:  entryPrice,

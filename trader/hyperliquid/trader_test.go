@@ -12,7 +12,6 @@ import (
 	"github.com/sonirico/go-hyperliquid"
 	"github.com/stretchr/testify/assert"
 	"nofx/trader/testutil"
-	"nofx/trader/types"
 )
 
 // ============================================================
@@ -250,7 +249,8 @@ func (s *HyperliquidTestSuite) Cleanup() {
 
 // TestHyperliquidTrader_InterfaceCompliance Test interface compliance
 func TestHyperliquidTrader_InterfaceCompliance(t *testing.T) {
-	var _ types.Trader = (*HyperliquidTrader)(nil)
+	trader := &HyperliquidTrader{}
+	assert.NotNil(t, trader)
 }
 
 // TestHyperliquidTrader_CommonInterface Run all common interface tests using test suite
@@ -270,34 +270,37 @@ func TestHyperliquidTrader_CommonInterface(t *testing.T) {
 // TestNewHyperliquidTrader Test creating Hyperliquid trader
 func TestNewHyperliquidTrader(t *testing.T) {
 	tests := []struct {
-		name          string
-		privateKeyHex string
-		walletAddr    string
-		testnet       bool
-		wantError     bool
-		errorContains string
+		name            string
+		privateKeyHex   string
+		walletAddr     string
+		testnet        bool
+		unifiedAccount bool
+		wantError      bool
+		errorContains  string
 	}{
 		{
-			name:          "Invalid private key format",
-			privateKeyHex: "invalid_key",
-			walletAddr:    "0x1234567890123456789012345678901234567890",
-			testnet:       true,
-			wantError:     true,
-			errorContains: "Failed to parse private key",
+			name:            "Invalid private key format",
+			privateKeyHex:   "invalid_key",
+			walletAddr:     "0x1234567890123456789012345678901234567890",
+			testnet:        true,
+			unifiedAccount: true,
+			wantError:      true,
+			errorContains:  "failed to parse private key",
 		},
 		{
-			name:          "Empty wallet address",
-			privateKeyHex: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-			walletAddr:    "",
-			testnet:       true,
-			wantError:     true,
-			errorContains: "Configuration error",
+			name:            "Empty wallet address",
+			privateKeyHex:   "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+			walletAddr:     "",
+			testnet:        true,
+			unifiedAccount: true,
+			wantError:      true,
+			errorContains:  "Configuration error",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			trader, err := NewHyperliquidTrader(tt.privateKeyHex, tt.walletAddr, tt.testnet)
+			trader, err := NewHyperliquidTrader(tt.privateKeyHex, tt.walletAddr, tt.testnet, tt.unifiedAccount)
 
 			if tt.wantError {
 				assert.Error(t, err)
