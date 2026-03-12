@@ -63,13 +63,13 @@ func (cb *ContextBuilder) BuildContext(ctx context.Context, runtime interface{})
 	}
 
 	// 第一步：获取账户信息
-	accountInfo, totalEquity, availableBalance, totalUnrealizedProfit, err := cb.buildAccountInfo(ctx)
+	accountInfo, totalEquity, availableBalance, totalUnrealizedProfit, err := cb.buildAccountInfo()
 	if err != nil {
 		return nil, fmt.Errorf("获取账户信息失败：%w", err)
 	}
 
 	// 第二步：获取持仓信息
-	positionSnapshots, err := cb.buildPositions(ctx)
+	positionSnapshots, err := cb.buildPositions()
 	if err != nil {
 		return nil, fmt.Errorf("获取持仓信息失败：%w", err)
 	}
@@ -125,8 +125,8 @@ func (cb *ContextBuilder) BuildContext(ctx context.Context, runtime interface{})
 }
 
 // buildAccountInfo 构建账户信息
-func (cb *ContextBuilder) buildAccountInfo(ctx context.Context) (*kernel.AccountInfo, float64, float64, float64, error) {
-	account, err := cb.trader.GetAccountInfo(ctx)
+func (cb *ContextBuilder) buildAccountInfo() (*kernel.AccountInfo, float64, float64, float64, error) {
+	account, err := cb.trader.GetAccountInfo()
 	if err != nil {
 		return nil, 0, 0, 0, err
 	}
@@ -143,8 +143,8 @@ func (cb *ContextBuilder) buildAccountInfo(ctx context.Context) (*kernel.Account
 }
 
 // buildPositions 构建持仓信息
-func (cb *ContextBuilder) buildPositions(ctx context.Context) ([]kernel.PositionInfo, error) {
-	positions, err := cb.trader.GetPositions(ctx)
+func (cb *ContextBuilder) buildPositions() ([]kernel.PositionInfo, error) {
+	positions, err := cb.trader.GetPositions()
 	if err != nil {
 		return nil, err
 	}

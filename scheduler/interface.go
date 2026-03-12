@@ -48,6 +48,9 @@ type Scheduler interface {
 
 	// GetStats 获取统计信息
 	GetStats() *SchedulerStats
+
+	// GetTrader 获取交易器
+	GetTrader() Trader
 }
 
 // Engine 引擎接口（使用 engine 包的定义）

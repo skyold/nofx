@@ -138,20 +138,19 @@ func (s *Server) pollAndUpdateOrderStatus(orderRecordID int64, traderID, exchang
 			time.Sleep(500 * time.Millisecond)
 			continue
 		}
-		if err == nil {
-			statusStr, _ := status["status"].(string)
-			if statusStr == "FILLED" {
+		if err == nil && status != nil {
+			if status.Status == "FILLED" {
 				// Get actual fill price
-				if avgPrice, ok := status["avgPrice"].(float64); ok && avgPrice > 0 {
-					actualPrice = avgPrice
+				if status.AvgPrice > 0 {
+					actualPrice = status.AvgPrice
 				}
 				// Get actual executed quantity
-				if execQty, ok := status["executedQty"].(float64); ok && execQty > 0 {
-					actualQty = execQty
+				if status.ExecutedQty > 0 {
+					actualQty = status.ExecutedQty
 				}
 				// Get commission/fee
-				if commission, ok := status["commission"].(float64); ok {
-					fee = commission
+				if status.Fee > 0 {
+					fee = status.Fee
 				}
 
 				logger.Infof("  ✅ Order filled: avgPrice=%.6f, qty=%.6f, fee=%.6f", actualPrice, actualQty, fee)
@@ -190,9 +189,9 @@ func (s *Server) pollAndUpdateOrderStatus(orderRecordID int64, traderID, exchang
 				}
 
 				return
-			} else if statusStr == "CANCELED" || statusStr == "EXPIRED" || statusStr == "REJECTED" {
-				logger.Infof("  ⚠️ Order %s, updating status", statusStr)
-				s.store.Order().UpdateOrderStatus(orderRecordID, statusStr, 0, 0, 0)
+			} else if status.Status == "CANCELED" || status.Status == "EXPIRED" || status.Status == "REJECTED" {
+				logger.Infof("  ⚠️ Order %s, updating status", status.Status)
+				s.store.Order().UpdateOrderStatus(orderRecordID, status.Status, 0, 0, 0)
 				return
 			}
 		}

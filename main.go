@@ -3,7 +3,6 @@ package main
 import (
 	"nofx/api"
 	"nofx/auth"
-	"nofx/backtest"
 	"nofx/config"
 	"nofx/crypto"
 	"nofx/experience"
@@ -78,7 +77,6 @@ func main() {
 		logger.Fatalf("❌ Failed to initialize database: %v", err)
 	}
 	defer st.Close()
-	backtest.UseDatabaseWithType(st.DB(), st.DBType() == store.DBTypePostgres)
 
 	// Initialize installation ID for experience improvement (anonymous statistics)
 	initInstallationID(st)
@@ -95,13 +93,8 @@ func main() {
 	// time.Sleep(500 * time.Millisecond)
 	logger.Info("📊 Using CoinAnk API for all market data (WebSocket cache disabled)")
 
-	// Create TraderManager and BacktestManager
+	// Create TraderManager
 	traderManager := manager.NewTraderManager()
-	mcpClient := newSharedMCPClient()
-	backtestManager := backtest.NewManager(mcpClient)
-	if err := backtestManager.RestoreRuns(); err != nil {
-		logger.Warnf("⚠️ Failed to restore backtest history: %v", err)
-	}
 
 	// Load all traders from database to memory (may auto-start traders with IsRunning=true)
 	if err := traderManager.LoadTradersFromStore(st); err != nil {
@@ -129,7 +122,7 @@ func main() {
 	}
 
 	// Start API server
-	server := api.NewServer(traderManager, st, cryptoService, backtestManager, cfg.APIServerPort)
+	server := api.NewServer(traderManager, st, cryptoService, cfg.APIServerPort)
 	go func() {
 		if err := server.Start(); err != nil {
 			logger.Fatalf("❌ Failed to start API server: %v", err)

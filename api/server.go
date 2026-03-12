@@ -7,7 +7,6 @@ import (
 	"net"
 	"net/http"
 	"nofx/auth"
-	"nofx/backtest"
 	"nofx/config"
 	"nofx/crypto"
 	"nofx/logger"
@@ -40,18 +39,16 @@ import (
 
 // Server HTTP API server
 type Server struct {
-	router          *gin.Engine
-	traderManager   *manager.TraderManager
-	store           *store.Store
-	cryptoHandler   *CryptoHandler
-	backtestManager *backtest.Manager
-	debateHandler   *DebateHandler
-	httpServer      *http.Server
-	port            int
+	router        *gin.Engine
+	traderManager *manager.TraderManager
+	store         *store.Store
+	cryptoHandler *CryptoHandler
+	httpServer    *http.Server
+	port          int
 }
 
 // NewServer Creates API server
-func NewServer(traderManager *manager.TraderManager, st *store.Store, cryptoService *crypto.CryptoService, backtestManager *backtest.Manager, port int) *Server {
+func NewServer(traderManager *manager.TraderManager, st *store.Store, cryptoService *crypto.CryptoService, port int) *Server {
 	// Set to Release mode (reduce log output)
 	gin.SetMode(gin.ReleaseMode)
 
@@ -63,22 +60,12 @@ func NewServer(traderManager *manager.TraderManager, st *store.Store, cryptoServ
 	// Create crypto handler
 	cryptoHandler := NewCryptoHandler(cryptoService)
 
-	// Create debate store and handler
-	debateStore := store.NewDebateStore(st.GormDB())
-	if err := debateStore.InitSchema(); err != nil {
-		logger.Errorf("Failed to initialize debate schema: %v", err)
-	}
-	debateHandler := NewDebateHandler(debateStore, st.Strategy(), st.AIModel())
-	debateHandler.SetTraderManager(traderManager)
-
 	s := &Server{
-		router:          router,
-		traderManager:   traderManager,
-		store:           st,
-		cryptoHandler:   cryptoHandler,
-		backtestManager: backtestManager,
-		debateHandler:   debateHandler,
-		port:            port,
+		router:        router,
+		traderManager: traderManager,
+		store:         st,
+		cryptoHandler: cryptoHandler,
+		port:          port,
 	}
 
 	// Setup routes
@@ -193,19 +180,6 @@ func (s *Server) setupRoutes() {
 			protected.POST("/strategies/:id/activate", s.handleActivateStrategy)
 			protected.POST("/strategies/:id/duplicate", s.handleDuplicateStrategy)
 
-			// Debate Arena
-			protected.GET("/debates", s.debateHandler.HandleListDebates)
-			protected.GET("/debates/personalities", s.debateHandler.HandleGetPersonalities)
-			protected.GET("/debates/:id", s.debateHandler.HandleGetDebate)
-			protected.POST("/debates", s.debateHandler.HandleCreateDebate)
-			protected.POST("/debates/:id/start", s.debateHandler.HandleStartDebate)
-			protected.POST("/debates/:id/cancel", s.debateHandler.HandleCancelDebate)
-			protected.POST("/debates/:id/execute", s.debateHandler.HandleExecuteDebate)
-			protected.DELETE("/debates/:id", s.debateHandler.HandleDeleteDebate)
-			protected.GET("/debates/:id/messages", s.debateHandler.HandleGetMessages)
-			protected.GET("/debates/:id/votes", s.debateHandler.HandleGetVotes)
-			protected.GET("/debates/:id/stream", s.debateHandler.HandleDebateStream)
-
 			// Transaction management
 			protected.GET("/transactions", s.handleGetTransactions)
 			protected.PUT("/transactions/:id/trader", s.handleAssignTransaction)
@@ -223,10 +197,6 @@ func (s *Server) setupRoutes() {
 			protected.GET("/decisions", s.handleDecisions)
 			protected.GET("/decisions/latest", s.handleLatestDecisions)
 			protected.GET("/statistics", s.handleStatistics)
-
-			// Backtest routes
-			backtest := protected.Group("/backtest")
-			s.registerBacktestRoutes(backtest)
 		}
 	}
 }

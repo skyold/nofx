@@ -3,8 +3,7 @@ package manager
 import (
 	"encoding/json"
 	"fmt"
-	"nofx/engine/chaos"
-	"nofx/kernel"
+	chaos "nofx/engine/llm"
 	"nofx/logger"
 	"nofx/scheduler"
 	"nofx/store"
@@ -12,23 +11,6 @@ import (
 	"sync"
 	"time"
 )
-
-// TraderExecutorAdapter wraps Scheduler to implement debate.TraderExecutor
-type TraderExecutorAdapter struct {
-	scheduler scheduler.Scheduler
-}
-
-// ExecuteDecision executes a trading decision
-func (a *TraderExecutorAdapter) ExecuteDecision(d *kernel.Decision) error {
-	// TODO: 需要转换为 engine.ValidatedDecision 并调用 scheduler 的 trader
-	return fmt.Errorf("not implemented")
-}
-
-// GetBalance returns account balance
-func (a *TraderExecutorAdapter) GetBalance() (map[string]interface{}, error) {
-	// TODO: 需要从 scheduler 获取 trader 并调用 GetAccountInfo
-	return nil, fmt.Errorf("not implemented")
-}
 
 // CompetitionCache competition data cache
 type CompetitionCache struct {
@@ -451,4 +433,44 @@ func (tm *TraderManager) RemoveTrader(traderID string) error {
 
 	logger.Infof("✓ Removed trader: %s", traderID)
 	return nil
+}
+
+// LoadUserTradersFromStore loads traders for a specific user
+func (tm *TraderManager) LoadUserTradersFromStore(st *store.Store, userID string) error {
+	tm.mu.Lock()
+	defer tm.mu.Unlock()
+
+	logger.Infof("📦 Loading traders for user %s from store...", userID)
+
+	traders, err := st.Trader().List(userID)
+	if err != nil {
+		return fmt.Errorf("failed to list traders: %w", err)
+	}
+
+	for _, t := range traders {
+		if err := tm.loadSingleTrader(st, t); err != nil {
+			logger.Warnf("⚠️ Failed to load trader %s: %v", t.ID, err)
+		}
+	}
+
+	logger.Infof("✓ Loaded %d traders for user %s", len(traders), userID)
+	return nil
+}
+
+// GetTrader returns a trader by ID
+func (tm *TraderManager) GetTrader(traderID string) (scheduler.Trader, error) {
+	tm.mu.RLock()
+	defer tm.mu.RUnlock()
+
+	sched, exists := tm.schedulers[traderID]
+	if !exists {
+		return nil, fmt.Errorf("trader %s not found", traderID)
+	}
+
+	t := sched.GetTrader()
+	if t == nil {
+		return nil, fmt.Errorf("trader %s not initialized", traderID)
+	}
+
+	return t, nil
 }

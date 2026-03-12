@@ -1,7 +1,6 @@
 package store
 
 import (
-	"context"
 	"fmt"
 	"math"
 	"nofx/logger"
@@ -17,7 +16,7 @@ import (
 // 2. Quantity mismatches (partial external fills/closes)
 func (s *PositionStore) ReconcilePositions(trader types.Trader, traderID, exchangeID string) error {
 	// 1. Get real positions from exchange
-	exchangePositions, err := trader.GetPositions(context.Background())
+	exchangePositions, err := trader.GetPositions()
 	if err != nil {
 		return fmt.Errorf("failed to get exchange positions: %w", err)
 	}
