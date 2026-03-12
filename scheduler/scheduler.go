@@ -184,6 +184,13 @@ func (s *SchedulerImpl) GetStats() *SchedulerStats {
 	return s.stats
 }
 
+// GetTrader 获取交易器
+func (s *SchedulerImpl) GetTrader() Trader {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.trader
+}
+
 // runLoop 运行调度循环
 func (s *SchedulerImpl) runLoop() {
 	for {
@@ -300,7 +307,7 @@ func (s *SchedulerImpl) executeTradingCycle() error {
 		}
 
 		logger.Infof("⚡ Executing decision %d: %s %s", i+1, decision.Symbol, decision.Action)
-		result, err := s.trader.ExecuteDecision(ctx, decision)
+		result, err := s.trader.ExecuteDecision(decision)
 		if err != nil {
 			logger.Errorf("❌ Failed to execute decision %d: %v", i+1, err)
 			continue
