@@ -2,7 +2,105 @@ package engine
 
 import (
 	"context"
+	"time"
 )
+
+// PositionInfo position information
+type PositionInfo struct {
+	Symbol           string  `json:"symbol"`
+	Side             string  `json:"side"`
+	EntryPrice       float64 `json:"entry_price"`
+	MarkPrice        float64 `json:"mark_price"`
+	Quantity         float64 `json:"quantity"`
+	Leverage         int     `json:"leverage"`
+	UnrealizedPnL    float64 `json:"unrealized_pnl"`
+	UnrealizedPnLPct float64 `json:"unrealized_pnl_pct"`
+	PeakPnLPct       float64 `json:"peak_pnl_pct"`
+	LiquidationPrice float64 `json:"liquidation_price"`
+	MarginUsed       float64 `json:"margin_used"`
+	UpdateTime       int64   `json:"update_time"`
+}
+
+// AccountInfo account information
+type AccountInfo struct {
+	TotalEquity      float64 `json:"total_equity"`
+	AvailableBalance float64 `json:"available_balance"`
+	UnrealizedPnL    float64 `json:"unrealized_pnl"`
+	TotalPnL         float64 `json:"total_pnl"`
+	TotalPnLPct      float64 `json:"total_pnl_pct"`
+	MarginUsed       float64 `json:"margin_used"`
+	MarginUsedPct    float64 `json:"margin_used_pct"`
+	PositionCount    int     `json:"position_count"`
+}
+
+// CandidateCoin candidate coin (from coin pool)
+type CandidateCoin struct {
+	Symbol  string   `json:"symbol"`
+	Sources []string `json:"sources"`
+}
+
+// OITopData open interest growth top data
+type OITopData struct {
+	Rank              int     `json:"rank"`
+	OIDeltaPercent    float64 `json:"oi_delta_percent"`
+	OIDeltaValue      float64 `json:"oi_delta_value"`
+	PriceDeltaPercent float64 `json:"price_delta_percent"`
+}
+
+// TradingStats trading statistics
+type TradingStats struct {
+	TotalTrades    int     `json:"total_trades"`
+	WinRate        float64 `json:"win_rate"`
+	ProfitFactor   float64 `json:"profit_factor"`
+	SharpeRatio    float64 `json:"sharpe_ratio"`
+	TotalPnL       float64 `json:"total_pnl"`
+	AvgWin         float64 `json:"avg_win"`
+	AvgLoss        float64 `json:"avg_loss"`
+	MaxDrawdownPct float64 `json:"max_drawdown_pct"`
+}
+
+// RecentOrder recently completed order
+type RecentOrder struct {
+	Symbol       string  `json:"symbol"`
+	Side         string  `json:"side"`
+	EntryPrice   float64 `json:"entry_price"`
+	ExitPrice    float64 `json:"exit_price"`
+	RealizedPnL  float64 `json:"realized_pnl"`
+	PnLPct       float64 `json:"pnl_pct"`
+	EntryTime    string  `json:"entry_time"`
+	ExitTime     string  `json:"exit_time"`
+	HoldDuration string  `json:"hold_duration"`
+}
+
+// QuantData quantitative data
+type QuantData struct {
+	Symbol      string             `json:"symbol"`
+	Price       float64            `json:"price"`
+	Netflow     *NetflowData       `json:"netflow,omitempty"`
+	OI          map[string]*OIData `json:"oi,omitempty"`
+	PriceChange map[string]float64 `json:"price_change,omitempty"`
+}
+
+type NetflowData struct {
+	Institution *FlowTypeData `json:"institution,omitempty"`
+	Personal    *FlowTypeData `json:"personal,omitempty"`
+}
+
+type FlowTypeData struct {
+	Future map[string]float64 `json:"future,omitempty"`
+	Spot   map[string]float64 `json:"spot,omitempty"`
+}
+
+type OIData struct {
+	CurrentOI float64                 `json:"current_oi"`
+	Delta     map[string]*OIDeltaData `json:"delta,omitempty"`
+}
+
+type OIDeltaData struct {
+	OIDelta        float64 `json:"oi_delta"`
+	OIDeltaValue   float64 `json:"oi_delta_value"`
+	OIDeltaPercent float64 `json:"oi_delta_percent"`
+}
 
 // Engine 定义交易引擎的标准接口
 // 引擎负责构建上下文、与 LLM 对话、解析和验证决策
@@ -93,6 +191,17 @@ type Decision struct {
 	Reasoning       string   `json:"reasoning"`
 }
 
+// FullDecision AI's complete decision (including chain of thought)
+type FullDecision struct {
+	SystemPrompt        string     `json:"system_prompt"`
+	UserPrompt          string     `json:"user_prompt"`
+	CoTTrace            string     `json:"cot_trace"`
+	Decisions           []Decision `json:"decisions"`
+	RawResponse         string     `json:"raw_response"`
+	Timestamp           time.Time  `json:"timestamp"`
+	AIRequestDurationMs int64      `json:"ai_request_duration_ms,omitempty"`
+}
+
 // ValidatedDecision 验证后的决策
 type ValidatedDecision struct {
 	Decision
@@ -103,8 +212,8 @@ type ValidatedDecision struct {
 
 // AIResponse LLM 响应
 type AIResponse struct {
-	RawResponse string                 `json:"raw_response"`
-	Reasoning   string                 `json:"reasoning"`
-	Decisions   interface{}            `json:"decisions"`
-	Metadata    map[string]string      `json:"metadata"`
+	RawResponse string            `json:"raw_response"`
+	Reasoning   string            `json:"reasoning"`
+	Decisions   interface{}       `json:"decisions"`
+	Metadata    map[string]string `json:"metadata"`
 }

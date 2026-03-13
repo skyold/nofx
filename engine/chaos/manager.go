@@ -1,24 +1,119 @@
-package ai
+package chaos
 
 import (
 	"fmt"
 	"strings"
-
 	"nofx/logger"
 	"nofx/store"
 )
 
-type Manager struct {
-	config *store.StrategyConfig
+// =============================================================================
+// Manager - 内部业务逻辑层
+// =============================================================================
+// Manager 处理 Chaos 模式的核心业务逻辑，不直接对外暴露。
+// 所有外部调用都通过 ChaosEngine 进行。
+// =============================================================================
+
+// Manager handles Chaos trading mode specific logic
+type Manager struct{}
+
+// NewManager creates a new Chaos Manager
+func NewManager() *Manager {
+	return &Manager{}
 }
 
-func NewManager(config *store.StrategyConfig) *Manager {
-	return &Manager{
-		config: config,
+// =============================================================================
+// 模式检测与参数
+// =============================================================================
+
+// IsChaosMode checks if the current prompt indicates Chaos mode
+func (m *Manager) IsChaosMode(customPrompt string) bool {
+	if customPrompt == "" {
+		return false
 	}
+
+	cp := strings.TrimSpace(customPrompt)
+	chaosTags := []string{"这是一个Chaos策略", "Chaos Trader"}
+	for _, tag := range chaosTags {
+		if strings.HasPrefix(cp, tag) || strings.Contains(cp, tag) {
+			return true
+		}
+	}
+
+	// Also check for JSON-style type indicator
+	if strings.Contains(customPrompt, `"type": "chaos"`) {
+		return true
+	}
+
+	return false
 }
 
-func (m *Manager) ValidateDecision(d *Decision, reasoning *Reasoning, accountEquity float64, riskConfig store.RiskControlConfig) (float64, error) {
+// GetVariantParams returns the parameters for a specific variant
+func (m *Manager) GetVariantParams(variant string) map[string]string {
+	params := make(map[string]string)
+	v := strings.ToLower(strings.TrimSpace(variant))
+
+	// Default values
+	params["PRIMARY_TIMEFRAME"] = "N/A"
+	params["STRUCTURE_VALIDATION_TF"] = "N/A"
+	params["ENTRY_TIMEFRAME"] = "N/A"
+	params["TIME_DECAY_N"] = "N/A"
+	params["MIN_RR"] = "N/A"
+
+	switch v {
+	case "s1", "swing_core":
+		params["PRIMARY_TIMEFRAME"] = "1h"
+		params["STRUCTURE_VALIDATION_TF"] = "4h"
+		params["ENTRY_TIMEFRAME"] = "15m"
+		params["TIME_DECAY_N"] = "5"
+		params["MIN_RR"] = "1.5"
+
+	case "t1", "trend_follow_slow":
+		params["PRIMARY_TIMEFRAME"] = "4h"
+		params["STRUCTURE_VALIDATION_TF"] = "1d"
+		params["ENTRY_TIMEFRAME"] = "1h"
+		params["TIME_DECAY_N"] = "3"
+		params["MIN_RR"] = "2.0"
+
+	case "d1", "intraday_swing":
+		params["PRIMARY_TIMEFRAME"] = "15m"
+		params["STRUCTURE_VALIDATION_TF"] = "1h"
+		params["ENTRY_TIMEFRAME"] = "5m"
+		params["TIME_DECAY_N"] = "4"
+		params["MIN_RR"] = "1.5"
+
+	case "r1", "reversal_hunter":
+		params["PRIMARY_TIMEFRAME"] = "1h"
+		params["STRUCTURE_VALIDATION_TF"] = "4h"
+		params["ENTRY_TIMEFRAME"] = "15m"
+		params["TIME_DECAY_N"] = "3"
+		params["MIN_RR"] = "2.5"
+
+	case "x1", "scalp_turbo":
+		params["PRIMARY_TIMEFRAME"] = "5m"
+		params["STRUCTURE_VALIDATION_TF"] = "15m"
+		params["ENTRY_TIMEFRAME"] = "1m"
+		params["TIME_DECAY_N"] = "3"
+		params["MIN_RR"] = "1.2"
+
+	case "default", "":
+		params["PRIMARY_TIMEFRAME"] = "1h"
+		params["STRUCTURE_VALIDATION_TF"] = "4h"
+		params["ENTRY_TIMEFRAME"] = "15m"
+		params["TIME_DECAY_N"] = "5"
+		params["MIN_RR"] = "1.5"
+	}
+
+	return params
+}
+
+// =============================================================================
+// 决策验证
+// =============================================================================
+
+// ValidateDecision validates a decision made in Chaos mode
+func (m *Manager) ValidateDecision(d *Decision, reasoning *Reasoning, accountEquity float64,riskConfig store.RiskControlConfig) (float64, error) {
+	
 	decisionInfo := func() string {
 		score := 0
 		if d.TotalScore != nil {
@@ -99,7 +194,7 @@ func (m *Manager) ValidateDecision(d *Decision, reasoning *Reasoning, accountEqu
 		if len(disallowed) > 0 {
 			return 0, fmt.Errorf("%s: non-open action '%s' must include ONLY symbol+action (disallowed: %s)", decisionInfo(), d.Action, strings.Join(disallowed, ", "))
 		}
-		logger.Infof("✓ AI decision validated (non-opening) | %s %s", d.Action, d.Symbol)
+		logger.Infof("✓ Chaos decision validated (non-opening) | %s %s", d.Action, d.Symbol)
 		return 0, nil
 	}
 
@@ -123,6 +218,25 @@ func (m *Manager) ValidateDecision(d *Decision, reasoning *Reasoning, accountEqu
 	const MinRiskR = 0.1
 	if riskR < MinRiskR || riskR > MaxRiskR {
 		return 0, fmt.Errorf("%s: RiskR %.2f must be between %.2f and %.2f", decisionInfo(), riskR, MinRiskR, MaxRiskR)
+	}
+
+	if reasoning != nil {
+		var matchedOpp *Opportunity
+		for _, opp := range reasoning.Opportunities {
+			if opp.Symbol == d.Symbol {
+				matchedOpp = &opp
+				break
+			}
+		}
+		if matchedOpp != nil {
+			expectedStr := fmt.Sprintf("Final %.1fR", riskR)
+			expectedStr2 := fmt.Sprintf("Final %.2fR", riskR)
+
+			if !strings.Contains(matchedOpp.AuditPath, expectedStr) && !strings.Contains(matchedOpp.AuditPath, expectedStr2) {
+				logger.Warnf("%s: RiskR consistency check failed. Decision=%.2f, AuditPath='%s' (Expected '%s' or '%s')",
+					decisionInfo(), riskR, matchedOpp.AuditPath, expectedStr, expectedStr2)
+			}
+		}
 	}
 
 	if entryPrice <= 0 {
@@ -166,11 +280,12 @@ func (m *Manager) ValidateDecision(d *Decision, reasoning *Reasoning, accountEqu
 	}
 
 	if riskRewardRatio < minRR {
-		return 0, fmt.Errorf("%s: AI decision requires R:R ≥ %.2f (got %.4f). Params: Entry=%.4f, SL=%.4f, TP=%.4f, Risk=%.4f, Reward=%.4f",
+		return 0, fmt.Errorf("%s: Chaos decision requires R:R ≥ %.2f (got %.4f). Params: Entry=%.4f, SL=%.4f, TP=%.4f, Risk=%.4f, Reward=%.4f",
 			decisionInfo(), minRR, riskRewardRatio, entryPrice, stopLoss, takeProfit, risk, reward)
 	}
 
-	riskAmount := accountEquity * baseRiskPercent * riskR
+	var riskAmount float64
+	riskAmount = accountEquity * baseRiskPercent * riskR
 
 	quantity := riskAmount / risk
 
@@ -216,7 +331,7 @@ func (m *Manager) ValidateDecision(d *Decision, reasoning *Reasoning, accountEqu
 	}
 
 	logger.Infof(
-		"✓ AI decision validated | %s %s | RiskR=%.2f | Size=%.2f USDT | R:R=%.2f",
+		"✓ Chaos decision validated | %s %s | RiskR=%.2f | Size=%.2f USDT | R:R=%.2f",
 		d.Action, d.Symbol, riskR, positionSizeUSD, riskRewardRatio,
 	)
 

@@ -10,38 +10,49 @@ import (
 	"time"
 )
 
+func getString(m map[string]interface{}, key string) string {
+	if v, ok := m[key].(string); ok {
+		return v
+	}
+	return ""
+}
+
+func getFloat64(m map[string]interface{}, key string) float64 {
+	if v, ok := m[key].(float64); ok {
+		return v
+	}
+	return 0
+}
+
 // ReconcilePositions reconciles local positions with exchange positions
 // It detects and fixes:
 // 1. Ghost positions (exist locally but closed on exchange)
 // 2. Quantity mismatches (partial external fills/closes)
-func (s *PositionStore) ReconcilePositions(trader types.Trader, traderID, exchangeID string) error {
-	// 1. Get real positions from exchange
+func (s *PositionStore) ReconcilePositions(trader types.ExchangeAdapter, traderID, exchangeID string) error {
 	exchangePositions, err := trader.GetPositions()
 	if err != nil {
 		return fmt.Errorf("failed to get exchange positions: %w", err)
 	}
 
-	// Map: Symbol_Side -> Position Info
 	realPositions := make(map[string]struct {
 		Quantity   float64
 		EntryPrice float64
 	})
 
 	for _, pos := range exchangePositions {
-		symbol := pos.Symbol
-		side := pos.Side
-		qty := pos.Quantity
-		entryPrice := pos.EntryPrice
+		symbol := getString(pos, "symbol")
+		side := getString(pos, "side")
+		qty := getFloat64(pos, "quantity")
+		entryPrice := getFloat64(pos, "entry_price")
 
 		if symbol == "" || qty == 0 {
 			continue
 		}
 
-		// Normalize: ensure side is "long" or "short", quantity is positive
 		side = strings.ToLower(side)
 		if qty < 0 {
 			qty = -qty
-			if side == "" { // Some exchanges might not set side if qty is negative implies short
+			if side == "" {
 				side = "short"
 			}
 		}
@@ -79,7 +90,7 @@ func (s *PositionStore) ReconcilePositions(trader types.Trader, traderID, exchan
 		if !exists {
 			// Case 1: Ghost position (exists locally but not on exchange)
 			logger.Infof("👻 Found ghost position: %s %s (qty: %.4f), closing...", localPos.Symbol, localPos.Side, localPos.Quantity)
-			
+
 			// Close it locally
 			// Use current market price as exit price if possible, or entry price as fallback
 			exitPrice := localPos.EntryPrice
@@ -115,18 +126,18 @@ func (s *PositionStore) ReconcilePositions(trader types.Trader, traderID, exchan
 			// Allow small tolerance for floating point errors
 			diff := math.Abs(localPos.Quantity - realPos.Quantity)
 			if diff > 0.00001 {
-				logger.Infof("⚠️ Quantity mismatch for %s %s: local=%.4f, real=%.4f, fixing...", 
+				logger.Infof("⚠️ Quantity mismatch for %s %s: local=%.4f, real=%.4f, fixing...",
 					localPos.Symbol, localPos.Side, localPos.Quantity, realPos.Quantity)
-				
+
 				// Update quantity directly
 				// Calculate delta to add (can be negative)
 				delta := realPos.Quantity - localPos.Quantity
-				
+
 				err := s.UpdatePositionQuantityAndPrice(
-					localPos.ID, 
+					localPos.ID,
 					delta,
 					realPos.EntryPrice, // Use real entry price
-					0, // No extra fee info
+					0,                  // No extra fee info
 				)
 				if err != nil {
 					logger.Errorf("❌ Failed to update position quantity %s: %v", localPos.Symbol, err)

@@ -3,7 +3,7 @@ package chaos
 import (
 	"context"
 	"fmt"
-	"nofx/kernel"
+	"nofx/engine"
 	"nofx/market"
 	"nofx/provider/nofxos"
 	"nofx/store"
@@ -15,7 +15,7 @@ import (
 // 这个结构体封装了所有构建上下文所需的依赖
 type ContextBuilder struct {
 	trader         types.Trader
-	strategyEngine *kernel.StrategyEngine
+	engine         *engine.Engine
 	nofxosClient   *nofxos.Client
 	config         *ChaosConfig
 	store          *store.Store
@@ -56,7 +56,7 @@ type RuntimeInfo struct {
 
 // BuildContext 构建完整的 Chaos 上下文
 // 这是 Engine 接口的核心方法之一
-func (cb *ContextBuilder) BuildContext(ctx context.Context, runtime interface{}) (*ChaosContext, error) {
+func (cb *ContextBuilder) BuildContext(ctx context.Context, runtime interface{}) (*engine.Context, error) {
 	runtimeInfo, ok := runtime.(RuntimeInfo)
 	if !ok {
 		return nil, fmt.Errorf("invalid runtime info type")
@@ -180,8 +180,8 @@ func (cb *ContextBuilder) buildPositions() ([]kernel.PositionInfo, error) {
 }
 
 // buildCandidateCoins 构建候选币种列表
-func (cb *ContextBuilder) buildCandidateCoins(positions []kernel.PositionInfo) ([]kernel.CandidateCoin, error) {
-	var candidateCoins []kernel.CandidateCoin
+func (cb *ContextBuilder) buildCandidateCoins(positions []engine.PositionInfo) ([]engine.CandidateCoin, error) {
+	var candidateCoins []engine.CandidateCoin
 	existingCandidateMap := make(map[string]bool)
 
 	// 从策略引擎获取候选币种

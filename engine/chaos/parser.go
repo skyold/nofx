@@ -1,4 +1,4 @@
-package ai
+package chaos
 
 import (
 	"encoding/json"
@@ -11,31 +11,44 @@ import (
 )
 
 var (
+	// Safe regex: precisely match ```json code blocks
 	reJSONFence      = regexp.MustCompile(`(?is)` + "```json\\s*(\\[\\s*\\{.*?\\}\\s*\\])\\s*```")
 	reJSONArray      = regexp.MustCompile(`(?is)\[\s*\{.*?\}\s*\]`)
+	reArrayHead      = regexp.MustCompile(`^\[\s*\{`)
+	reArrayOpenSpace = regexp.MustCompile(`^\[\s+\{`)
 	reInvisibleRunes = regexp.MustCompile("[\u200B\u200C\u200D\uFEFF]")
 	reDecisionTag    = regexp.MustCompile(`(?s)<decision>(.*?)</decision>`)
-	reReasoningTag   = regexp.MustCompile(`(?s)<(execution_)?reasoning>(.*?)</(execution_)?reasoning>`)
+	// Support both <execution_reasoning> (Standard) and <reasoning> (Legacy/Fallback)
+	reReasoningTag = regexp.MustCompile(`(?s)<(execution_)?reasoning>(.*?)</(execution_)?reasoning>`)
 )
 
+// RawDecision represents the structure expected from AI JSON
 type RawDecision struct {
 	Symbol     string      `json:"symbol"`
 	Action     string      `json:"action"`
-	Leverage   interface{} `json:"leverage"`
-	EntryPrice interface{} `json:"entry"`
-	StopLoss   interface{} `json:"stop_loss"`
-	TakeProfit interface{} `json:"take_profit"`
-	RiskR      interface{} `json:"risk_r"`
-	TotalScore interface{} `json:"total_score"`
+	Leverage   interface{} `json:"leverage"`    // Support int or string (e.g., "10x")
+	EntryPrice interface{} `json:"entry"`       // Support float or string
+	StopLoss   interface{} `json:"stop_loss"`   // Support float or string
+	TakeProfit interface{} `json:"take_profit"` // Support float or string
+	RiskR      interface{} `json:"risk_r"`      // Support float or string
+	TotalScore interface{} `json:"total_score"` // Support float or string
 }
 
-type Parser struct{}
-
-func NewParser() *Parser {
-	return &Parser{}
+// Reasoning represents the structured reasoning output from AI
+// Now flexible to support different strategy structures
+type Reasoning struct {
+	Raw            map[string]interface{}
+	SystemRiskFlag bool
+	Opportunities  []Opportunity
 }
 
-func (p *Parser) ExtractDecisions(response string) ([]Decision, error) {
+// Opportunity for validation (Audit Path)
+type Opportunity struct {
+	Symbol    string
+	AuditPath string
+}
+
+func ExtractDecisions(response string) ([]Decision, string, error) {
 	s := removeInvisibleRunes(response)
 	s = strings.TrimSpace(s)
 	s = fixMissingQuotes(s)
@@ -45,11 +58,13 @@ func (p *Parser) ExtractDecisions(response string) ([]Decision, error) {
 		jsonPart = strings.TrimSpace(match[1])
 		logger.Infof("✓ [Format Audit] Extracted JSON using <decision> tag")
 	} else {
+		// Fallback: try to find JSON array directly if tag is missing
 		jsonPart = s
 	}
 
 	jsonPart = fixMissingQuotes(jsonPart)
 
+	// Try to find JSON array
 	var jsonContent string
 	if m := reJSONFence.FindStringSubmatch(jsonPart); m != nil && len(m) > 1 {
 		jsonContent = strings.TrimSpace(m[1])
@@ -63,33 +78,41 @@ func (p *Parser) ExtractDecisions(response string) ([]Decision, error) {
 			Symbol: "ALL",
 			Action: "wait",
 		}
-		return []Decision{fallbackDecision}, nil
+		// Create a synthetic JSON for the record
+		fallbackJSON := `[{"symbol":"ALL","action":"wait","reasoning":"AI output parsing failed (no JSON found), fallback to WAIT"}]`
+		return []Decision{fallbackDecision}, fallbackJSON, nil
 	}
 
 	jsonContent = compactArrayOpen(jsonContent)
 	jsonContent = fixMissingQuotes(jsonContent)
 
 	if err := validateJSONFormat(jsonContent); err != nil {
-		return nil, fmt.Errorf("JSON format validation failed: %w\nJSON content: %s\nFull response:\n%s", err, jsonContent, response)
+		return nil, jsonContent, fmt.Errorf("JSON format validation failed: %w\nJSON content: %s\nFull response:\n%s", err, jsonContent, response)
 	}
 
 	var rawDecisions []RawDecision
 	if err := json.Unmarshal([]byte(jsonContent), &rawDecisions); err != nil {
-		return nil, fmt.Errorf("JSON parsing failed: %w\nJSON content: %s", err, jsonContent)
+		return nil, jsonContent, fmt.Errorf("JSON parsing failed: %w\nJSON content: %s", err, jsonContent)
 	}
 
-	return convertDecisions(rawDecisions), nil
+	return convertDecisions(rawDecisions), jsonContent, nil
 }
 
-func (p *Parser) ExtractReasoningJSON(response string) (*Reasoning, error) {
+func ExtractReasoningJSON(response string) (*Reasoning, error) {
 	s := removeInvisibleRunes(response)
 	var jsonContent string
 
 	if match := reReasoningTag.FindStringSubmatch(s); match != nil {
+		// match[0] is full string
+		// match[1] is "execution_" or "" (prefix)
+		// match[2] is content
+		// match[3] is "execution_" or "" (suffix)
 		if len(match) > 2 {
 			jsonContent = strings.TrimSpace(match[2])
 		}
 	} else {
+		// Fallback: Try to find JSON object directly if tag is missing
+		// This handles cases where prompt returns raw JSON without XML tags
 		firstBrace := strings.Index(s, "{")
 		lastBrace := strings.LastIndex(s, "}")
 		if firstBrace >= 0 && lastBrace > firstBrace {
@@ -101,6 +124,7 @@ func (p *Parser) ExtractReasoningJSON(response string) (*Reasoning, error) {
 
 	jsonContent = fixMissingQuotes(jsonContent)
 
+	// Parse into generic map
 	var rawMap map[string]interface{}
 	if err := json.Unmarshal([]byte(jsonContent), &rawMap); err != nil {
 		return nil, fmt.Errorf("reasoning JSON parsing failed: %w", err)
@@ -110,11 +134,14 @@ func (p *Parser) ExtractReasoningJSON(response string) (*Reasoning, error) {
 		Raw: rawMap,
 	}
 
+	// 1. Extract SystemRiskFlag (Flexible Location)
+	// Try root level
 	if v, ok := rawMap["system_risk_flag"]; ok {
 		if boolVal, ok := v.(bool); ok {
 			reasoning.SystemRiskFlag = boolVal
 		}
 	} else if v, ok := rawMap["market_context"]; ok {
+		// Try nested in market_context (Standard Prompt style)
 		if mcMap, ok := v.(map[string]interface{}); ok {
 			if flag, ok := mcMap["system_risk_flag"]; ok {
 				if boolVal, ok := flag.(bool); ok {
@@ -124,6 +151,8 @@ func (p *Parser) ExtractReasoningJSON(response string) (*Reasoning, error) {
 		}
 	}
 
+	// 2. Extract Opportunities for Audit Path (Flexible)
+	// Only if "opportunities" key exists and is array
 	if v, ok := rawMap["opportunities"]; ok {
 		if oppsArray, ok := v.([]interface{}); ok {
 			for _, item := range oppsArray {
@@ -144,7 +173,11 @@ func (p *Parser) ExtractReasoningJSON(response string) (*Reasoning, error) {
 	return reasoning, nil
 }
 
-func (p *Parser) ExtractReasoning(response string) string {
+
+// ExtractReasoning extracts the Chain of Thought from the AI response
+// Supports both <reasoning> and <execution_reasoning> tags for backward compatibility
+func ExtractReasoning(response string) string {
+	reReasoningTag := regexp.MustCompile(`(?s)<(execution_)?reasoning>(.*?)</(execution_)?reasoning>`)
 	if match := reReasoningTag.FindStringSubmatch(response); match != nil && len(match) > 2 {
 		return strings.TrimSpace(match[2])
 	}
@@ -160,6 +193,7 @@ func (p *Parser) ExtractReasoning(response string) string {
 
 	return strings.TrimSpace(response)
 }
+
 
 func convertDecisions(raw []RawDecision) []Decision {
 	decisions := make([]Decision, len(raw))
@@ -211,6 +245,7 @@ func convertDecisions(raw []RawDecision) []Decision {
 	return decisions
 }
 
+// Helper functions for type conversion
 func toFloat(v interface{}) (float64, bool) {
 	switch val := v.(type) {
 	case float64:
@@ -218,6 +253,11 @@ func toFloat(v interface{}) (float64, bool) {
 	case int:
 		return float64(val), true
 	case string:
+		// Try to parse string as float
+		// Remove quotes if present (though JSON unmarshal usually handles this)
+		// Remove non-numeric characters except dot and minus
+		// For simplicity, let's use a basic regex or just simple parsing
+		// Here we assume standard number format in string
 		var f float64
 		if _, err := fmt.Sscanf(val, "%f", &f); err == nil {
 			return f, true
@@ -233,6 +273,7 @@ func toInt(v interface{}) (int, bool) {
 	case int:
 		return val, true
 	case string:
+		// Handle "10x" or "10"
 		s := strings.TrimSuffix(strings.ToLower(val), "x")
 		var i int
 		if _, err := fmt.Sscanf(s, "%d", &i); err == nil {
@@ -269,10 +310,12 @@ func fixMissingQuotes(jsonStr string) string {
 func validateJSONFormat(jsonStr string) error {
 	trimmed := strings.TrimSpace(jsonStr)
 
+	// Allow JSON that starts with [ but check for basic validity
 	if !strings.HasPrefix(trimmed, "[") {
 		return fmt.Errorf("JSON must start with [, actual: %s", trimmed[:min(20, len(trimmed))])
 	}
 
+	// Basic check for object start
 	if !strings.Contains(trimmed, "{") {
 		return fmt.Errorf("JSON array must contain objects {}, actual content: %s", trimmed[:min(50, len(trimmed))])
 	}
@@ -281,6 +324,8 @@ func validateJSONFormat(jsonStr string) error {
 		return fmt.Errorf("JSON cannot contain range symbol ~, all numbers must be precise single values")
 	}
 
+	// Relaxed thousand separator check: only if surrounded by digits
+	// Regex would be better but keeping simple loop for now
 	for i := 0; i < len(jsonStr)-4; i++ {
 		if jsonStr[i] >= '0' && jsonStr[i] <= '9' &&
 			jsonStr[i+1] == ',' &&
@@ -306,6 +351,5 @@ func removeInvisibleRunes(s string) string {
 }
 
 func compactArrayOpen(s string) string {
-	reArrayOpenSpace := regexp.MustCompile(`^\[\s+\{`)
 	return reArrayOpenSpace.ReplaceAllString(strings.TrimSpace(s), "[{")
 }
