@@ -1,6 +1,7 @@
 package trader
 
 import (
+	"context"
 	"fmt"
 	"nofx/logger"
 	"nofx/store"
@@ -20,20 +21,9 @@ type Trader struct {
 	exchangeID string
 	userID     string
 
-	// 底层交易所适配器
+	// 底层交易所适配器（实现 types.ExchangeAdapter 接口）
 	// Trader 负责适配不同交易所的接口
-	adapter interface {
-		GetBalance() (map[string]interface{}, error)
-		GetPositions() ([]map[string]interface{}, error)
-		GetMarketPrice(symbol string) (float64, error)
-		OpenLong(symbol string, quantity float64, leverage int) (map[string]interface{}, error)
-		OpenShort(symbol string, quantity float64, leverage int) (map[string]interface{}, error)
-		CloseLong(symbol string, quantity float64) (map[string]interface{}, error)
-		CloseShort(symbol string, quantity float64) (map[string]interface{}, error)
-		SetLeverage(symbol string, leverage int) error
-		CancelOrder(symbol string, orderID string) error
-		CancelAllOrders(symbol string) error
-	}
+	adapter types.ExchangeAdapter
 
 	// 配置
 	config *TraderConfig
@@ -67,18 +57,7 @@ func NewTrader(config TraderConfig, st *store.Store, userID string) (*Trader, er
 
 	// 根据配置创建对应的交易所 trader
 	// Trader 负责适配不同交易所的接口
-	var adapter interface {
-		GetBalance() (map[string]interface{}, error)
-		GetPositions() ([]map[string]interface{}, error)
-		GetMarketPrice(symbol string) (float64, error)
-		OpenLong(symbol string, quantity float64, leverage int) (map[string]interface{}, error)
-		OpenShort(symbol string, quantity float64, leverage int) (map[string]interface{}, error)
-		CloseLong(symbol string, quantity float64) (map[string]interface{}, error)
-		CloseShort(symbol string, quantity float64) (map[string]interface{}, error)
-		SetLeverage(symbol string, leverage int) error
-		CancelOrder(symbol string, orderID string) error
-		CancelAllOrders(symbol string) error
-	}
+	var adapter types.ExchangeAdapter
 
 	switch config.Exchange {
 	case "binance":
@@ -232,7 +211,7 @@ func (at *Trader) SupportsAction(action types.Action) bool {
 }
 
 // GetAccountInfo 获取账户信息 - 适配返回类型
-func (at *Trader) GetAccountInfo() (*types.AccountInfo, error) {
+func (at *Trader) GetAccountInfo(ctx context.Context) (*types.AccountInfo, error) {
 	// 调用底层交易所接口（无 context）
 	accountMap, err := at.adapter.GetBalance()
 	if err != nil {
@@ -252,7 +231,7 @@ func (at *Trader) GetAccountInfo() (*types.AccountInfo, error) {
 }
 
 // GetPositions 获取持仓信息 - 适配返回类型
-func (at *Trader) GetPositions() ([]types.PositionInfo, error) {
+func (at *Trader) GetPositions(ctx context.Context) ([]types.PositionInfo, error) {
 	// 调用底层交易所接口（无 context）
 	positionsMap, err := at.adapter.GetPositions()
 	if err != nil {
@@ -280,13 +259,13 @@ func (at *Trader) GetPositions() ([]types.PositionInfo, error) {
 }
 
 // GetMarketPrice 获取市场价格
-func (at *Trader) GetMarketPrice(symbol string) (float64, error) {
+func (at *Trader) GetMarketPrice(ctx context.Context, symbol string) (float64, error) {
 	// 直接调用底层接口（无 context）
 	return at.adapter.GetMarketPrice(symbol)
 }
 
 // OpenLong 开多仓 - 适配参数和返回类型
-func (at *Trader) OpenLong(symbol string, quantity float64, leverage int) (*types.Order, error) {
+func (at *Trader) OpenLong(ctx context.Context, symbol string, quantity float64, leverage int) (*types.Order, error) {
 	// 调用底层交易所接口（无 context，返回 map）
 	orderMap, err := at.adapter.OpenLong(symbol, quantity, leverage)
 	if err != nil {
@@ -298,7 +277,7 @@ func (at *Trader) OpenLong(symbol string, quantity float64, leverage int) (*type
 }
 
 // OpenShort 开空仓 - 适配参数和返回类型
-func (at *Trader) OpenShort(symbol string, quantity float64, leverage int) (*types.Order, error) {
+func (at *Trader) OpenShort(ctx context.Context, symbol string, quantity float64, leverage int) (*types.Order, error) {
 	orderMap, err := at.adapter.OpenShort(symbol, quantity, leverage)
 	if err != nil {
 		return nil, err
@@ -308,7 +287,7 @@ func (at *Trader) OpenShort(symbol string, quantity float64, leverage int) (*typ
 }
 
 // CloseLong 平多仓 - 适配参数和返回类型
-func (at *Trader) CloseLong(symbol string, quantity float64) (*types.Order, error) {
+func (at *Trader) CloseLong(ctx context.Context, symbol string, quantity float64) (*types.Order, error) {
 	orderMap, err := at.adapter.CloseLong(symbol, quantity)
 	if err != nil {
 		return nil, err
@@ -318,7 +297,7 @@ func (at *Trader) CloseLong(symbol string, quantity float64) (*types.Order, erro
 }
 
 // CloseShort 平空仓 - 适配参数和返回类型
-func (at *Trader) CloseShort(symbol string, quantity float64) (*types.Order, error) {
+func (at *Trader) CloseShort(ctx context.Context, symbol string, quantity float64) (*types.Order, error) {
 	orderMap, err := at.adapter.CloseShort(symbol, quantity)
 	if err != nil {
 		return nil, err
@@ -328,48 +307,43 @@ func (at *Trader) CloseShort(symbol string, quantity float64) (*types.Order, err
 }
 
 // SetLeverage 设置杠杆
-func (at *Trader) SetLeverage(symbol string, leverage int) error {
+func (at *Trader) SetLeverage(ctx context.Context, symbol string, leverage int) error {
 	// 直接调用底层接口
 	return at.adapter.SetLeverage(symbol, leverage)
 }
 
 // SetStopLoss 设置止损 - TODO: 根据交易所实现
-func (at *Trader) SetStopLoss(orderID string, price float64) error {
+func (at *Trader) SetStopLoss(ctx context.Context, orderID string, price float64) error {
 	return fmt.Errorf("SetStopLoss not yet implemented")
 }
 
 // SetTakeProfit 设置止盈 - TODO: 根据交易所实现
-func (at *Trader) SetTakeProfit(orderID string, price float64) error {
+func (at *Trader) SetTakeProfit(ctx context.Context, orderID string, price float64) error {
 	return fmt.Errorf("SetTakeProfit not yet implemented")
 }
 
 // GetOrderStatus 查询订单状态 - TODO: 根据交易所实现
-func (at *Trader) GetOrderStatus(symbol, orderID string) (*types.OrderStatus, error) {
+func (at *Trader) GetOrderStatus(ctx context.Context, symbol, orderID string) (*types.OrderStatus, error) {
 	return nil, fmt.Errorf("GetOrderStatus not yet implemented")
 }
 
 // GetOpenOrders 查询未成交订单 - TODO: 根据交易所实现
-func (at *Trader) GetOpenOrders(symbol string) ([]types.OpenOrder, error) {
+func (at *Trader) GetOpenOrders(ctx context.Context, symbol string) ([]types.OpenOrder, error) {
 	return nil, fmt.Errorf("GetOpenOrders not yet implemented")
 }
 
 // CancelOrder 取消订单 - TODO
-func (at *Trader) CancelOrder(symbol string, orderID string) (*types.Order, error) {
+func (at *Trader) CancelOrder(ctx context.Context, symbol string, orderID string) (*types.Order, error) {
 	return nil, fmt.Errorf("CancelOrder not yet implemented")
 }
 
 // CancelAllOrders 取消所有订单 - TODO
-func (at *Trader) CancelAllOrders(symbol string) error {
+func (at *Trader) CancelAllOrders(ctx context.Context, symbol string) error {
 	return fmt.Errorf("CancelAllOrders not yet implemented")
 }
 
-// GetBalance 获取账户余额 - 直接返回底层接口结果
-func (at *Trader) GetBalance() (map[string]interface{}, error) {
-	return at.adapter.GetBalance()
-}
-
 // ExecuteDecision 执行交易决策
-func (at *Trader) ExecuteDecision(decision interface{}) (*types.OrderResult, error) {
+func (at *Trader) ExecuteDecision(ctx context.Context, decision interface{}) (*types.OrderResult, error) {
 	// TODO: 实现决策执行逻辑
 	return &types.OrderResult{
 		Success: false,

@@ -1,6 +1,7 @@
 package types
 
 import (
+	"context"
 	"time"
 )
 
@@ -46,67 +47,103 @@ type Trader interface {
 	// === 账户查询 ===
 
 	// GetAccountInfo 获取账户信息
-	GetAccountInfo() (*AccountInfo, error)
+	GetAccountInfo(ctx context.Context) (*AccountInfo, error)
 
 	// GetPositions 获取持仓信息
-	GetPositions() ([]PositionInfo, error)
+	GetPositions(ctx context.Context) ([]PositionInfo, error)
 
 	// GetMarketPrice 获取市场价格
-	GetMarketPrice(symbol string) (float64, error)
+	GetMarketPrice(ctx context.Context, symbol string) (float64, error)
 
 	// === 基础交易 ===
 
 	// OpenLong 开多仓
-	OpenLong(symbol string, quantity float64, leverage int) (*Order, error)
+	OpenLong(ctx context.Context, symbol string, quantity float64, leverage int) (*Order, error)
 
 	// OpenShort 开空仓
-	OpenShort(symbol string, quantity float64, leverage int) (*Order, error)
+	OpenShort(ctx context.Context, symbol string, quantity float64, leverage int) (*Order, error)
 
 	// CloseLong 平多仓
-	CloseLong(symbol string, quantity float64) (*Order, error)
+	CloseLong(ctx context.Context, symbol string, quantity float64) (*Order, error)
 
 	// CloseShort 平空仓
-	CloseShort(symbol string, quantity float64) (*Order, error)
+	CloseShort(ctx context.Context, symbol string, quantity float64) (*Order, error)
 
 	// === 风控（可选） ===
 
 	// SetLeverage 设置杠杆
-	SetLeverage(symbol string, leverage int) error
+	SetLeverage(ctx context.Context, symbol string, leverage int) error
 
 	// SetStopLoss 设置止损
-	SetStopLoss(orderID string, price float64) error
+	SetStopLoss(ctx context.Context, orderID string, price float64) error
 
 	// SetTakeProfit 设置止盈
-	SetTakeProfit(orderID string, price float64) error
+	SetTakeProfit(ctx context.Context, orderID string, price float64) error
 
 	// === 订单管理（可选） ===
 
 	// GetOrderStatus 查询订单状态
-	GetOrderStatus(symbol, orderID string) (*OrderStatus, error)
+	GetOrderStatus(ctx context.Context, symbol, orderID string) (*OrderStatus, error)
 
 	// GetOpenOrders 查询未成交订单
-	GetOpenOrders(symbol string) ([]OpenOrder, error)
+	GetOpenOrders(ctx context.Context, symbol string) ([]OpenOrder, error)
 
 	// CancelOrder 取消订单
-	CancelOrder(symbol string, orderID string) (*Order, error)
+	CancelOrder(ctx context.Context, symbol string, orderID string) (*Order, error)
 
 	// CancelAllOrders 取消所有订单
-	CancelAllOrders(symbol string) error
+	CancelAllOrders(ctx context.Context, symbol string) error
 
-<<<<<<< HEAD
-	// GetOpenOrders 查询未成交订单
-	GetOpenOrders(symbol string) ([]OpenOrder, error)
-=======
 	// === 统一执行 ===
 
 	// ExecuteDecision 执行交易决策
-	ExecuteDecision(decision interface{}) (*OrderResult, error)
+	ExecuteDecision(ctx context.Context, decision interface{}) (*OrderResult, error)
+}
 
-	// === 底层适配器方法（用于 API 直接调用） ===
+// ExchangeAdapter 底层交易所适配器接口
+// 这是 Trader 持有的接口，用于适配各个交易所的原始实现
+// 所有交易所的原始方法签名都类似这样（无 context，返回 map）
+type ExchangeAdapter interface {
+	// === 账户查询（无 context，返回 map） ===
 
-	// GetBalance 获取账户余额（返回原始 map，用于 API 兼容）
+	// GetBalance 获取账户余额
 	GetBalance() (map[string]interface{}, error)
->>>>>>> 3a07182ff4779d595b9ac97f7926da93d016dd39
+
+	// GetPositions 获取持仓信息
+	GetPositions() ([]map[string]interface{}, error)
+
+	// GetMarketPrice 获取市场价格
+	GetMarketPrice(symbol string) (float64, error)
+
+	// === 基础交易（无 context，返回 map） ===
+
+	// OpenLong 开多仓
+	OpenLong(symbol string, quantity float64, leverage int) (map[string]interface{}, error)
+
+	// OpenShort 开空仓
+	OpenShort(symbol string, quantity float64, leverage int) (map[string]interface{}, error)
+
+	// CloseLong 平多仓
+	CloseLong(symbol string, quantity float64) (map[string]interface{}, error)
+
+	// CloseShort 平空仓
+	CloseShort(symbol string, quantity float64) (map[string]interface{}, error)
+
+	// === 风控 ===
+
+	// SetLeverage 设置杠杆
+	SetLeverage(symbol string, leverage int) error
+
+	// === 订单管理 ===
+
+	// CancelOrder 取消订单
+	CancelOrder(symbol string, orderID string) error
+
+	// CancelAllOrders 取消所有订单（可选 symbol 参数）
+	CancelAllOrders(symbol string) error
+
+	// GetOpenOrders 查询未成交订单
+	GetOpenOrders(symbol string) ([]OpenOrder, error)
 }
 
 // === 数据类型定义 ===
