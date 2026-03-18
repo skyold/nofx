@@ -128,50 +128,6 @@ export function FAQLayout({ language }: FAQLayoutProps) {
             )}
           </main>
         </div>
-
-        {/* Contact Section */}
-        <div
-          className="mt-16 p-8 rounded-lg text-center"
-          style={{
-            background:
-              'linear-gradient(135deg, rgba(240, 185, 11, 0.1) 0%, rgba(252, 213, 53, 0.05) 100%)',
-            border: '1px solid rgba(240, 185, 11, 0.2)',
-          }}
-        >
-          <h3 className="text-xl font-bold mb-3" style={{ color: '#EAECEF' }}>
-            {t('faqStillHaveQuestions', language)}
-          </h3>
-          <p className="mb-6" style={{ color: '#848E9C' }}>
-            {t('faqContactUs', language)}
-          </p>
-          <div className="flex items-center justify-center gap-4">
-            <a
-              href="https://github.com/NoFxAiOS/nofx"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="px-6 py-3 rounded-lg font-semibold transition-all hover:scale-105"
-              style={{
-                background: '#1E2329',
-                color: '#EAECEF',
-                border: '1px solid #2B3139',
-              }}
-            >
-              GitHub
-            </a>
-            <a
-              href="https://t.me/nofx_dev_community"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="px-6 py-3 rounded-lg font-semibold transition-all hover:scale-105"
-              style={{
-                background: 'linear-gradient(135deg, #F0B90B 0%, #FCD535 100%)',
-                color: '#0B0E11',
-              }}
-            >
-              {t('community', language)}
-            </a>
-          </div>
-        </div>
       </div>
     </DeepVoidBackground>
   )

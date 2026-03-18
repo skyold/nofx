@@ -84,10 +84,9 @@ export default function HeaderBar({
           onClick={() => {
             window.location.href = '/'
           }}
-          className="flex items-center gap-2 hover:opacity-80 transition-opacity cursor-pointer"
+          className="hover:opacity-80 transition-opacity cursor-pointer"
         >
-          <img src="/icons/agentk.svg" alt="AgentK Logo" className="w-7 h-7" />
-          <span className="text-lg font-bold text-nofx-gold">
+          <span className="text-2xl font-bold text-nofx-gold">
             AgentK
           </span>
         </div>
