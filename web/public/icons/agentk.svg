@@ -1,0 +1,11 @@
+<svg version="1.1" id="Layer_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
+	 width="100%" viewBox="0 0 1024 1024" enable-background="new 0 0 1024 1024" xml:space="preserve">
+<defs>
+	<linearGradient id="goldGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+		<stop offset="0%" style="stop-color:#F0B90B;stop-opacity:1" />
+		<stop offset="100%" style="stop-color:#F7AF0C;stop-opacity:1" />
+	</linearGradient>
+</defs>
+<text x="512" y="600" text-anchor="middle" font-family="Arial, sans-serif" font-size="280" font-weight="bold" fill="url(#goldGradient)" letter-spacing="5">AgentK</text>
+<rect x="100" y="680" width="824" height="8" rx="4" fill="url(#goldGradient)" opacity="0.8"/>
+</svg>

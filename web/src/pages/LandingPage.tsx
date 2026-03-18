@@ -28,7 +28,6 @@ export function LandingPage() {
       <HeaderBar
         onLoginClick={() => setShowLoginModal(true)}
         isLoggedIn={isLoggedIn}
-        isHomePage={true}
         language={language}
         onLanguageChange={setLanguage}
         user={user}

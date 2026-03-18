@@ -162,8 +162,8 @@ export function LoginPage() {
             <div className="relative">
               <div className="absolute -inset-2 bg-nofx-gold/20 rounded-full blur-xl animate-pulse"></div>
               <img
-                src="/icons/nofx.svg"
-                alt="NoFx Logo"
+                src="/icons/agentk.svg"
+                alt="AgentK Logo"
                 className="w-16 h-16 object-contain relative z-10 opacity-90"
               />
             </div>
@@ -205,7 +205,7 @@ export function LoginPage() {
               </div>
               <div className="flex gap-2">
                 <span className="text-emerald-500">➜</span>
-                <span>Target: NOFX CORE HUB</span>
+                <span>Target: AgentK CORE HUB</span>
               </div>
               <div className="flex gap-2">
                 <span className="text-emerald-500">➜</span>

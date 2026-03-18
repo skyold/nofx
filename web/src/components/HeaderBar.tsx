@@ -4,7 +4,6 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Menu, X, ChevronDown } from 'lucide-react'
 import { t, type Language } from '../i18n/translations'
 import { useSystemConfig } from '../hooks/useSystemConfig'
-import { OFFICIAL_LINKS } from '../constants/branding'
 
 type Page =
   | 'competition'
@@ -26,7 +25,6 @@ type Page =
 interface HeaderBarProps {
   onLoginClick?: () => void
   isLoggedIn?: boolean
-  isHomePage?: boolean
   currentPage?: Page
   language?: Language
   onLanguageChange?: (lang: Language) => void
@@ -38,7 +36,6 @@ interface HeaderBarProps {
 
 export default function HeaderBar({
   isLoggedIn = false,
-  isHomePage = false,
   currentPage,
   language = 'zh' as Language,
   onLanguageChange,
@@ -55,9 +52,6 @@ export default function HeaderBar({
   const userDropdownRef = useRef<HTMLDivElement>(null)
   const { config: systemConfig } = useSystemConfig()
   const registrationEnabled = systemConfig?.registration_enabled !== false
-  
-  // Default to Chaos mode, reset on every mount (login)
-  const [isChaosMode, setIsChaosMode] = useState(true)
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -92,45 +86,34 @@ export default function HeaderBar({
           }}
           className="flex items-center gap-2 hover:opacity-80 transition-opacity cursor-pointer"
         >
-          <img src="/icons/nofx.svg" alt="NOFX Logo" className="w-7 h-7" />
+          <img src="/icons/agentk.svg" alt="AgentK Logo" className="w-7 h-7" />
           <span className="text-lg font-bold text-nofx-gold">
-            NOFX
+            AgentK
           </span>
         </div>
 
         {/* Desktop Menu */}
-        <div className="hidden md:flex items-center justify-between flex-1 ml-8">
-          {/* Left Side - Navigation Tabs - Always show all tabs */}
+        <div className="hidden md:flex items-center justify-between flex-1">
+          {/* Left Side - Navigation Tabs */}
           <div className="flex items-center gap-2">
             {/* Navigation tabs configuration */}
             {(() => {
               // Define all navigation tabs
               const allNavTabs: { page: Page; path: string; label: string; requiresAuth: boolean }[] = [
-                { page: 'data', path: '/data', label: language === 'zh' ? '数据' : 'Data', requiresAuth: false },
-                { page: 'strategy-market', path: '/strategy-market', label: language === 'zh' ? '策略市场' : 'Market', requiresAuth: true },
+                { page: 'traders', path: '/traders', label: t('configNav', language), requiresAuth: true },
+                { page: 'chaos', path: '/chaos', label: language === 'zh' ? '看板' : 'Dashboard', requiresAuth: true },
+                { page: 'strategy', path: '/strategy', label: t('strategyNav', language), requiresAuth: true },
                 { page: 'time-machine', path: '/time-machine', label: language === 'zh' ? '时光机' : 'Time Machine', requiresAuth: true },
                 { page: 'transactions', path: '/transactions', label: language === 'zh' ? '交易列表' : 'Transactions', requiresAuth: true },
-                { page: 'traders', path: '/traders', label: t('configNav', language), requiresAuth: true },
-                { page: 'trader', path: '/dashboard', label: t('dashboardNav', language), requiresAuth: true },
-                { page: 'chaos-studio', path: '/chaos-studio', label: 'Chaos Studio', requiresAuth: true },
-                { page: 'chaos', path: '/chaos', label: 'Chaos', requiresAuth: true },
-                { page: 'strategy', path: '/strategy', label: t('strategyNav', language), requiresAuth: true },
                 { page: 'competition', path: '/competition', label: t('realtimeNav', language), requiresAuth: true },
-                { page: 'debate', path: '/debate', label: t('debateNav', language), requiresAuth: true },
-                { page: 'backtest', path: '/backtest', label: 'Backtest', requiresAuth: true },
                 { page: 'faq', path: '/faq', label: t('faqNav', language), requiresAuth: false },
               ]
 
-              const CHAOS_ONLY_PAGES: Page[] = ['time-machine', 'transactions', 'chaos-studio', 'chaos']
-              const SHARED_PAGES: Page[] = ['traders']
+              const HIDDEN_PAGES: Page[] = ['data', 'strategy-market', 'backtest', 'chaos-studio', 'debate', 'trader']
 
               const navTabs = allNavTabs.filter(tab => {
-                if (SHARED_PAGES.includes(tab.page)) return true
-                if (isChaosMode) {
-                  return CHAOS_ONLY_PAGES.includes(tab.page)
-                } else {
-                  return !CHAOS_ONLY_PAGES.includes(tab.page)
-                }
+                if (HIDDEN_PAGES.includes(tab.page)) return false
+                return true
               })
 
               const handleNavClick = (tab: typeof navTabs[0]) => {
@@ -164,66 +147,8 @@ export default function HeaderBar({
             })()}
           </div>
 
-          {/* Right Side - Social Links and User Actions */}
+          {/* Right Side - User Actions */}
           <div className="flex items-center gap-4">
-            {/* Mode Toggle */}
-            <div className="flex items-center bg-zinc-900 rounded-lg p-1 border border-zinc-800">
-              <button
-                onClick={() => setIsChaosMode(true)}
-                className={`px-3 py-1 text-xs font-bold rounded transition-colors ${isChaosMode ? 'bg-nofx-gold text-black' : 'text-zinc-500 hover:text-zinc-300'}`}
-              >
-                CHAOS
-              </button>
-              <button
-                onClick={() => setIsChaosMode(false)}
-                className={`px-3 py-1 text-xs font-bold rounded transition-colors ${!isChaosMode ? 'bg-nofx-gold text-black' : 'text-zinc-500 hover:text-zinc-300'}`}
-              >
-                NOFX
-              </button>
-            </div>
-
-            {/* Social Links - Always visible */}
-            <div className="flex items-center gap-1">
-              {/* GitHub */}
-              <a
-                href={OFFICIAL_LINKS.github}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="p-2 rounded-lg transition-all hover:scale-110 text-nofx-text-muted hover:text-white hover:bg-white/5"
-                title="GitHub"
-              >
-                <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor">
-                  <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" />
-                </svg>
-              </a>
-              {/* Twitter/X */}
-              <a
-                href={OFFICIAL_LINKS.twitter}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="p-2 rounded-lg transition-all hover:scale-110 text-nofx-text-muted hover:text-[#1DA1F2] hover:bg-[#1DA1F2]/10"
-                title="Twitter"
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
-                </svg>
-              </a>
-              {/* Telegram */}
-              <a
-                href={OFFICIAL_LINKS.telegram}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="p-2 rounded-lg transition-all hover:scale-110 text-nofx-text-muted hover:text-[#0088cc] hover:bg-[#0088cc]/10"
-                title="Telegram"
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z" />
-                </svg>
-              </a>
-            </div>
-
-            {/* Divider */}
-            <div className="h-5 w-px" style={{ background: '#2B3139' }} />
 
             {/* User Info and Actions */}
             {isLoggedIn && user ? (
@@ -368,31 +293,20 @@ export default function HeaderBar({
               <div className="flex flex-col gap-6 mb-12">
                 {(() => {
                   const allNavTabs: { page: Page; path: string; label: string; requiresAuth: boolean }[] = [
-                    { page: 'data', path: '/data', label: language === 'zh' ? '数据' : 'Data', requiresAuth: false },
-                    { page: 'strategy-market', path: '/strategy-market', label: language === 'zh' ? '策略市场' : 'Market', requiresAuth: true },
+                    { page: 'traders', path: '/traders', label: t('configNav', language), requiresAuth: true },
+                    { page: 'chaos', path: '/chaos', label: language === 'zh' ? '看板' : 'Dashboard', requiresAuth: true },
+                    { page: 'strategy', path: '/strategy', label: t('strategyNav', language), requiresAuth: true },
                     { page: 'time-machine', path: '/time-machine', label: language === 'zh' ? '时光机' : 'Time Machine', requiresAuth: true },
                     { page: 'transactions', path: '/transactions', label: language === 'zh' ? '交易列表' : 'Transactions', requiresAuth: true },
-                    { page: 'traders', path: '/traders', label: t('configNav', language), requiresAuth: true },
-                    { page: 'trader', path: '/dashboard', label: t('dashboardNav', language), requiresAuth: true },
-                    { page: 'chaos-studio', path: '/chaos-studio', label: 'Chaos Studio', requiresAuth: true },
-                    { page: 'chaos', path: '/chaos', label: 'Chaos', requiresAuth: true },
-                    { page: 'strategy', path: '/strategy', label: t('strategyNav', language), requiresAuth: true },
                     { page: 'competition', path: '/competition', label: t('realtimeNav', language), requiresAuth: true },
-                    { page: 'debate', path: '/debate', label: t('debateNav', language), requiresAuth: true },
-                    { page: 'backtest', path: '/backtest', label: 'Backtest', requiresAuth: true },
                     { page: 'faq', path: '/faq', label: t('faqNav', language), requiresAuth: false },
                   ]
 
-                  const CHAOS_ONLY_PAGES: Page[] = ['time-machine', 'transactions', 'chaos-studio', 'chaos']
-                  const SHARED_PAGES: Page[] = ['traders']
+                  const HIDDEN_PAGES: Page[] = ['data', 'strategy-market', 'backtest', 'chaos-studio', 'debate', 'trader']
 
                   const navTabs = allNavTabs.filter(tab => {
-                    if (SHARED_PAGES.includes(tab.page)) return true
-                    if (isChaosMode) {
-                      return CHAOS_ONLY_PAGES.includes(tab.page)
-                    } else {
-                      return !CHAOS_ONLY_PAGES.includes(tab.page)
-                    }
+                    if (HIDDEN_PAGES.includes(tab.page)) return false
+                    return true
                   })
 
                   const handleMobileNavClick = (tab: typeof navTabs[0]) => {
@@ -433,77 +347,12 @@ export default function HeaderBar({
                     </motion.button>
                   ))
                 })()}
-
-                {/* Original Page Links */}
-                {isHomePage && (
-                  <div className="pt-6 border-t border-white/5 space-y-4">
-                    {[
-                      { key: 'features', label: t('features', language) },
-                      { key: 'howItWorks', label: t('howItWorks', language) },
-                    ].map((item, i) => (
-                      <motion.a
-                        key={item.key}
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        transition={{ delay: 0.5 + i * 0.1 }}
-                        href={`#${item.key === 'features' ? 'features' : 'how-it-works'}`}
-                        className="block text-lg font-mono text-zinc-600 hover:text-white"
-                        onClick={() => setMobileMenuOpen(false)}
-                      >
-                        {'>'} {item.label}
-                      </motion.a>
-                    ))}
-                  </div>
-                )}
               </div>
 
               {/* Bottom Actions */}
               <div className="mt-auto space-y-8">
-                {/* Social Links */}
-                <div className="flex items-center gap-4">
-                  {[
-                    { href: OFFICIAL_LINKS.github, icon: <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" /> },
-                    { href: OFFICIAL_LINKS.twitter, icon: <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" /> },
-                    { href: OFFICIAL_LINKS.telegram, icon: <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z" /> }
-                  ].map((link, i) => (
-                    <a
-                      key={i}
-                      href={link.href}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="w-12 h-12 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-500 hover:text-nofx-gold hover:border-nofx-gold transition-colors"
-                    >
-                      <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor">
-                        {link.icon}
-                      </svg>
-                    </a>
-                  ))}
-                </div>
-
                 {/* Account / Lang */}
                 <div className="flex flex-col gap-4">
-                  {/* Mode Switcher */}
-                  <div className="flex bg-zinc-900 rounded-lg p-1 border border-zinc-800">
-                    <button
-                      onClick={() => setIsChaosMode(true)}
-                      className={`flex-1 py-3 text-sm font-bold rounded-md transition-colors ${isChaosMode
-                        ? 'bg-zinc-800 text-white shadow-sm'
-                        : 'text-zinc-500'
-                        }`}
-                    >
-                      CHAOS
-                    </button>
-                    <button
-                      onClick={() => setIsChaosMode(false)}
-                      className={`flex-1 py-3 text-sm font-bold rounded-md transition-colors ${!isChaosMode
-                        ? 'bg-zinc-800 text-white shadow-sm'
-                        : 'text-zinc-500'
-                        }`}
-                    >
-                      NOFX
-                    </button>
-                  </div>
-
                   <div className="grid grid-cols-2 gap-4">
                   {/* Lang Switcher */}
                   <div className="flex bg-zinc-900 rounded-lg p-1 border border-zinc-800">
