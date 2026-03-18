@@ -660,8 +660,8 @@ export function StrategyStudioPage() {
       aiTradingDesc: { zh: 'AI 分析市场并自主决策买卖', en: 'AI analyzes market and makes trading decisions' },
       gridTrading: { zh: 'AI 网格交易', en: 'AI Grid Trading' },
       gridTradingDesc: { zh: 'AI 控制网格策略，在震荡市场获利', en: 'AI-controlled grid strategy for ranging markets' },
-      chaosTrading: { zh: 'Chaos 交易', en: 'Chaos Trading' },
-      chaosTradingDesc: { zh: '高级对抗性交易策略，支持故障注入和独立风控', en: 'Advanced adversarial strategy with fault injection' },
+      chaosTrading: { zh: 'AI 自动交易', en: 'AI Auto Trading' },
+      chaosTradingDesc: { zh: 'AI 自主分析市场数据进行交易', en: 'AI autonomously analyzes market data for trading' },
       gridConfig: { zh: '网格配置', en: 'Grid Configuration' },
       chaosConfig: { zh: 'Chaos 配置', en: 'Chaos Configuration' },
       coinSource: { zh: '币种来源', en: 'Coin Source' },
@@ -1179,25 +1179,25 @@ export function StrategyStudioPage() {
                     <Zap className="w-4 h-4" style={{ color: '#F0B90B' }} />
                     <span className="text-sm font-medium text-nofx-text">{t('strategyType')}</span>
                   </div>
-                  <div className="grid grid-cols-3 gap-3">
+                  <div className="grid grid-cols-2 gap-3">
                     <button
                       onClick={() => {
                         if (!selectedStrategy?.is_default) {
-                          handleStrategyTypeChange('ai_trading')
+                          handleStrategyTypeChange('chaos_trading')
                         }
                       }}
                       disabled={selectedStrategy?.is_default}
                       className={`p-3 rounded-lg border transition-all ${
-                        (!editingConfig.strategy_type || editingConfig.strategy_type === 'ai_trading')
+                        editingConfig.strategy_type === 'chaos_trading'
                           ? 'border-nofx-gold bg-nofx-gold/10'
                           : 'border-nofx-border hover:border-nofx-gold/50'
                       }`}
                     >
                       <div className="flex items-center gap-2 mb-1">
-                        <Bot className="w-4 h-4" style={{ color: '#F0B90B' }} />
-                        <span className="text-sm font-medium text-nofx-text">{t('aiTrading')}</span>
+                        <Dna className="w-4 h-4" style={{ color: '#a855f7' }} />
+                        <span className="text-sm font-medium text-nofx-text">{t('chaosTrading')}</span>
                       </div>
-                      <p className="text-xs text-nofx-text-muted text-left">{t('aiTradingDesc')}</p>
+                      <p className="text-xs text-nofx-text-muted text-left">{t('chaosTradingDesc')}</p>
                     </button>
                     <button
                       onClick={() => {
@@ -1217,25 +1217,6 @@ export function StrategyStudioPage() {
                         <span className="text-sm font-medium text-nofx-text">{t('gridTrading')}</span>
                       </div>
                       <p className="text-xs text-nofx-text-muted text-left">{t('gridTradingDesc')}</p>
-                    </button>
-                    <button
-                      onClick={() => {
-                        if (!selectedStrategy?.is_default) {
-                          handleStrategyTypeChange('chaos_trading')
-                        }
-                      }}
-                      disabled={selectedStrategy?.is_default}
-                      className={`p-3 rounded-lg border transition-all ${
-                        editingConfig.strategy_type === 'chaos_trading'
-                          ? 'border-nofx-gold bg-nofx-gold/10'
-                          : 'border-nofx-border hover:border-nofx-gold/50'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2 mb-1">
-                        <Dna className="w-4 h-4" style={{ color: '#a855f7' }} />
-                        <span className="text-sm font-medium text-nofx-text">{t('chaosTrading')}</span>
-                      </div>
-                      <p className="text-xs text-nofx-text-muted text-left">{t('chaosTradingDesc')}</p>
                     </button>
                   </div>
                 </div>
